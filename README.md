@@ -1,3 +1,10 @@
+# sherpa-onnx-fusion
+
+This fork aims for efficient phone and server ASR inference with LM fusion,
+starting with CTC prefix search and improving existing non-CTC fusion paths.
+See [Differences from k2-fsa/sherpa-onnx](FORK.md) for current changes,
+design status, and the decoder topic. **The new decoder is not implemented yet.**
+
 ### Supported functions
 
 |Speech recognition| [Speech synthesis][tts-url] | [Source separation][ss-url] |
