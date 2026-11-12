@@ -850,6 +850,7 @@ if(SHERPA_ONNX_ENABLE_TESTS)
     offline-whisper-lang-probs-test.cc
     offline-whisper-language-candidates-test.cc
     offline-whisper-timestamp-rules-test.cc
+    online-ctc-fst-decoder-test.cc
     packed-sequence-test.cc
     pad-sequence-test.cc
     online-stream-test.cc
