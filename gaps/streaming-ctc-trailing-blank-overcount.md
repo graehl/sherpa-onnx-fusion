@@ -28,7 +28,10 @@ counter keeps its previous value and does not reflect that chunk at all.
 
 Count trailing blanks in a local variable during the walk and assign it to
 the result afterwards, so each result reflects exactly the path it was
-built from. Decide what a chunk without a final state should report.
+built from. Decide what a chunk without a final state should report. An
+incremental result representation from the
+[traceback gap](streaming-ctc-traceback-recomputation.md) must keep the
+count correct without a full walk.
 
 ## Closure checks
 
