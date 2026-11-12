@@ -40,3 +40,7 @@ make -j$(nproc)
 - VAD: `VadModel` (`silero-vad-model`, `ten-vad-model`) behind `VoiceActivityDetector`, which segments speech using a `CircularBuffer`.
 - `cmake/` holds per-dependency fetch scripts (onnxruntime, kaldi-native-fbank, etc.); dependencies are downloaded at configure time.
 - `scripts/` contains per-model export/conversion scripts (not part of the build); `.github/workflows/` has the large CI matrix (per-platform builds, per-language tests, model export).
+
+## This fork
+
+This checkout is sherpa-onnx-fusion, a fork that adds LM fusion during the search. Read [FORK.md](FORK.md) first: it says what the fork adds and where its glossary, topics and gaps are.
