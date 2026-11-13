@@ -43,6 +43,36 @@ and scorer-specific token units. The
 [sketches companion](beam-search-and-scorer-fusion.sketches.md) holds the
 designs that are not current guidance.
 
+### Implemented so far
+
+The code is the authority for what exists; the sketches below remain the
+design for what does not.
+
+- **Scorer interface and registry**: `sherpa-onnx/csrc/scorer.h`,
+  `scorer-options.h`. It differs from the sketch below in four ways. Each
+  scorer creates its own per-utterance object (`Scorer::NewUtterance`) and
+  receives it with every state, so a batched call needs no lookup from a
+  shared context. `Advance` and `Finish` write into caller arrays instead of
+  returning vectors. `Next`, `CharacterIndex`, and `FloatView` are not
+  built, because the search batches a token's units through `Advance`.
+  Type names carry a `Scorer` prefix (`ScorerStateRef`, `ScorerExtension`).
+- **CTC prefix search**: `sherpa-onnx/csrc/ctc-prefix-search.h`, one object
+  per utterance, sum and max alignment (max without recombination yet).
+  A frame runs in phases (`BeginFrame`, `GatherScorerWave` and
+  `ApplyScorerWave` per scorer, `EndFrame`) so a caller decoding several
+  utterances can put their scorer work in one batch; a token of several
+  scorer units takes one wave per unit. Records live in fixed-size blocks
+  and are addressed by index; a prefix out of the beam with no surviving
+  descendant is reclaimed at once. Candidate tokens per frame are the
+  `max_token_candidates` most probable. The length bonus counts tokens or
+  words. A timestamp is the frame whose emission of the token carried the
+  most probability. Tests compare unpruned search with enumeration of all
+  alignments.
+
+Not built yet: the KenLM and ONNX recurrent scorers, recognizer options and
+wiring, recombination in max mode, the multi-utterance `Decoder`, the early
+partial-score beam, score beam defaults, and the tuning traces.
+
 ### Scope across model families
 
 Follow graehl's [upstream proposal, issue #4186](https://github.com/k2-fsa/sherpa-onnx/issues/4186):
