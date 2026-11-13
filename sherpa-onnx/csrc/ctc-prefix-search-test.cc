@@ -194,6 +194,95 @@ TEST(CtcPrefixSearch, MaxModeRecombinesOnEqualScorerStatesExactly) {
   EXPECT_EQ(HistoryScorer::LiveStates(), 0);
 }
 
+// Decodes with "scorer" and returns the best result.
+CtcPrefixHypothesis BestWith(const CtcPrefixSearchOptions &options,
+                             const std::vector<float> &log_probs,
+                             int32_t vocab_size, Scorer *scorer,
+                             int64_t *kept = nullptr) {
+  CtcPrefixSearch search(options, PlainVocabulary(vocab_size), {scorer},
+                         {0.8f});
+  search.Decode(log_probs.data(), log_probs.size() / vocab_size);
+  auto best = search.Finish(1);
+  if (kept != nullptr) *kept = search.NumHypothesesKept();
+  return best.empty() ? CtcPrefixHypothesis() : best[0];
+}
+
+TEST(CtcPrefixSearch, MaxModeTracedBeamsPlusEpsilonReproduceTheResult) {
+  const int32_t num_frames = 16, vocab_size = 5;
+  BigramTableScorer bigram(ScorerUnit::kAsrToken, -1.5f);
+  bigram.Set(1, 2, -0.1f);
+  bigram.Set(2, 3, -0.2f);
+  HistoryScorer history(ScorerUnit::kAsrToken, -0.3f);
+  // The bigram scorer recombines; the history scorer never does.
+  Scorer *scorers[] = {&bigram, &history};
+  int32_t narrower = 0;
+  for (Scorer *scorer : scorers) {
+    for (uint32_t seed = 500; seed != 540; ++seed) {
+      auto log_probs = RandomLogProbs(num_frames, vocab_size, seed);
+      CtcPrefixSearchOptions options;
+      options.alignment = CtcAlignmentMode::kMax;
+      options.max_active = 200;
+      options.max_token_candidates = vocab_size;
+      options.trace_survival = true;
+      int64_t wide_kept = 0;
+      auto wide = BestWith(options, log_probs, vocab_size, scorer, &wide_kept);
+      ASSERT_GE(wide.required_score_beam, 0.0f);
+      ASSERT_GE(wide.required_max_active, 1);
+
+      // A score-gap beam just above the traced gap: same result and score.
+      options.trace_survival = false;
+      options.beam = wide.required_score_beam + 1e-3f;
+      int64_t gap_kept = 0;
+      auto by_gap = BestWith(options, log_probs, vocab_size, scorer, &gap_kept);
+      EXPECT_EQ(by_gap.tokens, wide.tokens) << "seed " << seed;
+      EXPECT_NEAR(by_gap.score, wide.score, 1e-5) << "seed " << seed;
+      EXPECT_LE(gap_kept, wide_kept);
+      narrower += gap_kept < wide_kept;
+
+      // A hypothesis beam of exactly the traced rank: the same.
+      options.beam = std::numeric_limits<float>::infinity();
+      options.max_active = wide.required_max_active;
+      auto by_rank = BestWith(options, log_probs, vocab_size, scorer);
+      EXPECT_EQ(by_rank.tokens, wide.tokens) << "seed " << seed;
+      EXPECT_NEAR(by_rank.score, wide.score, 1e-5) << "seed " << seed;
+    }
+  }
+  // The traced beams are real restrictions, not the unlimited search again.
+  EXPECT_GT(narrower, 40);
+  EXPECT_EQ(HistoryScorer::LiveStates(), 0);
+}
+
+TEST(CtcPrefixSearch, SumModeTracedBeamsPlusEpsilonReproduceTheResult) {
+  const int32_t num_frames = 14, vocab_size = 5;
+  BigramTableScorer scorer(ScorerUnit::kAsrToken, -1.5f);
+  scorer.Set(1, 2, -0.1f);
+  scorer.Set(2, 3, -0.2f);
+  for (uint32_t seed = 500; seed != 540; ++seed) {
+    auto log_probs = RandomLogProbs(num_frames, vocab_size, seed);
+    CtcPrefixSearchOptions options;
+    options.max_active = 64;
+    options.max_token_candidates = vocab_size;
+    options.trace_survival = true;
+    auto wide = BestWith(options, log_probs, vocab_size, &scorer);
+
+    // Sum mode's trace covers every alignment that added to the output, so
+    // the result and its score are reproduced, at a wider beam than the
+    // output's main alignment alone would need.
+    options.trace_survival = false;
+    options.beam = wide.required_score_beam + 1e-3f;
+    auto by_gap = BestWith(options, log_probs, vocab_size, &scorer);
+    EXPECT_EQ(by_gap.tokens, wide.tokens) << "seed " << seed;
+    EXPECT_NEAR(by_gap.score, wide.score, 1e-4) << "seed " << seed;
+    EXPECT_EQ(by_gap.required_score_beam, 0.0f);
+
+    options.beam = std::numeric_limits<float>::infinity();
+    options.max_active = wide.required_max_active;
+    auto by_rank = BestWith(options, log_probs, vocab_size, &scorer);
+    EXPECT_EQ(by_rank.tokens, wide.tokens) << "seed " << seed;
+    EXPECT_NEAR(by_rank.score, wide.score, 1e-4) << "seed " << seed;
+  }
+}
+
 TEST(CtcPrefixSearch, ChunkBoundariesDoNotChangeTheResult) {
   const int32_t num_frames = 12, vocab_size = 5;
   auto log_probs = RandomLogProbs(num_frames, vocab_size, 7);

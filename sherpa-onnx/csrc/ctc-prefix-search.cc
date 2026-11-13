@@ -62,6 +62,17 @@ struct CtcPrefixSearch::Record {
   bool live;
 };
 
+// Each of a prefix's two endings (in blank, in its last token) has its own
+// alignments and so its own need; see NoteContribution.
+struct CtcPrefixSearch::SurvivalTrace {
+  SurvivalNeed blank;
+  SurvivalNeed nonblank;
+  SurvivalNeed next_blank;
+  SurvivalNeed next_nonblank;
+  float best_blank_term;
+  float best_nonblank_term;
+};
+
 // Scoring of one new record by one scorer: the units still to advance
 // through, in units_[begin, begin + length).
 struct CtcPrefixSearch::Pending {
@@ -89,8 +100,13 @@ CtcPrefixSearch::CtcPrefixSearch(
     offset += RoundUpTo8(scorer->Info().state_bytes);
     utterances_.push_back(scorer->NewUtterance());
   }
+  if (options_.trace_survival) {
+    survival_offset_ = offset;
+    offset += RoundUpTo8(sizeof(SurvivalTrace));
+  }
   record_bytes_ = offset;
-  recombine_ = options_.alignment == CtcAlignmentMode::kMax;
+  recombine_ =
+      options_.alignment == CtcAlignmentMode::kMax && options_.recombine;
   for (Scorer *scorer : scorers_) {
     recombine_ = recombine_ && scorer->Info().recombines;
   }
@@ -103,6 +119,10 @@ CtcPrefixSearch::CtcPrefixSearch(
   record->log_blank = 0;
   record->active = true;
   record->scored = true;
+  if (options_.trace_survival) {
+    *SurvivalOf(record) = {{0.0f, 1}, {0.0f, 1}, {0.0f, 1},
+                           {0.0f, 1}, kLogZero,  kLogZero};
+  }
   for (size_t s = 0; s != num_scorers; ++s) {
     scorers_[s]->Start(utterances_[s].get(), StateOf(record, s));
     SubtotalsOf(record)[s] = 0;
@@ -136,6 +156,30 @@ std::byte *CtcPrefixSearch::StateOf(Record *record, int32_t scorer) const {
 float *CtcPrefixSearch::SubtotalsOf(Record *record) const {
   return reinterpret_cast<float *>(reinterpret_cast<std::byte *>(record) +
                                    subtotals_offset_);
+}
+
+CtcPrefixSearch::SurvivalTrace *CtcPrefixSearch::SurvivalOf(
+    Record *record) const {
+  return reinterpret_cast<SurvivalTrace *>(
+      reinterpret_cast<std::byte *>(record) + survival_offset_);
+}
+
+// Folds the need of one term's alignment into an ending's need for the
+// frame in progress. In max mode the ending holds its largest term, so it
+// takes that term's need. In sum mode every term is part of the ending, so
+// it takes the most demanding.
+void CtcPrefixSearch::NoteContribution(float term, const SurvivalNeed &from,
+                                       float *best_term,
+                                       SurvivalNeed *next) const {
+  if (options_.alignment == CtcAlignmentMode::kMax) {
+    if (term > *best_term) *next = from;
+  } else if (*best_term == kLogZero) {
+    *next = from;
+  } else {
+    next->gap = std::max(next->gap, from.gap);
+    next->rank = std::max(next->rank, from.rank);
+  }
+  *best_term = std::max(*best_term, term);
 }
 
 float CtcPrefixSearch::Accumulate(float sum, float term) const {
@@ -247,6 +291,10 @@ void CtcPrefixSearch::Touch(uint32_t index) {
   record->stamp = frame_ + 1;
   record->next_blank = kLogZero;
   record->next_nonblank = kLogZero;
+  if (options_.trace_survival) {
+    SurvivalOf(record)->best_blank_term = kLogZero;
+    SurvivalOf(record)->best_nonblank_term = kLogZero;
+  }
   touched_.push_back(index);
 }
 
@@ -302,12 +350,40 @@ void CtcPrefixSearch::BeginFrame(const float *log_probs) {
     float total = Acoustic(log_blank, log_nonblank);
     int32_t last = record->token;
 
+    // The need of the alignment each of this prefix's sources stands for.
+    SurvivalNeed blank_need = {0, 0}, nonblank_need = {0, 0},
+                 total_need = {0, 0};
+    if (options_.trace_survival) {
+      blank_need = SurvivalOf(record)->blank;
+      nonblank_need = SurvivalOf(record)->nonblank;
+      if (options_.alignment == CtcAlignmentMode::kMax) {
+        total_need = log_blank >= log_nonblank ? blank_need : nonblank_need;
+      } else if (log_blank == kLogZero) {
+        total_need = nonblank_need;
+      } else if (log_nonblank == kLogZero) {
+        total_need = blank_need;
+      } else {
+        total_need = {std::max(blank_need.gap, nonblank_need.gap),
+                      std::max(blank_need.rank, nonblank_need.rank)};
+      }
+    }
+
     Touch(index);
-    record->next_blank =
-        Accumulate(record->next_blank, total + log_probs[blank]);
+    float stay_blank = total + log_probs[blank];
+    record->next_blank = Accumulate(record->next_blank, stay_blank);
+    if (options_.trace_survival) {
+      SurvivalTrace *trace = SurvivalOf(record);
+      NoteContribution(stay_blank, total_need, &trace->best_blank_term,
+                       &trace->next_blank);
+    }
     if (last >= 0) {
-      record->next_nonblank =
-          Accumulate(record->next_nonblank, log_nonblank + log_probs[last]);
+      float stay_nonblank = log_nonblank + log_probs[last];
+      record->next_nonblank = Accumulate(record->next_nonblank, stay_nonblank);
+      if (options_.trace_survival) {
+        SurvivalTrace *trace = SurvivalOf(record);
+        NoteContribution(stay_nonblank, nonblank_need,
+                         &trace->best_nonblank_term, &trace->next_nonblank);
+      }
     }
     for (int32_t token : candidates_) {
       // Repeating the last token extends the prefix only after a blank.
@@ -321,6 +397,11 @@ void CtcPrefixSearch::BeginFrame(const float *log_probs) {
       if (emitted > child->emit_score) {
         child->emit_score = emitted;
         child->frame = frame_;
+      }
+      if (options_.trace_survival) {
+        SurvivalTrace *trace = SurvivalOf(child);
+        NoteContribution(emitted, token == last ? blank_need : total_need,
+                         &trace->best_nonblank_term, &trace->next_nonblank);
       }
     }
   }
@@ -443,7 +524,9 @@ bool CtcPrefixSearch::SameFuture(const Record &a, const Record &b) const {
 // both ending in blank and ending in its last token. Everything scored
 // from here on is the same for both, so the dropped one cannot win.
 void CtcPrefixSearch::Recombine() {
-  same_hash_.clear();
+  // (hash of the future, position in touched_), sorted to bring equal
+  // futures together.
+  by_future_.clear();
   for (size_t i = 0; i != touched_.size(); ++i) {
     if (touched_scores_[i] == kLogZero) continue;
     Record *record = Rec(touched_[i]);
@@ -459,26 +542,35 @@ void CtcPrefixSearch::Recombine() {
     for (size_t s = 0; s != scorers_.size(); ++s) {
       mix(StateOf(record, s), scorers_[s]->Info().state_bytes);
     }
-    same_hash_[hash].push_back(static_cast<uint32_t>(i));
+    by_future_.emplace_back(hash, static_cast<uint32_t>(i));
   }
-  for (auto &entry : same_hash_) {
-    std::vector<uint32_t> &group = entry.second;
-    for (size_t x = 0; x != group.size(); ++x) {
-      if (touched_scores_[group[x]] == kLogZero) continue;
-      const Record &a = *Rec(touched_[group[x]]);
+  std::sort(by_future_.begin(), by_future_.end());
+
+  for (size_t begin = 0; begin != by_future_.size();) {
+    size_t end = begin + 1;
+    while (end != by_future_.size() &&
+           by_future_[end].first == by_future_[begin].first) {
+      ++end;
+    }
+    for (size_t x = begin; end - begin > 1 && x != end; ++x) {
+      uint32_t ax = by_future_[x].second;
+      if (touched_scores_[ax] == kLogZero) continue;
+      const Record &a = *Rec(touched_[ax]);
       float a_rest = a.scorer_total + LengthBonus(a, false);
-      for (size_t y = 0; y != group.size(); ++y) {
-        if (x == y || touched_scores_[group[y]] == kLogZero) continue;
-        const Record &b = *Rec(touched_[group[y]]);
+      for (size_t y = begin; y != end; ++y) {
+        uint32_t by = by_future_[y].second;
+        if (x == y || touched_scores_[by] == kLogZero) continue;
+        const Record &b = *Rec(touched_[by]);
         if (!SameFuture(a, b)) continue;
         float b_rest = b.scorer_total + LengthBonus(b, false);
         if (a.next_blank + a_rest >= b.next_blank + b_rest &&
             a.next_nonblank + a_rest >= b.next_nonblank + b_rest) {
-          touched_scores_[group[y]] = kLogZero;
+          touched_scores_[by] = kLogZero;
           ++num_recombined_;
         }
       }
     }
+    begin = end;
   }
 }
 
@@ -525,6 +617,16 @@ void CtcPrefixSearch::EndFrame() {
     record->log_nonblank = record->next_nonblank;
     record->active = true;
     active_.push_back(index);
+    if (options_.trace_survival) {
+      // Being kept this frame is part of what both endings needed.
+      SurvivalTrace *trace = SurvivalOf(record);
+      float gap = touched_scores_[order[0]] - touched_scores_[order[i]];
+      int32_t rank = static_cast<int32_t>(i) + 1;
+      trace->blank = {std::max(trace->next_blank.gap, gap),
+                      std::max(trace->next_blank.rank, rank)};
+      trace->nonblank = {std::max(trace->next_nonblank.gap, gap),
+                         std::max(trace->next_nonblank.rank, rank)};
+    }
   }
   for (size_t i = keep; i != order.size(); ++i) {
     ReleaseIfUnused(touched_[order[i]]);
@@ -561,6 +663,23 @@ CtcPrefixHypothesis CtcPrefixSearch::MakeHypothesis(
   hypothesis.score = score;
   hypothesis.acoustic_log_prob = acoustic;
   Record *record = Rec(index);
+  if (options_.trace_survival) {
+    const SurvivalTrace &trace = *SurvivalOf(record);
+    bool blank_only = record->log_nonblank == kLogZero;
+    bool nonblank_only = record->log_blank == kLogZero;
+    SurvivalNeed need;
+    if (options_.alignment == CtcAlignmentMode::kMax) {
+      need = record->log_blank >= record->log_nonblank ? trace.blank
+                                                       : trace.nonblank;
+    } else if (blank_only || nonblank_only) {
+      need = blank_only ? trace.blank : trace.nonblank;
+    } else {
+      need = {std::max(trace.blank.gap, trace.nonblank.gap),
+              std::max(trace.blank.rank, trace.nonblank.rank)};
+    }
+    hypothesis.required_score_beam = need.gap;
+    hypothesis.required_max_active = need.rank;
+  }
   for (size_t s = 0; s != scorers_.size(); ++s) {
     hypothesis.scorer_log_scores.push_back(
         SubtotalsOf(record)[s] + (final_scores ? final_scores[s] : 0));

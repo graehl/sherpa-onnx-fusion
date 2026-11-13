@@ -10,6 +10,7 @@
 #include <limits>
 #include <memory>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "sherpa-onnx/csrc/scorer.h"
@@ -49,6 +50,10 @@ enum class LengthBonusUnit { kToken, kWord };
 struct CtcPrefixSearchOptions {
   CtcAlignmentMode alignment = CtcAlignmentMode::kSum;
 
+  // In max mode, drop a hypothesis that another with the same future
+  // matches or beats (see CtcAlignmentMode::kMax). Off only for comparison.
+  bool recombine = true;
+
   // Hypothesis beam: at most this many output prefixes survive a frame.
   int32_t max_active = 8;
   // A prefix survives only within this score of the frame's best.
@@ -63,6 +68,13 @@ struct CtcPrefixSearchOptions {
 
   // The character a character scorer is given between words.
   UnitId word_boundary_char = ' ';
+
+  // Optional traces, off by default; each adds bytes to every hypothesis's
+  // record and work per frame only when on.
+  //
+  // Survival: for each result, how wide the score-gap beam and the
+  // hypothesis beam had to be to keep its best alignment at every frame.
+  bool trace_survival = false;
 };
 
 struct CtcPrefixHypothesis {
@@ -76,6 +88,26 @@ struct CtcPrefixHypothesis {
   float acoustic_log_prob = 0;
   // Raw, unweighted log score of each scorer, in scorer order.
   std::vector<float> scorer_log_scores;
+
+  // With CtcPrefixSearchOptions::trace_survival: over the frames of the
+  // prefixes this output's best alignment passed through, the largest gap
+  // below the frame's best score and the lowest rank at which it was kept.
+  // A search whose score-gap beam exceeds the first, or whose hypothesis
+  // beam is at least the second, gives the same result and score. In max
+  // mode these are what the output's one best alignment needed. In sum mode
+  // they are what every alignment that added to the output needed, however
+  // little it added, so they are larger than a search needs in practice.
+  // Zero without the trace.
+  float required_score_beam = 0;
+  int32_t required_max_active = 0;
+};
+
+// What it took to keep an alignment alive: over the frames of the prefixes it
+// passed through, the largest gap below the frame's best score and the lowest
+// rank (counting from 1) at which it was kept.
+struct SurvivalNeed {
+  float gap;
+  int32_t rank;
 };
 
 // One utterance's search. Frames arrive in any chunking; chunk boundaries do
@@ -133,10 +165,12 @@ class CtcPrefixSearch {
  private:
   struct Record;
   struct Pending;
+  struct SurvivalTrace;
 
   Record *Rec(uint32_t index) const;
   std::byte *StateOf(Record *record, int32_t scorer) const;
   float *SubtotalsOf(Record *record) const;
+  SurvivalTrace *SurvivalOf(Record *record) const;
 
   uint32_t NewRecord(uint32_t parent, int32_t token);
   void FreeRecord(uint32_t index);
@@ -146,6 +180,8 @@ class CtcPrefixSearch {
   void QueueScoring(uint32_t index);
   void FinishScoring();
   void Recombine();
+  void NoteContribution(float term, const SurvivalNeed &from, float *best_term,
+                        SurvivalNeed *next) const;
   bool SameFuture(const Record &a, const Record &b) const;
   float Acoustic(float blank, float nonblank) const;
   float Accumulate(float sum, float term) const;
@@ -160,10 +196,11 @@ class CtcPrefixSearch {
   std::vector<float> weights_;
   std::vector<std::unique_ptr<ScorerUtterance>> utterances_;
 
-  // Record layout: header, one float subtotal per scorer, then each
-  // scorer's state bytes, all 8-byte aligned.
+  // Record layout: header, one float subtotal per scorer, each scorer's
+  // state bytes, then the bytes of any enabled trace, all 8-byte aligned.
   size_t subtotals_offset_ = 0;
   std::vector<size_t> state_offsets_;
+  size_t survival_offset_ = 0;  // Meaningful with trace_survival.
   size_t record_bytes_ = 0;
 
   // Records live in fixed-size blocks, so a record's address is stable and
@@ -181,7 +218,7 @@ class CtcPrefixSearch {
   int64_t num_recombined_ = 0;
   int64_t num_kept_ = 0;
   int64_t num_scored_ = 0;
-  std::unordered_map<uint64_t, std::vector<uint32_t>> same_hash_;
+  std::vector<std::pair<uint64_t, uint32_t>> by_future_;
 
   // Per-frame work.
   std::vector<uint32_t> touched_;
