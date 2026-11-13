@@ -58,7 +58,13 @@ design for what does not.
   scorer's model uses for a word boundary is the common option `space`.
   Type names carry a `Scorer` prefix (`ScorerStateRef`, `ScorerExtension`).
 - **CTC prefix search**: `sherpa-onnx/csrc/ctc-prefix-search.h`, one object
-  per utterance, sum and max alignment (max without recombination yet).
+  per utterance, sum and max alignment. In max mode, when every scorer
+  sets `recombines`, a hypothesis is dropped when another with the same
+  last token, word state, and scorer state bytes scores at least as well
+  both ending in blank and ending in that token; the two endings are
+  compared separately because a repeated token extends only the blank
+  ending. The best result is unchanged; later results are no longer each
+  output's own best alignment.
   A frame runs in phases (`BeginFrame`, `GatherScorerWave` and
   `ApplyScorerWave` per scorer, `EndFrame`) so a caller decoding several
   utterances can put their scorer work in one batch; a token of several
@@ -105,7 +111,7 @@ design for what does not.
   short test recordings, and accepts a KenLM scorer from `--scorer.*` and
   from `--fusion-config`. The streaming path has unit tests only.
 
-Not built yet: recombination in max mode, the multi-utterance `Decoder`, the early
+Not built yet: the multi-utterance `Decoder`, the early
 partial-score beam, score beam defaults, and the tuning traces.
 
 ### Scope across model families

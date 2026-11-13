@@ -121,15 +121,77 @@ TEST(CtcPrefixSearch, UnprunedSearchMatchesEnumerationWithoutScorers) {
       search.Decode(log_probs.data(), num_frames);
       auto nbest = search.Finish(1000);
 
-      ASSERT_EQ(nbest.size(), outputs.size()) << "seed " << seed;
-      EXPECT_EQ(nbest[0].tokens, expected.first) << "seed " << seed;
-      EXPECT_NEAR(nbest[0].score, expected.second, 1e-4) << "seed " << seed;
-      for (const auto &hypothesis : nbest) {
-        EXPECT_NEAR(hypothesis.acoustic_log_prob, outputs.at(hypothesis.tokens),
+      // Sum mode keeps every output. Max mode with no scorer drops
+      // hypotheses that another with the same last token beats.
+      if (sum) {
+        ASSERT_EQ(nbest.size(), outputs.size()) << "seed " << seed;
+        EXPECT_EQ(search.NumRecombined(), 0);
+        for (const auto &hypothesis : nbest) {
+          EXPECT_NEAR(hypothesis.acoustic_log_prob,
+                      outputs.at(hypothesis.tokens), 1e-4);
+        }
+      } else {
+        ASSERT_FALSE(nbest.empty());
+        EXPECT_LT(nbest.size(), outputs.size()) << "seed " << seed;
+        EXPECT_GT(search.NumRecombined(), 0);
+        // Only the best result is exact: a dropped hypothesis stops
+        // feeding its descendants.
+        EXPECT_NEAR(nbest[0].acoustic_log_prob, outputs.at(nbest[0].tokens),
                     1e-4);
       }
+      EXPECT_EQ(nbest[0].tokens, expected.first) << "seed " << seed;
+      EXPECT_NEAR(nbest[0].score, expected.second, 1e-4) << "seed " << seed;
     }
   }
+}
+
+TEST(CtcPrefixSearch, MaxModeRecombinesOnEqualScorerStatesExactly) {
+  const int32_t num_frames = 6, vocab_size = 4;
+  // A bigram scorer's state is the last token, so hypotheses ending in the
+  // same token have the same future.
+  BigramTableScorer bigram(ScorerUnit::kAsrToken, -2.0f);
+  bigram.Set(BigramTableScorer::kStart, 2, -0.2f);
+  bigram.Set(2, 3, -0.1f);
+  bigram.Set(3, 1, -0.4f);
+  bigram.SetFinal(1, -0.3f);
+  const float weight = 0.7f, bonus = 0.3f;
+  auto score_of = [&](const Tokens &tokens) {
+    double score = bonus * tokens.size();
+    UnitId previous = BigramTableScorer::kStart;
+    for (int32_t token : tokens) {
+      score += weight * bigram.LogScore(previous, token);
+      previous = token;
+    }
+    return score + weight * bigram.FinalLogScore(previous);
+  };
+
+  for (uint32_t seed = 400; seed != 420; ++seed) {
+    auto log_probs = RandomLogProbs(num_frames, vocab_size, seed);
+    auto outputs = EnumerateOutputs(log_probs, num_frames, vocab_size, false);
+    auto expected = BestOf(outputs, score_of);
+
+    CtcPrefixSearchOptions options = Exhaustive(vocab_size);
+    options.alignment = CtcAlignmentMode::kMax;
+    options.length_bonus = bonus;
+    CtcPrefixSearch search(options, PlainVocabulary(vocab_size), {&bigram},
+                           {weight});
+    search.Decode(log_probs.data(), num_frames);
+    auto nbest = search.Finish(1000);
+    ASSERT_FALSE(nbest.empty());
+    EXPECT_EQ(nbest[0].tokens, expected.first) << "seed " << seed;
+    EXPECT_NEAR(nbest[0].score, expected.second, 1e-4) << "seed " << seed;
+    EXPECT_GT(search.NumRecombined(), 0);
+    EXPECT_LT(nbest.size(), outputs.size());
+
+    // A scorer whose state is the whole history never recombines.
+    HistoryScorer history(ScorerUnit::kAsrToken, -0.1f);
+    CtcPrefixSearch unmerged(options, PlainVocabulary(vocab_size), {&history},
+                             {weight});
+    unmerged.Decode(log_probs.data(), num_frames);
+    EXPECT_EQ(unmerged.NumRecombined(), 0);
+    EXPECT_EQ(unmerged.Finish(1000).size(), outputs.size());
+  }
+  EXPECT_EQ(HistoryScorer::LiveStates(), 0);
 }
 
 TEST(CtcPrefixSearch, ChunkBoundariesDoNotChangeTheResult) {

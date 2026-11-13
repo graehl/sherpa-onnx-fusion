@@ -90,6 +90,10 @@ CtcPrefixSearch::CtcPrefixSearch(
     utterances_.push_back(scorer->NewUtterance());
   }
   record_bytes_ = offset;
+  recombine_ = options_.alignment == CtcAlignmentMode::kMax;
+  for (Scorer *scorer : scorers_) {
+    recombine_ = recombine_ && scorer->Info().recombines;
+  }
   pending_.resize(num_scorers);
   wave_.resize(num_scorers);
   scratch_.resize(num_scorers);
@@ -422,6 +426,62 @@ void CtcPrefixSearch::FinishScoring() {
   }
 }
 
+bool CtcPrefixSearch::SameFuture(const Record &a, const Record &b) const {
+  if (a.token != b.token || a.word_open != b.word_open) return false;
+  for (size_t s = 0; s != scorers_.size(); ++s) {
+    if (std::memcmp(StateOf(const_cast<Record *>(&a), s),
+                    StateOf(const_cast<Record *>(&b), s),
+                    scorers_[s]->Info().state_bytes) != 0) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// Among this frame's hypotheses with the same future (last token, word
+// state, and scorer states), drops each one that another matches or beats
+// both ending in blank and ending in its last token. Everything scored
+// from here on is the same for both, so the dropped one cannot win.
+void CtcPrefixSearch::Recombine() {
+  same_hash_.clear();
+  for (size_t i = 0; i != touched_.size(); ++i) {
+    if (touched_scores_[i] == kLogZero) continue;
+    Record *record = Rec(touched_[i]);
+    uint64_t hash = 1469598103934665603ull;
+    auto mix = [&hash](const void *data, size_t size) {
+      const auto *bytes = static_cast<const unsigned char *>(data);
+      for (size_t k = 0; k != size; ++k) {
+        hash = (hash ^ bytes[k]) * 1099511628211ull;
+      }
+    };
+    mix(&record->token, sizeof(record->token));
+    mix(&record->word_open, sizeof(record->word_open));
+    for (size_t s = 0; s != scorers_.size(); ++s) {
+      mix(StateOf(record, s), scorers_[s]->Info().state_bytes);
+    }
+    same_hash_[hash].push_back(static_cast<uint32_t>(i));
+  }
+  for (auto &entry : same_hash_) {
+    std::vector<uint32_t> &group = entry.second;
+    for (size_t x = 0; x != group.size(); ++x) {
+      if (touched_scores_[group[x]] == kLogZero) continue;
+      const Record &a = *Rec(touched_[group[x]]);
+      float a_rest = a.scorer_total + LengthBonus(a, false);
+      for (size_t y = 0; y != group.size(); ++y) {
+        if (x == y || touched_scores_[group[y]] == kLogZero) continue;
+        const Record &b = *Rec(touched_[group[y]]);
+        if (!SameFuture(a, b)) continue;
+        float b_rest = b.scorer_total + LengthBonus(b, false);
+        if (a.next_blank + a_rest >= b.next_blank + b_rest &&
+            a.next_nonblank + a_rest >= b.next_nonblank + b_rest) {
+          touched_scores_[group[y]] = kLogZero;
+          ++num_recombined_;
+        }
+      }
+    }
+  }
+}
+
 void CtcPrefixSearch::EndFrame() {
   FinishScoring();
 
@@ -433,6 +493,8 @@ void CtcPrefixSearch::EndFrame() {
                         : Acoustic(record.next_blank, record.next_nonblank) +
                               record.scorer_total + LengthBonus(record, false);
   }
+
+  if (recombine_) Recombine();
 
   // Best first; equal scores keep the order of their records' indices.
   std::vector<uint32_t> order(touched_.size());
