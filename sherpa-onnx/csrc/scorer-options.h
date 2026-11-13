@@ -32,7 +32,10 @@ struct CommonScorerOptions {
 struct ScorerOptions {
   std::string type;  // Registered scorer type, e.g. "kenlm".
   CommonScorerOptions common;
-  float weight = 1.0f;       // Default search weight of this scorer.
+  float weight = 1.0f;  // Default search weight of this scorer.
+  // Apply the scorer only to the hypotheses that survive the search, as
+  // n-best rescoring does, instead of during the search.
+  bool rescore = false;
   std::string extra = "{}";  // JSON object text for the type's factory.
 
   void Register(ParseOptions *po);

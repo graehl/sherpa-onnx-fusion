@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "sherpa-onnx/csrc/recurrent-lm-scorer.h"
+#include "sherpa-onnx/csrc/rescoring-scorer.h"
 #if SHERPA_ONNX_ENABLE_KENLM
 #include "sherpa-onnx/csrc/kenlm-scorer.h"
 #endif
@@ -80,7 +81,9 @@ std::unique_ptr<Scorer> CreateScorer(const ScorerOptions &options) {
     throw std::runtime_error("Unknown scorer type '" + options.type +
                              "'. Registered types: " + known + hint);
   }
-  return it->second->Create(options.common, options.extra);
+  auto scorer = it->second->Create(options.common, options.extra);
+  return options.rescore ? MakeRescoringScorer(std::move(scorer))
+                         : std::move(scorer);
 }
 
 std::vector<std::unique_ptr<Scorer>> CreateScorers(
