@@ -12,8 +12,8 @@ This is the convention for configuring the multiple
 [fusion scorers](beam-search-and-scorer-fusion.md). The mechanism is
 implemented and tested with a fixture collection
 (`sherpa-onnx/csrc/option-collection.h`, `option-json.h`,
-`option-collection-test.cc`); no recognizer option uses it until the scorer
-configuration lands. It works for any `std::vector` of a struct that has
+`option-collection-test.cc`), and the offline recognizer's `--scorer.*` and
+`--fusion-config` options use it. It works for any `std::vector` of a struct that has
 the project's usual `Register(ParseOptions *)`; a list of FST inputs is
 another possible consumer. Existing options and `--config` files keep their
 behavior. The configs it serves are simple: scalars, nested structs, and

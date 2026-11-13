@@ -21,11 +21,11 @@ consumer is an ordered list of FST inputs: callers could supply separate
 graphs and request composition rather than build one combined file outside
 the application.
 
-## Existing mechanism
+## Mechanism before this addition
 
 `ParseOptions::Register` accepts scalar field pointers. Its prefix wrapper
 forms dotted names, and `SetOption` assigns an exact registered key.
-It has no generic registration for vectors of nested structs; repeating
+It had no generic registration for vectors of nested structs; repeating
 one scalar key overwrites that field. Indexed names can be registered
 explicitly, but collection creation and storage lifetime are then the
 caller's responsibility. Existing `--config` files contain CLI-style
@@ -57,19 +57,15 @@ framework. A local wrapper or extension is an option, not a commitment.
 
 ## Status
 
-The mechanism is implemented and tested with a non-scorer fixture; see the
-topic. What remains is its first real consumer, the scorer configuration,
-and the multiple-FST use below.
+The mechanism is implemented and tested with a non-scorer fixture, and the
+recognizer's scorer configuration uses it; see the topic. The multiple-FST
+use below remains a possible second consumer.
 
 ## Decisions still open
 
-Choose the smallest approach that supports the required nested collections
-without making anticipated merges from `k2-fsa/sherpa-onnx` unnecessarily
-difficult. Specify collection ordering, index gaps, duplicate assignments,
-unknown-field errors, and precedence between files and CLI overrides.
-Defaults, validation, and diagnostics should agree across supported input
-forms; errors should identify the full nested field path. Preserve existing
-CLI and config-file behavior.
+The [topic's rules](../../topics/json-option-collections.md#rules) settle
+collection ordering, index gaps, duplicate assignments, unknown-field
+errors, and precedence between files and CLI overrides.
 
 For multiple FST inputs, configuration is only the entry point. The consuming
 code must define composition order, label/symbol compatibility, and eager

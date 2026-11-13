@@ -21,6 +21,7 @@ set(sources
   fa-feature-extractor.cc
   fa-lexicon.cc
   features.cc
+  fusion-config.cc
   file-utils.cc
   forced-aligner-impl.cc
   forced-aligner.cc
@@ -41,6 +42,7 @@ set(sources
   offline-ctc-fst-decoder-config.cc
   offline-ctc-fst-decoder.cc
   offline-ctc-greedy-search-decoder.cc
+  offline-ctc-prefix-beam-search-decoder.cc
   offline-ctc-model.cc
   offline-dolphin-model-config.cc
   offline-dolphin-model.cc
@@ -851,6 +853,7 @@ if(SHERPA_ONNX_ENABLE_TESTS)
     forced-aligner-test.cc
     lfr-test.cc
     math-test.cc
+    offline-ctc-prefix-beam-search-decoder-test.cc
     offline-recognizer-canary-impl-test.cc
     offline-recognizer-cohere-transcribe-impl-test.cc
     offline-recognizer-ctc-impl-test.cc
