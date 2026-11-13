@@ -30,11 +30,11 @@ void FusionConfig::Register(ParseOptions *po) {
                "Used only when decoding_method is prefix_beam_search. sum: "
                "score an output by the total probability of its alignments. "
                "max: by its best alignment.");
-  po->Register("ctc-score-beam", &ctc_score_beam,
+  po->Register("score-beam", &score_beam,
                "Used only when decoding_method is prefix_beam_search. A "
                "hypothesis survives a frame only if its score is within "
                "this much of the best hypothesis. 0 means no limit.");
-  po->Register("ctc-token-candidates", &ctc_token_candidates,
+  po->Register("token-candidates", &token_candidates,
                "Used only when decoding_method is prefix_beam_search. Number "
                "of most probable tokens per frame that may extend a "
                "hypothesis.");
@@ -54,9 +54,9 @@ bool FusionConfig::Validate() const {
                      ctc_alignment.c_str());
     return false;
   }
-  if (ctc_token_candidates < 1) {
-    SHERPA_ONNX_LOGE("--ctc-token-candidates must be positive. Given: %d",
-                     ctc_token_candidates);
+  if (token_candidates < 1) {
+    SHERPA_ONNX_LOGE("--token-candidates must be positive. Given: %d",
+                     token_candidates);
     return false;
   }
   return true;
@@ -72,8 +72,8 @@ std::string FusionConfig::ToString() const {
   os << "length_bonus=" << length_bonus << ", ";
   os << "length_bonus_unit=\"" << length_bonus_unit << "\", ";
   os << "ctc_alignment=\"" << ctc_alignment << "\", ";
-  os << "ctc_token_candidates=" << ctc_token_candidates << ", ";
-  os << "ctc_score_beam=" << ctc_score_beam << ")";
+  os << "token_candidates=" << token_candidates << ", ";
+  os << "score_beam=" << score_beam << ")";
   return os.str();
 }
 

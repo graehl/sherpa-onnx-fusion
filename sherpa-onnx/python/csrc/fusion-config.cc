@@ -121,8 +121,8 @@ void PybindFusionConfig(py::module *m) {
              f.length_bonus = length_bonus;
              f.length_bonus_unit = length_bonus_unit;
              f.ctc_alignment = ctc_alignment;
-             f.ctc_token_candidates = token_candidates;
-             f.ctc_score_beam = score_beam;
+             f.token_candidates = token_candidates;
+             f.score_beam = score_beam;
              return f;
            }),
            py::arg("scorers") = std::vector<ScorerOptions>{},
@@ -134,8 +134,8 @@ void PybindFusionConfig(py::module *m) {
       .def_readwrite("length_bonus", &PyClass::length_bonus)
       .def_readwrite("length_bonus_unit", &PyClass::length_bonus_unit)
       .def_readwrite("ctc_alignment", &PyClass::ctc_alignment)
-      .def_readwrite("token_candidates", &PyClass::ctc_token_candidates)
-      .def_readwrite("score_beam", &PyClass::ctc_score_beam)
+      .def_readwrite("token_candidates", &PyClass::token_candidates)
+      .def_readwrite("score_beam", &PyClass::score_beam)
       .def("validate", &PyClass::Validate)
       .def("__str__", &PyClass::ToString);
 }
