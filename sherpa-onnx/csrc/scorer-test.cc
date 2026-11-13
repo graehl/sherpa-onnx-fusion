@@ -115,8 +115,12 @@ TEST(ScorerRegistry, CreatesByTypeAndReportsUnknownTypes) {
     CreateScorers(options);
     FAIL() << "expected an unknown-type error";
   } catch (const std::runtime_error &e) {
-    EXPECT_EQ(std::string(e.what()),
-              "Unknown scorer type 'nonesuch'. Registered types: test-bigram");
+    std::string message = e.what();
+    EXPECT_EQ(message.rfind("Unknown scorer type 'nonesuch'. Registered", 0),
+              0u)
+        << message;
+    EXPECT_NE(message.find("onnx-rnn"), std::string::npos) << message;
+    EXPECT_NE(message.find("test-bigram"), std::string::npos) << message;
   }
 }
 

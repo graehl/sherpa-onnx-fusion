@@ -6,10 +6,16 @@
 
 #include <map>
 #include <memory>
+#include <mutex>  // NOLINT
 #include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
+
+#include "sherpa-onnx/csrc/recurrent-lm-scorer.h"
+#if SHERPA_ONNX_ENABLE_KENLM
+#include "sherpa-onnx/csrc/kenlm-scorer.h"
+#endif
 
 namespace sherpa_onnx {
 
@@ -45,7 +51,18 @@ void RegisterScorerFactory(const std::string &type,
   }
 }
 
+void RegisterBuiltinScorerFactories() {
+  static std::once_flag once;
+  std::call_once(once, [] {
+    RegisterScorerFactory("onnx-rnn", MakeOnnxRecurrentLmScorerFactory());
+#if SHERPA_ONNX_ENABLE_KENLM
+    RegisterScorerFactory("kenlm", MakeKenLmScorerFactory());
+#endif
+  });
+}
+
 std::unique_ptr<Scorer> CreateScorer(const ScorerOptions &options) {
+  RegisterBuiltinScorerFactories();
   const auto &factories = ScorerFactories();
   auto it = factories.find(options.type);
   if (it == factories.end()) {
@@ -54,8 +71,14 @@ std::unique_ptr<Scorer> CreateScorer(const ScorerOptions &options) {
       known += known.empty() ? "" : ", ";
       known += entry.first;
     }
+    std::string hint;
+#if !SHERPA_ONNX_ENABLE_KENLM
+    if (options.type == "kenlm") {
+      hint = " (kenlm needs a build with -DSHERPA_ONNX_ENABLE_KENLM=ON)";
+    }
+#endif
     throw std::runtime_error("Unknown scorer type '" + options.type +
-                             "'. Registered types: " + known);
+                             "'. Registered types: " + known + hint);
   }
   return it->second->Create(options.common, options.extra);
 }

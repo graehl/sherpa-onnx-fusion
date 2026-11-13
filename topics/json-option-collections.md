@@ -33,6 +33,7 @@ Several, by zero-based index:
 ```text
 --scorer.0.type=kenlm    --scorer.0.model=lm.bin       --scorer.0.weight=0.6
 --scorer.1.type=onnx-rnn --scorer.1.model=lstm.onnx    --scorer.1.weight=0.3
+--scorer.1.extra='{"vocab":"units.txt"}'
 ```
 
 The same in a JSON file named by an option:
@@ -41,7 +42,7 @@ The same in a JSON file named by an option:
 { "scorer": [
     { "type": "kenlm", "model": "lm.bin", "weight": 0.6 },
     { "type": "onnx-rnn", "model": "lstm.onnx", "weight": 0.3,
-      "extra": { "state-layout": "gru" } } ] }
+      "extra": { "vocab": "units.txt" } } ] }
 ```
 
 `--scorer.model` means `--scorer.0.model`. JSON keys are the option names,

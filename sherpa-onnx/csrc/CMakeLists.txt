@@ -137,6 +137,7 @@ set(sources
   online-zipformer2-ctc-model-config.cc
   online-zipformer2-ctc-model.cc
   online-zipformer2-transducer-model.cc
+  onnx-recurrent-lm-step.cc
   onnx-utils.cc
   option-json.cc
   packed-sequence.cc
@@ -145,6 +146,7 @@ set(sources
   phrase-matcher.cc
   provider-config.cc
   provider.cc
+  recurrent-lm-scorer.cc
   scorer-options.cc
   scorer.cc
   session.cc
@@ -368,6 +370,10 @@ if(SHERPA_ONNX_ENABLE_CHECK)
   list(APPEND sources log.cc)
 endif()
 
+if(SHERPA_ONNX_ENABLE_KENLM)
+  list(APPEND sources kenlm-scorer.cc)
+endif()
+
 # Always static build
 add_library(sherpa-onnx-core STATIC ${sources})
 
@@ -488,6 +494,10 @@ if(NOT BUILD_SHARED_LIBS AND APPLE)
 endif()
 
 target_link_libraries(sherpa-onnx-core fstfar fst)
+
+if(SHERPA_ONNX_ENABLE_KENLM)
+  target_link_libraries(sherpa-onnx-core kenlm)
+endif()
 
 if(SHERPA_ONNX_ENABLE_CHECK)
   target_compile_definitions(sherpa-onnx-core PUBLIC SHERPA_ONNX_ENABLE_CHECK=1)
@@ -863,6 +873,7 @@ if(SHERPA_ONNX_ENABLE_TESTS)
     online-recognizer-result-test.cc
     online-recognizer-transducer-impl-test.cc
     recognizer-result-json-test.cc
+    recurrent-lm-scorer-test.cc
     regex-lang-test.cc
     scorer-test.cc
     session-test.cc
@@ -885,6 +896,12 @@ if(SHERPA_ONNX_ENABLE_TESTS)
   if(SHERPA_ONNX_ENABLE_SPEAKER_DIARIZATION)
     list(APPEND sherpa_onnx_test_srcs
       fast-clustering-test.cc
+    )
+  endif()
+
+  if(SHERPA_ONNX_ENABLE_KENLM)
+    list(APPEND sherpa_onnx_test_srcs
+      kenlm-scorer-test.cc
     )
   endif()
 
