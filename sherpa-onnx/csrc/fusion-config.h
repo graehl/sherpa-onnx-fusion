@@ -28,6 +28,9 @@ struct FusionConfig {
   // CTC prefix search.
   std::string ctc_alignment = "sum";  // "sum" or "max"
   int32_t ctc_token_candidates = 8;
+  // A hypothesis survives a frame only within this score of the best.
+  // Zero or less means no limit. See the topic for the sweep behind 12.
+  float ctc_score_beam = 12.0f;
 
   void Register(ParseOptions *po);
   bool Validate() const;

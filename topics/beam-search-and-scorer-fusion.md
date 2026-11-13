@@ -85,7 +85,8 @@ design for what does not.
 - **Offline recognizer**: `--decoding-method=prefix_beam_search` for
   offline CTC models, with `--max-active-paths` as the hypothesis beam,
   `--scorer.*` or `--fusion-config` for scorers, and `--length-bonus`,
-  `--length-bonus-unit`, `--ctc-alignment`, `--ctc-token-candidates`
+  `--length-bonus-unit`, `--ctc-alignment`, `--ctc-token-candidates`,
+  `--ctc-score-beam`
   (`sherpa-onnx/csrc/fusion-config.h`,
   `offline-ctc-prefix-beam-search-decoder.h`). The utterances of a batch
   share each scorer call. Token text, word starts, and unemittable symbols
@@ -122,7 +123,7 @@ design for what does not.
   do not use this class yet: they batch within one `Decode` call.
 
 Not built yet: the early
-partial-score beam, score beam defaults, and the tuning traces.
+partial-score beam and the tuning traces.
 
 ### Scope across model families
 
@@ -187,6 +188,35 @@ revise its boundary or execution policy rather than accepting that regression
 as the cost of sharing code.
 
 ## Evidence: alignment summation and LM fusion
+
+### Score-gap beam sweep
+
+| Clips | Scorer, weight, word bonus | Beam | Largest gap that changed a transcript | Changed at 8 | Changed at 10 | Kept, no gap | Kept at 12 | Kept at 10 |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| Vietnamese | none | 8 | 2 | 0 | 0 | 8.0 | 8.0 | 8.0 |
+| Vietnamese | 8-gram, 0.3, 2 | 4 | 4 | 0 | 0 | 4.0 | 4.0 | 4.0 |
+| Vietnamese | 8-gram, 0.3, 2 | 8 | 2 | 0 | 0 | 8.0 | 8.0 | 7.8 |
+| Vietnamese | 8-gram, 0.3, 2 | 32 | 8 | 1 | 0 | 31.9 | 30.0 | 26.7 |
+| Sinhala | none | 8 | none down to 1 | 0 | 0 | 8.0 | 7.1 | 6.9 |
+| Sinhala | 8-gram, 0.5, 0.5 | 8 | 3 | 0 | 0 | 8.0 | 6.9 | 6.6 |
+| Sinhala | 8-gram, 0.5, 0.5 | 32 | 6 | 0 | 0 | 31.9 | 25.0 | 21.7 |
+| Sinhala | LSTM int8, 0.5, 0.5 | 8 | 3 | 0 | 0 | 8.0 | 6.9 | 6.6 |
+
+Every change at the gaps shown was one character in one clip. No
+transcript changed at a gap of 10 or more, and 12 leaves a margin over
+the one condition that changed at 8. At 12 the gap removes little work at
+beams of 4 and 8 and 6 to 22 percent of kept hypotheses at beam 32. Forty
+clips can show that a gap is too small; they cannot show that 12 is safe
+in general, and the measure here is agreement with the unlimited search,
+which is not error rate against references.
+
+A constant is a first default. The right gap depends on how far apart
+competing hypotheses' scores sit, which depends on the recognizer's score
+scale and on each scorer's weight and range; a default derived from those
+would hold across models where a constant will not. The per-hypothesis
+survival traces described under tuning are the better instrument for this:
+one unlimited run reports the gap each final result needed at every frame,
+in place of one run per candidate gap.
 
 ## Search semantics
 

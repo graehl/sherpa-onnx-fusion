@@ -162,9 +162,13 @@ TEST(FusionConfig, RegistersScorersAndSearchOptions) {
   CtcPrefixSearchOptions options = MakeCtcPrefixSearchOptions(config, 16);
   EXPECT_EQ(options.max_active, 16);
   EXPECT_EQ(options.max_token_candidates, 5);
+  EXPECT_FLOAT_EQ(options.beam, 12.0f);
   EXPECT_EQ(options.alignment, CtcAlignmentMode::kMax);
   EXPECT_EQ(options.length_bonus_unit, LengthBonusUnit::kWord);
   EXPECT_FLOAT_EQ(options.length_bonus, 1.5f);
+
+  config.ctc_score_beam = 0;
+  EXPECT_TRUE(std::isinf(MakeCtcPrefixSearchOptions(config, 16).beam));
 
   config.ctc_alignment = "best";
   EXPECT_FALSE(config.Validate());

@@ -529,6 +529,8 @@ void CtcPrefixSearch::EndFrame() {
   for (size_t i = keep; i != order.size(); ++i) {
     ReleaseIfUnused(touched_[order[i]]);
   }
+  num_kept_ += static_cast<int64_t>(keep);
+  num_scored_ += static_cast<int64_t>(new_records_.size());
   ++frame_;
 }
 
