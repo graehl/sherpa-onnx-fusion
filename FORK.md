@@ -1,35 +1,36 @@
 # Differences from k2-fsa/sherpa-onnx
 
-This fork aims for efficient phone and server ASR inference with LM fusion,
-adding CTC support and improving use cases that already have fusion support.
-It develops shared search components with pluggable scorers for CTC,
-transducer, and autoregressive models, starting with sum-over-alignments CTC
-prefix search. The decoder is currently in design; its proposed
-interfaces and CLI options are not implemented.
-
-Start with the [shared beam search and scorer fusion topic](topics/beam-search-and-scorer-fusion.md).
-It records the evidence, the first implementation's scope, the C++ interface
-sketch, and configuration; designs for later passes are in its
-[sketches companion](topics/beam-search-and-scorer-fusion.sketches.md), and
-the fork's own terms in the [glossary](GLOSSARY.md). The design follows and
-extends the
+This fork aims for efficient phone and server ASR inference with LM fusion.
+It adds a prefix beam search with pluggable scorers, shared across model
+families, and follows and extends the
 [LM-fusion proposal in upstream issue #4186](https://github.com/k2-fsa/sherpa-onnx/issues/4186).
 
-## Intended decoder additions
+Start with the [shared beam search and scorer fusion topic](topics/beam-search-and-scorer-fusion.md):
+it says what is built, names each part's source file, and records the
+evidence. Designs for later work are in its
+[sketches companion](topics/beam-search-and-scorer-fusion.sketches.md), and
+the fork's own terms in the [glossary](GLOSSARY.md).
 
-- Sum CTC alignment probabilities by output prefix, with or without an LM.
-- Fuse multiple independently weighted scorers during search, supporting
-  token or character units and factories with backend-specific configuration.
-- Follow the existing C++ interface conventions, with batched scorer calls
-  and utterance-owned storage independent of batch membership.
+## What the fork adds
 
-## Current code difference in this work
+- `--decoding-method=prefix_beam_search` for offline and streaming CTC
+  models, offline stateless-decoder transducers (zipformer), and offline
+  NeMo RNN-T and TDT models. CTC can sum over alignments or take the best.
+- Scorers fused during the search, several at once with independent
+  weights: a KenLM character n-gram (`-DSHERPA_ONNX_ENABLE_KENLM=ON`, off by
+  default because KenLM is LGPL) and an ONNX character LSTM or GRU.
+- Scorer configuration on the command line (`--scorer.type=kenlm
+  --scorer.model=lm.bin`, or `--scorer.N.<option>` for several) and from a
+  JSON file ([option collections](topics/json-option-collections.md)).
+- A multi-utterance CTC decoder that admits, feeds, finishes, and cancels
+  utterances individually while batching scorer calls across them.
+
+## Known defect characterized, not fixed
 
 The [streaming CTC FST characterization test](sherpa-onnx/csrc/online-ctc-fst-decoder-test.cc)
-reproduces trailing-silence overcount across chunks and its effect on
-endpointing. It deliberately passes when the current incorrect behavior is
-reproduced and prints a warning describing the correct result. The decoder
-defect is not fixed by that test.
+reproduces trailing-silence overcount across chunks in the existing FST
+decoder and its effect on endpointing. It passes while the defect is
+present and prints a warning describing the correct result.
 
 ## Tracked design and maintenance work
 
@@ -40,6 +41,8 @@ defect is not fixed by that test.
 - [Executable-driver infrastructure reuse](gaps/executable-driver-infrastructure.md).
 - [Typed collections of nested options](gaps/sketches/nested-option-collections.md),
   including multiple scorers and possible multiple-FST configuration.
+- [Language bindings for the fusion options](gaps/fusion-config-bindings.md).
+- [Static build aborts when a model loads (GCC 15)](gaps/static-onnxruntime-abort.md).
 - [Encoder-inclusive inflight scheduling](gaps/sketches/encoder-decoder-inflight-scheduling.md),
   deferred beyond the decoder's own inflight batching.
 
