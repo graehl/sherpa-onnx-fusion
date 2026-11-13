@@ -1,9 +1,10 @@
 # sherpa-onnx-fusion
 
-This fork aims for efficient phone and server ASR inference with LM fusion,
-starting with CTC prefix search and improving existing non-CTC fusion paths.
-See [Differences from k2-fsa/sherpa-onnx](FORK.md) for current changes,
-design status, and the decoder topic. **The new decoder is not implemented yet.**
+This fork aims for efficient phone and server ASR inference with LM fusion.
+It adds `--decoding-method=prefix_beam_search`, a prefix beam search with
+pluggable scorers (KenLM, ONNX LSTM/GRU) for CTC, transducer, and TDT models.
+See [Differences from k2-fsa/sherpa-onnx](FORK.md) for what is built and
+the decoder topic.
 
 ### Supported functions
 
