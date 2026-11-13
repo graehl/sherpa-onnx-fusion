@@ -144,6 +144,8 @@ set(sources
   phrase-matcher.cc
   provider-config.cc
   provider.cc
+  scorer-options.cc
+  scorer.cc
   session.cc
   silero-vad-model-config.cc
   silero-vad-model.cc
@@ -860,6 +862,7 @@ if(SHERPA_ONNX_ENABLE_TESTS)
     online-recognizer-transducer-impl-test.cc
     recognizer-result-json-test.cc
     regex-lang-test.cc
+    scorer-test.cc
     session-test.cc
     slice-test.cc
     stack-test.cc
