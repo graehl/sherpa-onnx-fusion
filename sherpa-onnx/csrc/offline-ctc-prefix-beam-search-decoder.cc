@@ -116,46 +116,10 @@ std::vector<OfflineCtcDecoderResult> OfflineCtcPrefixBeamSearchDecoder::Decode(
                                                          scorers, weights_));
   }
 
-  // Frame by frame across the batch, so each scorer call serves every
-  // utterance that still has frames.
-  std::vector<int32_t> live;
-  std::vector<size_t> counts;
-  std::vector<ScorerExtension> extensions;
-  std::vector<ScorerAdvanceResult> results;
-  for (int32_t t = 0; t != num_frames; ++t) {
-    live.clear();
-    for (int32_t b = 0; b != batch_size; ++b) {
-      if (t < p_length[b]) live.push_back(b);
-    }
-    if (live.empty()) break;
-    for (int32_t b : live) {
-      searches[b]->BeginFrame(
-          p_log_probs + (static_cast<size_t>(b) * num_frames + t) * vocab_size);
-    }
-    for (size_t s = 0; s != scorers.size(); ++s) {
-      while (true) {
-        extensions.clear();
-        counts.assign(live.size(), 0);
-        for (size_t i = 0; i != live.size(); ++i) {
-          size_t before = extensions.size();
-          searches[live[i]]->GatherScorerWave(s, &extensions);
-          counts[i] = extensions.size() - before;
-        }
-        if (extensions.empty()) break;
-        results.assign(extensions.size(), ScorerAdvanceResult());
-        scorers[s]->Advance({extensions.data(), extensions.size()},
-                            results.data());
-        size_t offset = 0;
-        for (size_t i = 0; i != live.size(); ++i) {
-          if (counts[i] != 0) {
-            searches[live[i]]->ApplyScorerWave(s, results.data() + offset);
-          }
-          offset += counts[i];
-        }
-      }
-    }
-    for (int32_t b : live) searches[b]->EndFrame();
-  }
+  std::vector<CtcPrefixSearch *> search_pointers;
+  for (const auto &search : searches) search_pointers.push_back(search.get());
+  DecodeFramesTogether(search_pointers, scorers, p_log_probs, num_frames,
+                       vocab_size, p_length);
 
   std::vector<OfflineCtcDecoderResult> ans(batch_size);
   for (int32_t b = 0; b != batch_size; ++b) {

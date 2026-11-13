@@ -11,6 +11,7 @@
 
 #include "sherpa-onnx/csrc/endpoint.h"
 #include "sherpa-onnx/csrc/features.h"
+#include "sherpa-onnx/csrc/fusion-config.h"
 #include "sherpa-onnx/csrc/homophone-replacer.h"
 #include "sherpa-onnx/csrc/online-ctc-fst-decoder-config.h"
 #include "sherpa-onnx/csrc/online-lm-config.h"
@@ -103,6 +104,8 @@ struct OnlineRecognizerConfig {
   OnlineLMConfig lm_config;
   EndpointConfig endpoint_config;
   OnlineCtcFstDecoderConfig ctc_fst_decoder_config;
+  // Used when decoding_method is prefix_beam_search.
+  FusionConfig fusion;
 
   bool enable_endpoint = true;
 

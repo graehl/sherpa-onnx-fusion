@@ -91,6 +91,7 @@ void OnlineRecognizerConfig::Register(ParseOptions *po) {
   endpoint_config.Register(po);
   lm_config.Register(po);
   ctc_fst_decoder_config.Register(po);
+  fusion.Register(po);
   hr.Register(po);
 
   po->Register("enable-endpoint", &enable_endpoint,
@@ -113,7 +114,9 @@ void OnlineRecognizerConfig::Register(ParseOptions *po) {
       "你好世界");
   po->Register("decoding-method", &decoding_method,
                "decoding method,"
-               "now support greedy_search and modified_beam_search.");
+               "now support greedy_search, modified_beam_search, and "
+               "prefix_beam_search (CTC models; can fuse the scorers given "
+               "by --scorer).");
   po->Register("temperature-scale", &temperature_scale,
                "Temperature scale for confidence computation in decoding.");
   po->Register(
@@ -157,6 +160,23 @@ bool OnlineRecognizerConfig::Validate() const {
   if (!ctc_fst_decoder_config.graph.empty() &&
       !ctc_fst_decoder_config.Validate()) {
     SHERPA_ONNX_LOGE("Errors in ctc_fst_decoder_config");
+    return false;
+  }
+
+  if (decoding_method == "prefix_beam_search") {
+    if (max_active_paths <= 0) {
+      SHERPA_ONNX_LOGE("max_active_paths is less than 0! Given: %d",
+                       max_active_paths);
+      return false;
+    }
+    if (!fusion.Validate()) {
+      return false;
+    }
+  } else if (!fusion.scorers.empty()) {
+    SHERPA_ONNX_LOGE(
+        "--scorer is used only with --decoding-method=prefix_beam_search. "
+        "Given --decoding-method=%s",
+        decoding_method.c_str());
     return false;
   }
 
@@ -204,6 +224,7 @@ std::string OnlineRecognizerConfig::ToString() const {
   os << "lm_config=" << lm_config.ToString() << ", ";
   os << "endpoint_config=" << endpoint_config.ToString() << ", ";
   os << "ctc_fst_decoder_config=" << ctc_fst_decoder_config.ToString() << ", ";
+  os << "fusion=" << fusion.ToString() << ", ";
   os << "enable_endpoint=" << (enable_endpoint ? "True" : "False") << ", ";
   os << "max_active_paths=" << max_active_paths << ", ";
   os << "hotwords_score=" << hotwords_score << ", ";

@@ -105,6 +105,7 @@ set(sources
   online-ctc-fst-decoder-config.cc
   online-ctc-fst-decoder.cc
   online-ctc-greedy-search-decoder.cc
+  online-ctc-prefix-beam-search-decoder.cc
   online-ctc-model.cc
   online-ebranchformer-transducer-model.cc
   online-lm-config.cc
@@ -868,6 +869,7 @@ if(SHERPA_ONNX_ENABLE_TESTS)
     offline-whisper-language-candidates-test.cc
     offline-whisper-timestamp-rules-test.cc
     online-ctc-fst-decoder-test.cc
+    online-ctc-prefix-beam-search-decoder-test.cc
     option-collection-test.cc
     packed-sequence-test.cc
     pad-sequence-test.cc
