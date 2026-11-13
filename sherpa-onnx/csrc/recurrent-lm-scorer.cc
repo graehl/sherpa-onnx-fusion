@@ -96,7 +96,8 @@ class RecurrentLmScorer : public Scorer {
   RecurrentLmScorer(std::unique_ptr<RecurrentLmStep> step,
                     RecurrentLmVocabulary vocabulary)
       : step_(std::move(step)), vocabulary_(std::move(vocabulary)) {
-    info_.unit = ScorerUnit::kCharacter;
+    info_.unit = vocabulary_.token_units ? ScorerUnit::kAsrToken
+                                         : ScorerUnit::kCharacter;
     info_.state_bytes = sizeof(Node *);
     info_.copy_state = &CopyState;
     info_.destroy_state = &DestroyState;
@@ -149,6 +150,10 @@ class RecurrentLmScorer : public Scorer {
 
   void Finish(Span<const ScorerStateRef> states,
               ScorerFinalScore *results) override {
+    if (!vocabulary_.score_end) {
+      for (size_t i = 0; i != states.size; ++i) results[i] = {0.0f, true};
+      return;
+    }
     for (const ScorerStateRef &state : states) Request(NodeOf(state.bytes));
     Compute();
     for (size_t i = 0; i != states.size; ++i) {
@@ -160,6 +165,10 @@ class RecurrentLmScorer : public Scorer {
 
  private:
   int32_t IdOf(UnitId unit) const {
+    if (vocabulary_.token_units) {
+      return unit >= 0 && unit < step_->VocabSize() ? unit
+                                                    : vocabulary_.unknown_id;
+    }
     int32_t id = vocabulary_.id_of_char.Lookup(unit);
     return id < 0 ? vocabulary_.unknown_id : id;
   }
