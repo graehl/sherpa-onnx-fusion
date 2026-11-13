@@ -83,11 +83,29 @@ design for what does not.
   (`sherpa-onnx/csrc/fusion-config.h`,
   `offline-ctc-prefix-beam-search-decoder.h`). The utterances of a batch
   share each scorer call. Token text, word starts, and unemittable symbols
-  come from the recognizer's token table; byte-BPE tables are refused. The
+  come from the recognizer's token table; byte-BPE tables are refused. A
+  character scorer scores the text the recognizer would output for the
+  tokens, except that no word boundary is scored before the first word or
+  twice in a row. Join markers the recognizer does not remove itself
+  (`##`, `@@`) would be scored as written; no such model is supported. The
   options exist in the C++ config and command line only; see
   [the bindings gap](../gaps/fusion-config-bindings.md).
 
-Not built yet: streaming recognizer wiring, recombination in max mode, the multi-utterance `Decoder`, the early
+- **Streaming recognizer**: the same method and options for streaming
+  CTC models (`online-ctc-prefix-beam-search-decoder.h`). Each stream keeps
+  its search across chunks and drops it at an endpoint; streams decoded in
+  one call share each scorer call. A stream's result is the best prefix so
+  far, which later frames can revise. Once the stream's input is declared
+  finished, each further decoded chunk reports the result with the
+  scorers' end-of-input scores, so the last one is final; a stream finished
+  with nothing left to decode keeps its last result. The trailing-silence count used for endpointing is the number of
+  frames since the best prefix's last token was most probably emitted.
+- **End-to-end check**: `sherpa-onnx-offline` with a CTC model gives the
+  same transcripts with `greedy_search` and `prefix_beam_search` on two
+  short test recordings, and accepts a KenLM scorer from `--scorer.*` and
+  from `--fusion-config`. The streaming path has unit tests only.
+
+Not built yet: recombination in max mode, the multi-utterance `Decoder`, the early
 partial-score beam, score beam defaults, and the tuning traces.
 
 ### Scope across model families

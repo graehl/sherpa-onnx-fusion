@@ -21,6 +21,7 @@
 #include "sherpa-onnx/csrc/online-ctc-fst-decoder.h"
 #include "sherpa-onnx/csrc/online-ctc-greedy-search-decoder.h"
 #include "sherpa-onnx/csrc/online-ctc-model.h"
+#include "sherpa-onnx/csrc/online-ctc-prefix-beam-search-decoder.h"
 #include "sherpa-onnx/csrc/online-recognizer-impl.h"
 #include "sherpa-onnx/csrc/symbol-table.h"
 
@@ -268,6 +269,7 @@ class OnlineRecognizerCtcImpl : public OnlineRecognizerImpl {
     }
 
     s->GetFasterDecoderProcessedFrames() = 0;
+    s->SetCtcPrefixSearch(nullptr);
 
     // Note: We only update counters. The underlying audio samples
     // are not discarded.
@@ -329,6 +331,14 @@ class OnlineRecognizerCtcImpl : public OnlineRecognizerImpl {
           config_.ctc_fst_decoder_config, blank_id);
     } else if (config_.decoding_method == "greedy_search") {
       decoder_ = std::make_unique<OnlineCtcGreedySearchDecoder>(blank_id);
+    } else if (config_.decoding_method == "prefix_beam_search") {
+      try {
+        decoder_ = std::make_unique<OnlineCtcPrefixBeamSearchDecoder>(
+            config_.fusion, config_.max_active_paths, sym_, blank_id);
+      } catch (const std::exception &e) {
+        SHERPA_ONNX_LOGE("%s", e.what());
+        SHERPA_ONNX_EXIT(-1);
+      }
     } else {
       SHERPA_ONNX_LOGE(
           "Unsupported decoding method: %s for streaming CTC models",

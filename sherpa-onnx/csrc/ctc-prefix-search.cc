@@ -576,4 +576,47 @@ std::vector<CtcPrefixHypothesis> CtcPrefixSearch::Finish(int32_t nbest) {
   return hypotheses;
 }
 
+void DecodeFramesTogether(const std::vector<CtcPrefixSearch *> &searches,
+                          const std::vector<Scorer *> &scorers,
+                          const float *log_probs, int32_t num_frames,
+                          int32_t vocab_size, const int64_t *lengths) {
+  std::vector<size_t> live;
+  std::vector<size_t> counts;
+  std::vector<ScorerExtension> extensions;
+  std::vector<ScorerAdvanceResult> results;
+  for (int32_t t = 0; t != num_frames; ++t) {
+    live.clear();
+    for (size_t i = 0; i != searches.size(); ++i) {
+      if (lengths == nullptr || t < lengths[i]) live.push_back(i);
+    }
+    if (live.empty()) break;
+    for (size_t i : live) {
+      searches[i]->BeginFrame(log_probs + (i * num_frames + t) * vocab_size);
+    }
+    for (size_t s = 0; s != scorers.size(); ++s) {
+      while (true) {
+        extensions.clear();
+        counts.assign(live.size(), 0);
+        for (size_t k = 0; k != live.size(); ++k) {
+          size_t before = extensions.size();
+          searches[live[k]]->GatherScorerWave(s, &extensions);
+          counts[k] = extensions.size() - before;
+        }
+        if (extensions.empty()) break;
+        results.assign(extensions.size(), ScorerAdvanceResult());
+        scorers[s]->Advance({extensions.data(), extensions.size()},
+                            results.data());
+        size_t offset = 0;
+        for (size_t k = 0; k != live.size(); ++k) {
+          if (counts[k] != 0) {
+            searches[live[k]]->ApplyScorerWave(s, results.data() + offset);
+          }
+          offset += counts[k];
+        }
+      }
+    }
+    for (size_t i : live) searches[i]->EndFrame();
+  }
+}
+
 }  // namespace sherpa_onnx

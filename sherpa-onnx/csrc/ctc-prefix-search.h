@@ -175,6 +175,16 @@ class CtcPrefixSearch {
   std::vector<UnitId> units_;
 };
 
+// Decodes frames of several utterances together, so each scorer call
+// serves every utterance that has a frame at that position. log_probs is
+// [searches.size(), num_frames, vocab_size]; lengths[i] is utterance i's
+// number of valid frames, or lengths is null when all have num_frames.
+// Every search must have been created with "scorers", in that order.
+void DecodeFramesTogether(const std::vector<CtcPrefixSearch *> &searches,
+                          const std::vector<Scorer *> &scorers,
+                          const float *log_probs, int32_t num_frames,
+                          int32_t vocab_size, const int64_t *lengths);
+
 }  // namespace sherpa_onnx
 
 #endif  // SHERPA_ONNX_CSRC_CTC_PREFIX_SEARCH_H_

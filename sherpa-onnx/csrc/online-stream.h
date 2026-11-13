@@ -20,6 +20,8 @@
 
 namespace sherpa_onnx {
 
+class CtcPrefixSearch;
+
 struct TransducerKeywordResult;
 class OnlineStream {
  public:
@@ -126,6 +128,10 @@ class OnlineStream {
   void SetFasterDecoder(std::unique_ptr<kaldi_decoder::FasterDecoder> decoder);
   kaldi_decoder::FasterDecoder *GetFasterDecoder() const;
   int32_t &GetFasterDecoderProcessedFrames();
+
+  // for the online ctc prefix beam search decoder; null until its first use
+  void SetCtcPrefixSearch(std::shared_ptr<CtcPrefixSearch> search);
+  CtcPrefixSearch *GetCtcPrefixSearch() const;
 
   // for streaming paraformer
   std::vector<float> &GetParaformerFeatCache();

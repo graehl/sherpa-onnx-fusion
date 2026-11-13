@@ -10,6 +10,7 @@
 #include <utility>
 #include <vector>
 
+#include "sherpa-onnx/csrc/ctc-prefix-search.h"
 #include "sherpa-onnx/csrc/features.h"
 #include "sherpa-onnx/csrc/text-utils.h"
 #include "sherpa-onnx/csrc/transducer-keyword-decoder.h"
@@ -210,6 +211,14 @@ class OnlineStream::Impl {
     return faster_decoder_processed_frames_;
   }
 
+  void SetCtcPrefixSearch(std::shared_ptr<CtcPrefixSearch> search) {
+    ctc_prefix_search_ = std::move(search);
+  }
+
+  CtcPrefixSearch *GetCtcPrefixSearch() const {
+    return ctc_prefix_search_.get();
+  }
+
  private:
   FeatureExtractor feat_extractor_;
   mutable std::mutex mutex_;
@@ -240,6 +249,7 @@ class OnlineStream::Impl {
   std::unordered_map<std::string, std::string> options_;
   std::unique_ptr<kaldi_decoder::FasterDecoder> faster_decoder_;
   int32_t faster_decoder_processed_frames_ = 0;
+  std::shared_ptr<CtcPrefixSearch> ctc_prefix_search_;
 };
 
 OnlineStream::OnlineStream(const FeatureExtractorConfig &config /*= {}*/,
@@ -382,6 +392,14 @@ kaldi_decoder::FasterDecoder *OnlineStream::GetFasterDecoder() const {
 
 int32_t &OnlineStream::GetFasterDecoderProcessedFrames() {
   return impl_->GetFasterDecoderProcessedFrames();
+}
+
+void OnlineStream::SetCtcPrefixSearch(std::shared_ptr<CtcPrefixSearch> search) {
+  impl_->SetCtcPrefixSearch(std::move(search));
+}
+
+CtcPrefixSearch *OnlineStream::GetCtcPrefixSearch() const {
+  return impl_->GetCtcPrefixSearch();
 }
 
 std::vector<float> &OnlineStream::GetParaformerFeatCache() {
