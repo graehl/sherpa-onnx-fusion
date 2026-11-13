@@ -140,10 +140,51 @@ test recordings (2026-11-13, shared-library build, x86-64, int8 models):
 
 This shows the wiring and the three transducer topologies running on real
 models; a handful of recordings says nothing about error rate, and no
-scorer was fused in these runs. On the TDT model the prefix search took
+scorer was fused in these runs. § Fusion on a transducer has a fused run
+with error rates. On the TDT model the prefix search took
 about three times the greedy decoder's time (real-time factor 0.63
 against 0.22, one run), because it calls the prediction network once per
 hypothesis where a batched call would do (§ Not built).
+
+### Fusion on a transducer
+
+The Vietnamese zipformer transducer above (int8, capital-letter tokens) was
+run through `sherpa-onnx-offline` on the 857-clip FLEURS test set with the
+character 8-gram fused by `prefix_beam_search`, the scorer given lowercase
+text (`--scorer-text-case=lower`). Weight and word bonus were chosen on the
+340-clip validation split at beam 4 (2026-11-13; ER2; intervals and p by
+paired bootstrap against greedy):
+
+| Decoding | Beam | Weight | Word bonus | Validation ER2 | Test ER2 | Test change from greedy |
+|---|---:|---:|---:|---:|---:|---|
+| greedy | | | | 4.62 | 5.61 | |
+| modified beam search (existing) | 4 | | | 4.60 | 5.65 | +0.04 (p = 0.39) |
+| prefix search, no scorer | 4 | | | 4.70 | 5.64 | +0.03 (p = 0.48) |
+| prefix search + 8-gram | 4 | 0.3 | 0 | 4.27 | 5.28 | −0.33 (−0.54 to −0.11, p = 0.003) |
+| prefix search + 8-gram | 4 | 0.3 | 1 | 4.30 | 5.23 | −0.38 (−0.54 to −0.22, p < 0.0001) |
+| prefix search + 8-gram | 8 | 0.3 | 0 | 4.27 | 5.55 | −0.06 (−0.37 to +0.30, p = 0.67) |
+| prefix search + 8-gram | 8 | 0.3 | 1 | 4.28 | 5.21 | −0.40 (−0.57 to −0.24, p < 0.0001) |
+| prefix search + 8-gram | 8 | 0.5 | 2 | 4.24 | 5.39 | −0.22 (−0.44 to −0.01, p = 0.04) |
+
+Fusion helps this transducer by about 7 percent relative, and the search
+without a scorer matches the existing decoders. Two things the runs
+exposed:
+
+- Without `--scorer-text-case=lower` the lowercase language model saw only
+  unknown capitals and the fused search deleted words.
+- With no word bonus, beam 8 deleted long stretches in a few test clips
+  (28 words in one): after one token the model allows blank for the rest of
+  a stretch of speech, and every word left out saves its language-model
+  cost. Validation did not show it, and beam 4 mostly hid it. A word bonus
+  of 1 removed it. The with-bonus settings were added after seeing this on
+  test, so their test scores are not a clean held-out estimate; the
+  validation column shows they were equally good there.
+
+Decoding time through the binary was about 1.3 times greedy's with the
+scorer (measured under parallel load, so approximate). The RNN-T and TDT
+models have no language model in their languages on hand; fusion there is
+covered by the search's unit tests against enumeration and not yet by a
+real model with a scorer.
 
 ### Score-gap beam sweep
 
@@ -186,6 +227,17 @@ pruned on the first weak frame of a new token is created again on the next
 with little lost. For choosing a default in sum mode a sweep remains the
 measure.
 
+The guarantee is for one limit at a time against a search the other limit
+does not bind. When the traced search already ran with a binding hypothesis
+beam, tightening either limit lets through hypotheses the wider search had
+crowded out, and those can displace the traced result or beat it. On 300 of
+the Vietnamese clips, max mode with the 8-gram and a beam of 32
+(2026-11-13): the traced gap plus 0.001 reproduced 297 results, the traced
+rank 299, and a gap 0.05 below the traced one only 3, so the traced gap is
+tight. Of the four misses examined, two found a higher-scoring result.
+Median traced gap 3.4 and rank 5 in max mode, against 17.3 and 32 in sum
+mode, where the trace's values are upper bounds as described above.
+
 ### Sum versus max on a full test set
 
 | Scorer | Beam | Score gap | ER2 sum | ER2 max | ER2 max, no recombination | Search s, sum | Search s, max | Kept per frame, sum | Kept per frame, max |
@@ -225,10 +277,20 @@ is the model's steps. Without a scorer, max mode is the greedy decoder;
 the small differences in that row are ties in the cached probabilities
 broken differently.
 
+Sum mode can borrow the beam effect without max mode's scores:
+`CtcPrefixSearchOptions::prune_dominated_in_sum` (experimental, off, no
+command-line option) drops a hypothesis that another with the same future
+matches or beats in both sums, adding nothing across outputs. It is an
+approximation there, since a dropped prefix that returns has lost its
+probability. It scored 7.88, 7.50 and 7.28 at beams 8, 16 and 32: better
+than plain sum mode at each (p < 0.0001) and not better than max mode
+(worse at 8, p = 0.04; no difference at 16 and 32). Summing alignments
+adds nothing over the best alignment on this data once the beam is
+diverse.
+
 Limits: one language, one recognizer, one test set, and one weight and
 bonus per scorer, neither tuned per mode; the LSTM's were not tuned at
-all. Recombination for sum mode (adding the probabilities of hypotheses
-with the same future) is the untested combination these results point at.
+all.
 
 ## Search semantics
 
@@ -748,6 +810,7 @@ transducer models. The options are fields of `FusionConfig`
 | `--fusion-config` | | JSON file of any of these options |
 | `--length-bonus`, `--length-bonus-unit` | 0, `token` | Added to a prefix's score per token or per word |
 | `--ctc-alignment` | `sum` | CTC only: `sum` or `max` (§ Search semantics) |
+| `--scorer-text-case` | `keep` | `lower` gives character scorers lowercase text; the output keeps its case |
 
 Scorer options and the JSON form are described in
 [option collections](json-option-collections.md). Giving a scorer with
