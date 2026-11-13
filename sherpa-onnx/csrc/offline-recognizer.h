@@ -119,6 +119,17 @@ class OfflineRecognizer {
    */
   void DecodeStreams(OfflineStream **ss, int32_t n) const;
 
+  /** Run the model for a list of streams ahead of DecodeStreams, which then
+   * only searches for those streams. Optional per stream: DecodeStreams runs
+   * the model for any stream that was not encoded. The two calls can batch
+   * different sets of streams. Does nothing for a model family that does not
+   * separate the two steps (currently every family except CTC).
+   *
+   * @param ss Pointer to an array of streams.
+   * @param n  Size of the input array.
+   */
+  void EncodeStreams(OfflineStream **ss, int32_t n) const;
+
   /** Onnxruntime Session objects are not affected by this method.
    * The exact behavior can be defined by a specific recognizer impl.
    * For instance, for the whisper recognizer, you can retrieve the language and

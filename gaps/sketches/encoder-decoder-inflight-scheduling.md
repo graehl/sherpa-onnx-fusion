@@ -9,7 +9,7 @@ where: recognizer orchestration, encoder batching, capture and executable driver
 ## Intended outcome
 
 User-directed: defer the overall encoder-inclusive use case while requiring
-[the new decoder](../../topics/beam-search-and-scorer-fusion.md#required-inflight-batching)
+[the new decoder](../../topics/beam-search-and-scorer-fusion.md#inflight-batching)
 to support inflight batching now. This sketch tracks future integration;
 it does not claim that every current driver blocks capture while transcribing.
 
@@ -25,10 +25,24 @@ while showing “transcribing.” Pipeline progress across consecutive utterance
 does not require overlapping GPU calls. Offline model input requirements
 must be respected without treating them as a capture restriction.
 
+## Seam already present
+
+The offline CTC recognizer separates the two steps:
+`OfflineRecognizer::EncodeStreams` runs the model and leaves each stream's
+log probabilities on the stream, and `DecodeStreams` searches streams that
+have them, running the model itself for any that do not. The two calls can
+take different sets of streams, so a caller can encode an utterance when its
+recording ends and search it later in a batch with others. Both calls still
+block their caller, and nothing schedules them. Other model families ignore
+`EncodeStreams`.
+
 ## Work deferred
 
 - Define encoder-ready work and its handoff to decoder utterance handles,
-  including chunked and complete-utterance models.
+  including chunked and complete-utterance models. The stream-held output
+  above is the complete-utterance CTC case only; a transducer's search
+  calls its prediction network and joiner, so its handoff carries encoder
+  frames and the search still needs model time.
 - Define queue limits, backpressure, fairness, cancellation, endpointing,
   and result delivery under sustained overload or interrupted input.
 - Decide scheduling policy for serialized small-device compute and optional

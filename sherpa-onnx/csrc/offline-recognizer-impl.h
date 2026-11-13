@@ -43,6 +43,10 @@ class OfflineRecognizerImpl {
 
   virtual void DecodeStreams(OfflineStream **ss, int32_t n) const = 0;
 
+  // Runs the model ahead of DecodeStreams where the implementation separates
+  // the two; see OfflineRecognizer::EncodeStreams.
+  virtual void EncodeStreams(OfflineStream ** /*ss*/, int32_t /*n*/) const {}
+
   virtual void SetConfig(const OfflineRecognizerConfig &config);
 
   virtual OfflineRecognizerConfig GetConfig() const = 0;

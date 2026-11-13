@@ -192,6 +192,10 @@ std::unique_ptr<OfflineStream> OfflineRecognizer::CreateStream() const {
   return impl_->CreateStream();
 }
 
+void OfflineRecognizer::EncodeStreams(OfflineStream **ss, int32_t n) const {
+  impl_->EncodeStreams(ss, n);
+}
+
 void OfflineRecognizer::DecodeStreams(OfflineStream **ss, int32_t n) const {
   impl_->DecodeStreams(ss, n);
 

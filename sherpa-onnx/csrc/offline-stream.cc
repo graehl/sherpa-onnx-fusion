@@ -299,6 +299,21 @@ class OfflineStream::Impl {
 
   const ContextGraphPtr &GetContextGraph() const { return context_graph_; }
 
+  void SetEncoderOutput(std::vector<float> values, int32_t num_frames) {
+    encoder_output_ = std::move(values);
+    encoder_output_frames_ = num_frames;
+    has_encoder_output_ = true;
+  }
+
+  bool HasEncoderOutput() const { return has_encoder_output_; }
+
+  std::vector<float> TakeEncoderOutput(int32_t *num_frames) {
+    *num_frames = encoder_output_frames_;
+    has_encoder_output_ = false;
+    encoder_output_frames_ = 0;
+    return std::move(encoder_output_);
+  }
+
   void SetOption(const std::string &key, const std::string &value) {
     options_[key] = value;
   }
@@ -395,6 +410,10 @@ class OfflineStream::Impl {
   std::vector<float> samples_;
 
   std::unordered_map<std::string, std::string> options_;
+
+  std::vector<float> encoder_output_;
+  int32_t encoder_output_frames_ = 0;
+  bool has_encoder_output_ = false;
 };
 
 OfflineStream::OfflineStream(const FeatureExtractorConfig &config /*= {}*/,
@@ -441,6 +460,19 @@ const ContextGraphPtr &OfflineStream::GetContextGraph() const {
 
 const OfflineRecognitionResult &OfflineStream::GetResult() const {
   return impl_->GetResult();
+}
+
+void OfflineStream::SetEncoderOutput(std::vector<float> values,
+                                     int32_t num_frames) {
+  impl_->SetEncoderOutput(std::move(values), num_frames);
+}
+
+bool OfflineStream::HasEncoderOutput() const {
+  return impl_->HasEncoderOutput();
+}
+
+std::vector<float> OfflineStream::TakeEncoderOutput(int32_t *num_frames) {
+  return impl_->TakeEncoderOutput(num_frames);
 }
 
 void OfflineStream::SetOption(const std::string &key,

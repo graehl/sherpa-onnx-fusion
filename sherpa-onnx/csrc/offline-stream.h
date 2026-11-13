@@ -142,6 +142,14 @@ class OfflineStream {
   /** Get the ContextGraph of this stream */
   const ContextGraphPtr &GetContextGraph() const;
 
+  // The model's output for this stream when it is computed ahead of the
+  // search, by OfflineRecognizer::EncodeStreams. "values" is
+  // (num_frames, dim), flattened; for a CTC model, log probabilities.
+  void SetEncoderOutput(std::vector<float> values, int32_t num_frames);
+  bool HasEncoderOutput() const;
+  // Moves the output out of the stream, which then has none.
+  std::vector<float> TakeEncoderOutput(int32_t *num_frames);
+
   // Generic per-stream option mechanism (key-value string pairs).
   void SetOption(const std::string &key, const std::string &value);
   bool HasOption(const std::string &key) const;

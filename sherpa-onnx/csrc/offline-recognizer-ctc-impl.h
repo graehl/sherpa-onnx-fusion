@@ -5,6 +5,8 @@
 #ifndef SHERPA_ONNX_CSRC_OFFLINE_RECOGNIZER_CTC_IMPL_H_
 #define SHERPA_ONNX_CSRC_OFFLINE_RECOGNIZER_CTC_IMPL_H_
 
+#include <algorithm>
+#include <array>
 #include <ios>
 #include <memory>
 #include <sstream>
@@ -229,7 +231,38 @@ class OfflineRecognizerCtcImpl : public OfflineRecognizerImpl {
     }
   }
 
+  void EncodeStreams(OfflineStream **ss, int32_t n) const override {
+    std::vector<OfflineStream *> todo;
+    for (int32_t i = 0; i != n; ++i) {
+      if (!ss[i]->HasEncoderOutput()) {
+        todo.push_back(ss[i]);
+      }
+    }
+
+    if (!model_->SupportBatchProcessing() || todo.size() == 1 ||
+        !config_.model_config.omnilingual.model.empty()) {
+      for (OfflineStream *s : todo) {
+        auto t = ForwardStream(s);
+        if (!t.empty()) {
+          KeepEncoderOutput(&s, 1, t);
+        }
+      }
+    } else if (!todo.empty()) {
+      auto t = ForwardStreams(todo.data(), static_cast<int32_t>(todo.size()));
+      KeepEncoderOutput(todo.data(), static_cast<int32_t>(todo.size()), t);
+    }
+  }
+
   void DecodeStreams(OfflineStream **ss, int32_t n) const override {
+    for (int32_t i = 0; i != n; ++i) {
+      if (ss[i]->HasEncoderOutput()) {
+        // Some streams were encoded ahead; encode the rest and search all.
+        EncodeStreams(ss, n);
+        DecodeEncodedStreams(ss, n);
+        return;
+      }
+    }
+
     if (!model_->SupportBatchProcessing() || (n == 1) ||
         !config_.model_config.omnilingual.model.empty()) {
       // If the model does not support batch processing,
@@ -242,6 +275,25 @@ class OfflineRecognizerCtcImpl : public OfflineRecognizerImpl {
       return;
     }
 
+    auto t = ForwardStreams(ss, n);
+
+    auto results = decoder_->Decode(std::move(t[0]), std::move(t[1]));
+
+    int32_t frame_shift_ms = 10;
+    for (int32_t i = 0; i != n; ++i) {
+      auto r = Convert(results[i], symbol_table_, frame_shift_ms,
+                       model_->SubsamplingFactor());
+      r.text = ApplyInverseTextNormalization(std::move(r.text));
+      r.text = ApplyHomophoneReplacer(std::move(r.text));
+      ss[i]->SetResult(r);
+    }
+  }
+
+  OfflineRecognizerConfig GetConfig() const override { return config_; }
+
+ private:
+  // Runs the model on a batch of streams; returns what Forward returns.
+  std::vector<Ort::Value> ForwardStreams(OfflineStream **ss, int32_t n) const {
     // Even if the omnilingual asr model can process batch input, the following
     // code does not support batching raw audio samples.
 
@@ -287,26 +339,13 @@ class OfflineRecognizerCtcImpl : public OfflineRecognizerImpl {
 
     Ort::Value x = PadSequence(model_->Allocator(), features_pointer,
                                -23.025850929940457f);
-    auto t = model_->Forward(std::move(x), std::move(x_length));
-
-    auto results = decoder_->Decode(std::move(t[0]), std::move(t[1]));
-
-    int32_t frame_shift_ms = 10;
-    for (int32_t i = 0; i != n; ++i) {
-      auto r = Convert(results[i], symbol_table_, frame_shift_ms,
-                       model_->SubsamplingFactor());
-      r.text = ApplyInverseTextNormalization(std::move(r.text));
-      r.text = ApplyHomophoneReplacer(std::move(r.text));
-      ss[i]->SetResult(r);
-    }
+    return model_->Forward(std::move(x), std::move(x_length));
   }
 
-  OfflineRecognizerConfig GetConfig() const override { return config_; }
-
- private:
-  // Decode a single stream.
+  // Runs the model on one stream; returns what Forward returns, or nothing
+  // when the input is too short, in which case the stream has an empty result.
   // Some models do not support batch size > 1, e.g., WeNet CTC models.
-  void DecodeStream(OfflineStream *s) const {
+  std::vector<Ort::Value> ForwardStream(OfflineStream *s) const {
     auto memory_info =
         Ort::MemoryInfo::CreateCpu(OrtDeviceAllocator, OrtMemTypeDefault);
 
@@ -327,7 +366,7 @@ class OfflineRecognizerCtcImpl : public OfflineRecognizerImpl {
           kOmnilingualMinNumSamples / 16.0);
       OfflineRecognitionResult r;
       s->SetResult(r);
-      return;
+      return {};
     }
 
     int32_t num_frames = f.size() / feat_dim;
@@ -348,19 +387,103 @@ class OfflineRecognizerCtcImpl : public OfflineRecognizerImpl {
         Ort::Value::CreateTensor(memory_info, &x_length_scalar, 1,
                                  x_length_shape.data(), x_length_shape.size());
 
-    auto t = model_->Forward(std::move(x), std::move(x_length));
-    auto results = decoder_->Decode(std::move(t[0]), std::move(t[1]));
-    int32_t frame_shift_ms = 10;
+    return model_->Forward(std::move(x), std::move(x_length));
+  }
 
-    if (!config_.model_config.omnilingual.model.empty()) {
-      frame_shift_ms = 20;
+  // Decode a single stream.
+  void DecodeStream(OfflineStream *s) const {
+    auto t = ForwardStream(s);
+    if (t.empty()) {
+      return;
     }
 
-    auto r = Convert(results[0], symbol_table_, frame_shift_ms,
+    auto results = decoder_->Decode(std::move(t[0]), std::move(t[1]));
+
+    auto r = Convert(results[0], symbol_table_, FrameShiftMs(),
                      model_->SubsamplingFactor());
     r.text = ApplyInverseTextNormalization(std::move(r.text));
     r.text = ApplyHomophoneReplacer(std::move(r.text));
     s->SetResult(r);
+  }
+
+  int32_t FrameShiftMs() const {
+    return config_.model_config.omnilingual.model.empty() ? 10 : 20;
+  }
+
+  // Moves each stream's valid frames of the model output "t" for "ss" into
+  // that stream.
+  static void KeepEncoderOutput(OfflineStream **ss, int32_t n,
+                                const std::vector<Ort::Value> &t) {
+    std::vector<int64_t> shape = t[0].GetTensorTypeAndShapeInfo().GetShape();
+    auto max_frames = static_cast<int32_t>(shape[1]);
+    auto dim = static_cast<int32_t>(shape[2]);
+    const float *p = t[0].GetTensorData<float>();
+    // The model's lengths are int64; see OfflineCtcModel::Forward.
+    const int64_t *length = t[1].GetTensorData<int64_t>();
+    for (int32_t i = 0; i != n; ++i) {
+      auto num_frames = static_cast<int32_t>(length[i]);
+      const float *begin = p + static_cast<size_t>(i) * max_frames * dim;
+      ss[i]->SetEncoderOutput(
+          std::vector<float>(begin,
+                             begin + static_cast<size_t>(num_frames) * dim),
+          num_frames);
+    }
+  }
+
+  // Searches streams that EncodeStreams has processed. One it gave an empty
+  // result, for input that is too short, has no output and keeps that result.
+  void DecodeEncodedStreams(OfflineStream **ss, int32_t n) const {
+    std::vector<OfflineStream *> encoded;
+    std::vector<std::vector<float>> outputs;
+    std::vector<int32_t> lengths;
+    for (int32_t i = 0; i != n; ++i) {
+      if (ss[i]->HasEncoderOutput()) {
+        int32_t num_frames = 0;
+        outputs.push_back(ss[i]->TakeEncoderOutput(&num_frames));
+        lengths.push_back(num_frames);
+        encoded.push_back(ss[i]);
+      }
+    }
+    if (encoded.empty()) {
+      return;
+    }
+
+    auto batch = static_cast<int32_t>(encoded.size());
+    int32_t max_frames = *std::max_element(lengths.begin(), lengths.end());
+    int32_t dim = 0;
+    for (int32_t i = 0; i != batch && dim == 0; ++i) {
+      if (lengths[i] > 0) {
+        dim = static_cast<int32_t>(outputs[i].size()) / lengths[i];
+      }
+    }
+
+    // onnxruntime shapes, and the lengths the decoders read, are int64.
+    std::array<int64_t, 3> shape = {batch, max_frames, dim};
+    Ort::Value log_probs = Ort::Value::CreateTensor<float>(
+        model_->Allocator(), shape.data(), shape.size());
+    float *p = log_probs.GetTensorMutableData<float>();
+    size_t stride = static_cast<size_t>(max_frames) * dim;
+    std::fill(p, p + batch * stride, 0.0f);
+    for (int32_t i = 0; i != batch; ++i) {
+      std::copy(outputs[i].begin(), outputs[i].end(), p + i * stride);
+    }
+
+    std::array<int64_t, 1> length_shape = {batch};
+    Ort::Value log_probs_length = Ort::Value::CreateTensor<int64_t>(
+        model_->Allocator(), length_shape.data(), length_shape.size());
+    std::copy(lengths.begin(), lengths.end(),
+              log_probs_length.GetTensorMutableData<int64_t>());
+
+    auto results =
+        decoder_->Decode(std::move(log_probs), std::move(log_probs_length));
+
+    for (int32_t i = 0; i != batch; ++i) {
+      auto r = Convert(results[i], symbol_table_, FrameShiftMs(),
+                       model_->SubsamplingFactor());
+      r.text = ApplyInverseTextNormalization(std::move(r.text));
+      r.text = ApplyHomophoneReplacer(std::move(r.text));
+      encoded[i]->SetResult(r);
+    }
   }
 
  private:
