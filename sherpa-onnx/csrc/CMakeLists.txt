@@ -168,6 +168,7 @@ set(sources
   text-utils.cc
   timer.cc
   transducer-keyword-decoder.cc
+  transducer-prefix-search.cc
   transpose.cc
   unbind.cc
   utils.cc
@@ -889,6 +890,7 @@ if(SHERPA_ONNX_ENABLE_TESTS)
     slice-test.cc
     stack-test.cc
     text-utils-test.cc
+    transducer-prefix-search-test.cc
     text2token-test.cc
     transpose-test.cc
     unbind-test.cc
