@@ -36,7 +36,12 @@ struct CtcSearchVocabulary {
 
 enum class CtcAlignmentMode {
   kSum,  // An output's score is the summed probability of its alignments.
-  kMax,  // An output's score is the probability of its best alignment.
+  // An output's score is the probability of its best alignment. When every
+  // scorer's ScorerInfo::recombines is set, a hypothesis is dropped as soon
+  // as another with the same last token and equal scorer states scores at
+  // least as well. That cannot change the best result, but results after
+  // the first are then no longer each output's own best alignment.
+  kMax,
 };
 
 enum class LengthBonusUnit { kToken, kWord };
@@ -115,6 +120,9 @@ class CtcPrefixSearch {
   std::vector<CtcPrefixHypothesis> Finish(int32_t nbest = 1);
 
   int32_t NumFramesDecoded() const { return frame_; }
+  // Hypotheses dropped so far because another with the same future scored
+  // at least as well (max alignment, when every scorer recombines).
+  int64_t NumRecombined() const { return num_recombined_; }
   // Prefix records currently held, for tests of reclamation.
   int32_t NumLiveRecords() const { return num_live_records_; }
 
@@ -133,6 +141,8 @@ class CtcPrefixSearch {
   void Touch(uint32_t index);
   void QueueScoring(uint32_t index);
   void FinishScoring();
+  void Recombine();
+  bool SameFuture(const Record &a, const Record &b) const;
   float Acoustic(float blank, float nonblank) const;
   float Accumulate(float sum, float term) const;
   float LengthBonus(const Record &record, bool at_end) const;
@@ -163,6 +173,9 @@ class CtcPrefixSearch {
 
   std::vector<uint32_t> active_;
   int32_t frame_ = 0;
+  bool recombine_ = false;
+  int64_t num_recombined_ = 0;
+  std::unordered_map<uint64_t, std::vector<uint32_t>> same_hash_;
 
   // Per-frame work.
   std::vector<uint32_t> touched_;
