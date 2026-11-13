@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "sherpa-onnx/csrc/features.h"
+#include "sherpa-onnx/csrc/fusion-config.h"
 #include "sherpa-onnx/csrc/homophone-replacer.h"
 #include "sherpa-onnx/csrc/offline-ctc-fst-decoder-config.h"
 #include "sherpa-onnx/csrc/offline-lm-config.h"
@@ -27,6 +28,8 @@ struct OfflineRecognizerConfig {
   OfflineModelConfig model_config;
   OfflineLMConfig lm_config;
   OfflineCtcFstDecoderConfig ctc_fst_decoder_config;
+  // Used when decoding_method is prefix_beam_search.
+  FusionConfig fusion;
 
   std::string decoding_method = "greedy_search";
   int32_t max_active_paths = 4;

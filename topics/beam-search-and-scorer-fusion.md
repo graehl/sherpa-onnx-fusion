@@ -53,8 +53,9 @@ design for what does not.
   scorer creates its own per-utterance object (`Scorer::NewUtterance`) and
   receives it with every state, so a batched call needs no lookup from a
   shared context. `Advance` and `Finish` write into caller arrays instead of
-  returning vectors. `Next`, `CharacterIndex`, and `FloatView` are not
-  built, because the search batches a token's units through `Advance`.
+  returning vectors. `Next` and `FloatView` are not built, because the
+  search batches a token's units through `Advance`. The unit a character
+  scorer's model uses for a word boundary is the common option `space`.
   Type names carry a `Scorer` prefix (`ScorerStateRef`, `ScorerExtension`).
 - **CTC prefix search**: `sherpa-onnx/csrc/ctc-prefix-search.h`, one object
   per utterance, sum and max alignment (max without recombination yet).
@@ -75,8 +76,18 @@ design for what does not.
   n-gram model in ARPA or KenLM binary form. Its state is KenLM's own, with
   unused bytes zeroed, so equal contexts are equal bytes.
 
-Not built yet: recognizer options and
-wiring, recombination in max mode, the multi-utterance `Decoder`, the early
+- **Offline recognizer**: `--decoding-method=prefix_beam_search` for
+  offline CTC models, with `--max-active-paths` as the hypothesis beam,
+  `--scorer.*` or `--fusion-config` for scorers, and `--length-bonus`,
+  `--length-bonus-unit`, `--ctc-alignment`, `--ctc-token-candidates`
+  (`sherpa-onnx/csrc/fusion-config.h`,
+  `offline-ctc-prefix-beam-search-decoder.h`). The utterances of a batch
+  share each scorer call. Token text, word starts, and unemittable symbols
+  come from the recognizer's token table; byte-BPE tables are refused. The
+  options exist in the C++ config and command line only; see
+  [the bindings gap](../gaps/fusion-config-bindings.md).
+
+Not built yet: streaming recognizer wiring, recombination in max mode, the multi-utterance `Decoder`, the early
 partial-score beam, score beam defaults, and the tuning traces.
 
 ### Scope across model families
