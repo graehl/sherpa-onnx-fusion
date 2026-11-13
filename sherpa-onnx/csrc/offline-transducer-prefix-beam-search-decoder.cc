@@ -35,7 +35,8 @@ TransducerPrefixSearchOptions MakeTransducerPrefixSearchOptions(
 TransducerFusion::TransducerFusion(const FusionConfig &config,
                                    const SymbolTable &symbol_table,
                                    int32_t blank_id, int32_t vocab_size)
-    : vocabulary_(MakeCtcSearchVocabulary(symbol_table, blank_id)),
+    : vocabulary_(MakeCtcSearchVocabulary(symbol_table, blank_id,
+                                          ScorersWantLowercase(config))),
       scorers_(CreateScorers(config.scorers)) {
   // A model may score more token IDs than the table names.
   SearchToken absent;

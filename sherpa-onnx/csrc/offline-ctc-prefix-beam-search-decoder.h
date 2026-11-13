@@ -28,9 +28,14 @@ namespace sherpa_onnx {
 // word or twice in a row, and the silence token "SIL" contributes nothing.
 // Join markers that the recognizer does not itself remove, such as "##",
 // "@@", or a "|" delimiter token, are therefore scored as written, and a
-// table that has them is reported once in the log.
+// table that has them is reported once in the log. "lowercase" gives the
+// scorers each token's text in lowercase (FusionConfig::scorer_text_case).
 std::shared_ptr<CtcSearchVocabulary> MakeCtcSearchVocabulary(
-    const SymbolTable &symbol_table, int32_t blank_id);
+    const SymbolTable &symbol_table, int32_t blank_id, bool lowercase = false);
+
+inline bool ScorersWantLowercase(const FusionConfig &config) {
+  return config.scorer_text_case == "lower";
+}
 
 // The search options a validated configuration and a hypothesis beam describe.
 CtcPrefixSearchOptions MakeCtcPrefixSearchOptions(const FusionConfig &config,

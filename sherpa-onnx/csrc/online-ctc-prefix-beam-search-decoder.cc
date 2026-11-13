@@ -18,7 +18,8 @@ OnlineCtcPrefixBeamSearchDecoder::OnlineCtcPrefixBeamSearchDecoder(
     const FusionConfig &config, int32_t max_active,
     const SymbolTable &symbol_table, int32_t blank_id)
     : options_(MakeCtcPrefixSearchOptions(config, max_active)),
-      vocabulary_(MakeCtcSearchVocabulary(symbol_table, blank_id)),
+      vocabulary_(MakeCtcSearchVocabulary(symbol_table, blank_id,
+                                          ScorersWantLowercase(config))),
       scorers_(CreateScorers(config.scorers)) {
   for (const auto &scorer : scorers_) scorer_pointers_.push_back(scorer.get());
   for (const auto &scorer : config.scorers) weights_.push_back(scorer.weight);

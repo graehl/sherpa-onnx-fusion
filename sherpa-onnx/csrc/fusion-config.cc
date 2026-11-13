@@ -34,6 +34,12 @@ void FusionConfig::Register(ParseOptions *po) {
                "Used only when decoding_method is prefix_beam_search. A "
                "hypothesis survives a frame only if its score is within "
                "this much of the best hypothesis. 0 means no limit.");
+  po->Register("scorer-text-case", &scorer_text_case,
+               "Used only when decoding_method is prefix_beam_search. keep: "
+               "character scorers are given the recognizer's text as "
+               "written. lower: in lowercase, for a language model trained "
+               "on lowercase text and a recognizer that writes capitals. The "
+               "recognizer's output is unchanged.");
   po->Register("token-candidates", &token_candidates,
                "Used only when decoding_method is prefix_beam_search. Number "
                "of most probable tokens per frame that may extend a "
@@ -54,6 +60,11 @@ bool FusionConfig::Validate() const {
                      ctc_alignment.c_str());
     return false;
   }
+  if (scorer_text_case != "keep" && scorer_text_case != "lower") {
+    SHERPA_ONNX_LOGE("--scorer-text-case must be keep or lower. Given: '%s'",
+                     scorer_text_case.c_str());
+    return false;
+  }
   if (token_candidates < 1) {
     SHERPA_ONNX_LOGE("--token-candidates must be positive. Given: %d",
                      token_candidates);
@@ -72,6 +83,7 @@ std::string FusionConfig::ToString() const {
   os << "length_bonus=" << length_bonus << ", ";
   os << "length_bonus_unit=\"" << length_bonus_unit << "\", ";
   os << "ctc_alignment=\"" << ctc_alignment << "\", ";
+  os << "scorer_text_case=\"" << scorer_text_case << "\", ";
   os << "token_candidates=" << token_candidates << ", ";
   os << "score_beam=" << score_beam << ")";
   return os.str();
