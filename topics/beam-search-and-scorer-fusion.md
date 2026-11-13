@@ -111,7 +111,17 @@ design for what does not.
   short test recordings, and accepts a KenLM scorer from `--scorer.*` and
   from `--fusion-config`. The streaming path has unit tests only.
 
-Not built yet: the multi-utterance `Decoder`, the early
+- **Multi-utterance decoder**: `sherpa-onnx/csrc/ctc-inflight-decoder.h`,
+  the lifecycle drafted below for CTC: `TryAdd`, `TryAccept` (copies the
+  chunk), `InputFinished`, `Cancel`, `Step`, `Status`, `GetResult`,
+  `Release`, with stable handles, per-utterance weights and result count,
+  an admission limit, and a bound on queued input. `Step` advances every
+  utterance that has frames queued and batches scorer calls across them;
+  an utterance waiting for input does not hold others back. Calls are
+  synchronous, end-of-input scoring is per utterance, and the recognizers
+  do not use this class yet: they batch within one `Decode` call.
+
+Not built yet: the early
 partial-score beam, score beam defaults, and the tuning traces.
 
 ### Scope across model families

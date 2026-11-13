@@ -1,10 +1,10 @@
 ---
 slug: fusion-config-bindings
 noticed: 2026-11-13
-where: OfflineRecognizerConfig::fusion (sherpa-onnx/csrc/offline-recognizer.h) and every language binding
+where: OfflineRecognizerConfig::fusion and OnlineRecognizerConfig::fusion (sherpa-onnx/csrc) and every language binding
 ---
 
-**Gap:** `OfflineRecognizerConfig` has a `fusion` member (scorers, length
+**Gap:** `OfflineRecognizerConfig` and `OnlineRecognizerConfig` have a `fusion` member (scorers, length
 bonus, CTC prefix-search options) that only the C++ struct and the command
 line expose. The C API, Python, JNI, and the other bindings neither set it
 nor pass it through, so `decoding_method = "prefix_beam_search"` from a

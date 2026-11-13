@@ -188,6 +188,12 @@ class CtcPrefixSearch {
   std::vector<UnitId> units_;
 };
 
+// Between BeginFrame and EndFrame of each search in "searches": runs every
+// scorer's waves, each scorer call serving all the searches. Every search
+// must have been created with "scorers", in that order.
+void RunScorerWavesTogether(const std::vector<CtcPrefixSearch *> &searches,
+                            const std::vector<Scorer *> &scorers);
+
 // Decodes frames of several utterances together, so each scorer call
 // serves every utterance that has a frame at that position. log_probs is
 // [searches.size(), num_frames, vocab_size]; lengths[i] is utterance i's
