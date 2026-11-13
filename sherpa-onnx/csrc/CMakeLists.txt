@@ -150,6 +150,7 @@ set(sources
   provider.cc
   recognizer-options-json.cc
   recurrent-lm-scorer.cc
+  scored-prefix-trie.cc
   scorer-options.cc
   scorer.cc
   session.cc

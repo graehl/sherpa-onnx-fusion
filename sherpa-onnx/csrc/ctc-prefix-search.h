@@ -9,10 +9,10 @@
 #include <cstdint>
 #include <limits>
 #include <memory>
-#include <unordered_map>
 #include <utility>
 #include <vector>
 
+#include "sherpa-onnx/csrc/scored-prefix-trie.h"
 #include "sherpa-onnx/csrc/scorer.h"
 
 // CTC prefix beam search for one utterance, with scorer fusion.
@@ -20,20 +20,8 @@
 
 namespace sherpa_onnx {
 
-// What the search needs to know about one recognizer token.
-struct CtcSearchToken {
-  // False for a token the search never emits, such as an unknown-word token.
-  bool emit = true;
-  // The token's text begins a new word (its piece begins with a space).
-  bool starts_word = false;
-  // Unicode scalars of the token's text, without that leading space.
-  std::vector<UnitId> chars;
-};
-
-struct CtcSearchVocabulary {
-  int32_t blank_id = 0;
-  std::vector<CtcSearchToken> tokens;  // Indexed by token ID.
-};
+using CtcSearchToken = SearchToken;
+using CtcSearchVocabulary = SearchVocabulary;
 
 enum class CtcAlignmentMode {
   kSum,  // An output's score is the summed probability of its alignments.
@@ -44,8 +32,6 @@ enum class CtcAlignmentMode {
   // the first are then no longer each output's own best alignment.
   kMax,
 };
-
-enum class LengthBonusUnit { kToken, kWord };
 
 struct CtcPrefixSearchOptions {
   CtcAlignmentMode alignment = CtcAlignmentMode::kSum;
@@ -158,77 +144,46 @@ class CtcPrefixSearch {
   // Work counters since construction: hypotheses kept after pruning,
   // summed over frames, and new prefixes sent to the scorers.
   int64_t NumHypothesesKept() const { return num_kept_; }
-  int64_t NumPrefixesScored() const { return num_scored_; }
+  int64_t NumPrefixesScored() const { return trie_.NumNodesScored(); }
   // Prefix records currently held, for tests of reclamation.
-  int32_t NumLiveRecords() const { return num_live_records_; }
+  int32_t NumLiveRecords() const { return trie_.NumLiveNodes(); }
 
  private:
-  struct Record;
-  struct Pending;
+  using Node = ScoredPrefixTrie::Node;
+  struct CtcState;
   struct SurvivalTrace;
 
-  Record *Rec(uint32_t index) const;
-  std::byte *StateOf(Record *record, int32_t scorer) const;
-  float *SubtotalsOf(Record *record) const;
-  SurvivalTrace *SurvivalOf(Record *record) const;
+  CtcState *Ctc(Node *node) const;
+  SurvivalTrace *SurvivalOf(Node *node) const;
 
-  uint32_t NewRecord(uint32_t parent, int32_t token);
-  void FreeRecord(uint32_t index);
-  void ReleaseIfUnused(uint32_t index);
-  uint32_t FindOrCreateChild(uint32_t parent, int32_t token);
   void Touch(uint32_t index);
-  void QueueScoring(uint32_t index);
-  void FinishScoring();
   void Recombine();
   void NoteContribution(float term, const SurvivalNeed &from, float *best_term,
                         SurvivalNeed *next) const;
-  bool SameFuture(const Record &a, const Record &b) const;
   float Acoustic(float blank, float nonblank) const;
   float Accumulate(float sum, float term) const;
-  float LengthBonus(const Record &record, bool at_end) const;
+  float LengthBonus(const Node &node, bool at_end) const;
   CtcPrefixHypothesis MakeHypothesis(uint32_t index, float score,
                                      float acoustic,
                                      const float *final_scores) const;
 
   CtcPrefixSearchOptions options_;
-  std::shared_ptr<const CtcSearchVocabulary> vocabulary_;
-  std::vector<Scorer *> scorers_;
-  std::vector<float> weights_;
-  std::vector<std::unique_ptr<ScorerUtterance>> utterances_;
-
-  // Record layout: header, one float subtotal per scorer, each scorer's
-  // state bytes, then the bytes of any enabled trace, all 8-byte aligned.
-  size_t subtotals_offset_ = 0;
-  std::vector<size_t> state_offsets_;
-  size_t survival_offset_ = 0;  // Meaningful with trace_survival.
-  size_t record_bytes_ = 0;
-
-  // Records live in fixed-size blocks, so a record's address is stable and
-  // records are addressed by index.
-  static constexpr uint32_t kBlockShift = 8;
-  std::vector<std::unique_ptr<uint64_t[]>> blocks_;
-  uint32_t num_records_ = 0;
-  std::vector<uint32_t> free_records_;
-  int32_t num_live_records_ = 0;
-  std::unordered_map<uint64_t, uint32_t> children_;  // (parent, token) -> index
+  // Each prefix's record holds a CtcState and, with trace_survival, a
+  // SurvivalTrace after it.
+  size_t survival_offset_ = 0;
+  ScoredPrefixTrie trie_;
 
   std::vector<uint32_t> active_;
   int32_t frame_ = 0;
   bool recombine_ = false;
   int64_t num_recombined_ = 0;
   int64_t num_kept_ = 0;
-  int64_t num_scored_ = 0;
-  std::vector<std::pair<uint64_t, uint32_t>> by_future_;
 
   // Per-frame work.
   std::vector<uint32_t> touched_;
   std::vector<float> touched_scores_;
   std::vector<int32_t> candidates_;
-  std::vector<uint32_t> new_records_;
-  std::vector<std::vector<Pending>> pending_;   // Per scorer.
-  std::vector<std::vector<uint32_t>> wave_;     // Pending indices sent.
-  std::vector<std::vector<uint64_t>> scratch_;  // Intermediate states.
-  std::vector<UnitId> units_;
+  std::vector<std::pair<uint64_t, uint32_t>> by_future_;
 };
 
 // Between BeginFrame and EndFrame of each search in "searches": runs every
