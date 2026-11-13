@@ -30,6 +30,10 @@ void FusionConfig::Register(ParseOptions *po) {
                "Used only when decoding_method is prefix_beam_search. sum: "
                "score an output by the total probability of its alignments. "
                "max: by its best alignment.");
+  po->Register("ctc-score-beam", &ctc_score_beam,
+               "Used only when decoding_method is prefix_beam_search. A "
+               "hypothesis survives a frame only if its score is within "
+               "this much of the best hypothesis. 0 means no limit.");
   po->Register("ctc-token-candidates", &ctc_token_candidates,
                "Used only when decoding_method is prefix_beam_search. Number "
                "of most probable tokens per frame that may extend a "
@@ -68,7 +72,8 @@ std::string FusionConfig::ToString() const {
   os << "length_bonus=" << length_bonus << ", ";
   os << "length_bonus_unit=\"" << length_bonus_unit << "\", ";
   os << "ctc_alignment=\"" << ctc_alignment << "\", ";
-  os << "ctc_token_candidates=" << ctc_token_candidates << ")";
+  os << "ctc_token_candidates=" << ctc_token_candidates << ", ";
+  os << "ctc_score_beam=" << ctc_score_beam << ")";
   return os.str();
 }
 

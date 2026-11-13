@@ -285,3 +285,13 @@ remains a joint-search estimate.
 
 Recovery when every hypothesis is rejected is sketched under
 [Recovery by iterative widening](#recovery-by-iterative-widening).
+
+## Score-gap beam default from model score ranges
+
+The score-gap beam's default is a constant, 12, from one sweep. A default
+that holds across models would be derived from how far apart competing
+hypotheses' scores sit: the recognizer's score scale, and each scorer's
+weight and the range of its scores. That needs each model to publish its
+score range, by a metadata convention or as an explicit option, and a rule
+that turns those ranges and the weights into a gap (graehl, 2026-11-13).
+Until then, anyone who cares tunes `--ctc-score-beam`.

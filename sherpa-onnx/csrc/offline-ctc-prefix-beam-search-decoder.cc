@@ -73,6 +73,7 @@ CtcPrefixSearchOptions MakeCtcPrefixSearchOptions(const FusionConfig &config,
                                                     : CtcAlignmentMode::kSum;
   options.max_active = max_active;
   options.max_token_candidates = config.ctc_token_candidates;
+  if (config.ctc_score_beam > 0) options.beam = config.ctc_score_beam;
   options.length_bonus = config.length_bonus;
   options.length_bonus_unit = config.length_bonus_unit == "word"
                                   ? LengthBonusUnit::kWord

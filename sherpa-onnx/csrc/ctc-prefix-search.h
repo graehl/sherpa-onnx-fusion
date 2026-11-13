@@ -123,6 +123,10 @@ class CtcPrefixSearch {
   // Hypotheses dropped so far because another with the same future scored
   // at least as well (max alignment, when every scorer recombines).
   int64_t NumRecombined() const { return num_recombined_; }
+  // Work counters since construction: hypotheses kept after pruning,
+  // summed over frames, and new prefixes sent to the scorers.
+  int64_t NumHypothesesKept() const { return num_kept_; }
+  int64_t NumPrefixesScored() const { return num_scored_; }
   // Prefix records currently held, for tests of reclamation.
   int32_t NumLiveRecords() const { return num_live_records_; }
 
@@ -175,6 +179,8 @@ class CtcPrefixSearch {
   int32_t frame_ = 0;
   bool recombine_ = false;
   int64_t num_recombined_ = 0;
+  int64_t num_kept_ = 0;
+  int64_t num_scored_ = 0;
   std::unordered_map<uint64_t, std::vector<uint32_t>> same_hash_;
 
   // Per-frame work.
