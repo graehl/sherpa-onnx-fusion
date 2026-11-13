@@ -19,7 +19,10 @@
 #include "fst/fstlib.h"
 #include "gtest/gtest.h"
 #include "sherpa-onnx/csrc/endpoint.h"
+#include "sherpa-onnx/csrc/fusion-config.h"
+#include "sherpa-onnx/csrc/online-ctc-prefix-beam-search-decoder.h"
 #include "sherpa-onnx/csrc/online-stream.h"
+#include "sherpa-onnx/csrc/symbol-table.h"
 
 namespace sherpa_onnx {
 namespace {
@@ -110,6 +113,46 @@ TEST_F(OnlineCtcFstDecoderTest, KnownBugAllBlankChunksOvercountSilence) {
   EXPECT_TRUE(endpoint.IsEndpoint(6, results[0].num_trailing_blanks, 0.04f));
 
   // A nonblank in the full traceback resets the stale count.
+  const float speech_then_blank[] = {-100, 0, 0, -100};
+  decoder.Decode(speech_then_blank, 1, 2, 2, &results, streams, 1);
+  EXPECT_EQ(results[0].num_trailing_blanks, 1);
+  EXPECT_EQ(results[0].tokens, std::vector<int64_t>({1}));
+  EXPECT_EQ(results[0].timestamps, std::vector<int32_t>({6}));
+}
+
+// The same input through the streaming prefix search, which keeps its search
+// across chunks instead of re-reading a traceback: the counts are the correct
+// ones, chunked or whole, and the endpoint rule does not fire early.
+TEST(OnlineCtcPrefixBeamSearchDecoderTrailingSilence,
+     AllBlankChunksCountSilenceOnce) {
+  SymbolTable symbol_table("<blk> 0\na 1\n", false);
+  FusionConfig fusion;
+  OnlineCtcPrefixBeamSearchDecoder decoder(fusion, 4, symbol_table, 0);
+  OnlineStream chunked;
+  OnlineStream *streams[] = {&chunked};
+  std::vector<OnlineCtcDecoderResult> results(1);
+  const float scores[] = {0, -100, 0, -100, 0, -100, 0, -100, 0, -100, 0, -100};
+  std::vector<int32_t> observed_counts;
+  for (int32_t chunk = 0; chunk != 3; ++chunk) {
+    decoder.Decode(scores + chunk * 4, 1, 2, 2, &results, streams, 1);
+    observed_counts.push_back(results[0].num_trailing_blanks);
+    EXPECT_TRUE(results[0].tokens.empty());
+    EXPECT_TRUE(results[0].timestamps.empty());
+  }
+  EXPECT_EQ(observed_counts, std::vector<int32_t>({2, 4, 6}));
+
+  OnlineStream whole;
+  OnlineStream *whole_streams[] = {&whole};
+  std::vector<OnlineCtcDecoderResult> whole_results(1);
+  decoder.Decode(scores, 1, 6, 2, &whole_results, whole_streams, 1);
+  EXPECT_EQ(whole_results[0].num_trailing_blanks, 6);
+
+  EndpointConfig endpoint_config;
+  endpoint_config.rule1.min_trailing_silence = 0.3f;
+  Endpoint endpoint(endpoint_config);
+  // Six 40-ms frames are 240 ms: the 300-ms threshold must not fire.
+  EXPECT_FALSE(endpoint.IsEndpoint(6, results[0].num_trailing_blanks, 0.04f));
+
   const float speech_then_blank[] = {-100, 0, 0, -100};
   decoder.Decode(speech_then_blank, 1, 2, 2, &results, streams, 1);
   EXPECT_EQ(results[0].num_trailing_blanks, 1);

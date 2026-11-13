@@ -33,6 +33,13 @@ incremental result representation from the
 [traceback gap](streaming-ctc-traceback-recomputation.md) must keep the
 count correct without a full walk.
 
+## Unaffected path
+
+`--decoding-method=prefix_beam_search` keeps its search across chunks and
+does not re-read a traceback. The same test file runs the same input
+through it (`AllBlankChunksCountSilenceOnce`) and requires the correct
+counts 2, 4, 6. The defect remains in the FST decoder.
+
 ## Closure checks
 
 Change the test's oracle to 2, 4, 6, remove its warning and the
