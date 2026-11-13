@@ -55,6 +55,12 @@ adaptation close to Sherpa's current conventions. No decision has been
 made to fork Kaldi, contribute this upstream, or replace the configuration
 framework. A local wrapper or extension is an option, not a commitment.
 
+## Status
+
+The mechanism is implemented and tested with a non-scorer fixture; see the
+topic. What remains is its first real consumer, the scorer configuration,
+and the multiple-FST use below.
+
 ## Decisions still open
 
 Choose the smallest approach that supports the required nested collections

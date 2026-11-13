@@ -135,6 +135,7 @@ set(sources
   online-zipformer2-ctc-model.cc
   online-zipformer2-transducer-model.cc
   onnx-utils.cc
+  option-json.cc
   packed-sequence.cc
   pad-sequence.cc
   parse-options.cc
@@ -849,6 +850,7 @@ if(SHERPA_ONNX_ENABLE_TESTS)
     offline-whisper-language-candidates-test.cc
     offline-whisper-timestamp-rules-test.cc
     online-ctc-fst-decoder-test.cc
+    option-collection-test.cc
     packed-sequence-test.cc
     pad-sequence-test.cc
     online-stream-test.cc

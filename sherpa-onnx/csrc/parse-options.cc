@@ -18,6 +18,7 @@
 #include <fstream>
 #include <iomanip>
 #include <string>
+#include <utility>
 
 #include "sherpa-onnx/csrc/file-utils.h"
 #include "sherpa-onnx/csrc/log.h"
@@ -396,6 +397,9 @@ void ParseOptions::PrintUsage(bool print_command_line /*=false*/) const {
          << it.second.use_msg_ << '\n';
     }
   }
+  if (!handler_usage_.empty()) {
+    os << handler_usage_;
+  }
   if (app_specific_header_printed == true) {
     os << '\n';
   }
@@ -570,9 +574,69 @@ bool ParseOptions::SetOption(const std::string &key, const std::string &value,
     }
     *(string_map_[key]) = value;
   } else {
-    return false;
+    return SetByHandler(key, value, has_equal_sign);
   }
   return true;
+}
+
+bool ParseOptions::SetByHandler(const std::string &key,
+                                const std::string &value, bool has_equal_sign) {
+  auto it = handler_map_.find(key);
+  if (it != handler_map_.end()) {
+    return it->second("", value, has_equal_sign);
+  }
+  for (size_t dot = key.rfind('.'); dot != std::string::npos && dot != 0;
+       dot = key.rfind('.', dot - 1)) {
+    it = handler_map_.find(key.substr(0, dot));
+    if (it != handler_map_.end()) {
+      return it->second(key.substr(dot + 1), value, has_equal_sign);
+    }
+  }
+  return false;
+}
+
+void ParseOptions::RegisterHandler(const std::string &name,
+                                   OptionHandler handler,
+                                   const std::string &usage) {
+  if (other_parser_ != nullptr) {
+    other_parser_->RegisterHandler(prefix_ + "." + name, std::move(handler),
+                                   usage);
+    return;
+  }
+  std::string idx = name;
+  NormalizeArgName(&idx);
+  if (!handler_map_.emplace(idx, std::move(handler)).second) {
+    SHERPA_ONNX_LOGE("Registering option handler twice, ignoring second: %s",
+                     name.c_str());
+    return;
+  }
+  handler_usage_ += usage;
+}
+
+bool ParseOptions::Assign(const std::string &key, const std::string &value,
+                          bool has_equal_sign /*= true*/) {
+  if (other_parser_ != nullptr) {
+    return other_parser_->Assign(prefix_ + "." + key, value, has_equal_sign);
+  }
+  if (key.empty()) {
+    return false;
+  }
+  std::string idx = key;
+  NormalizeArgName(&idx);
+  return SetOption(idx, value, has_equal_sign);
+}
+
+std::string ParseOptions::OptionsUsage(const std::string &name_prefix) const {
+  std::ostringstream os;
+  for (const auto &it : doc_map_) {
+    if (!it.second.is_standard_) {
+      os << "  --" << std::setw(25) << std::left
+         << (name_prefix + it.second.name_) << " : " << it.second.use_msg_
+         << '\n';
+    }
+  }
+  os << handler_usage_;
+  return os.str();
 }
 
 bool ParseOptions::ToBool(std::string str) const {
