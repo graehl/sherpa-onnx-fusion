@@ -103,6 +103,7 @@ class TransducerPrefixSearch {
   void ContextOf(uint32_t hypothesis, int32_t size, int64_t pad,
                  int64_t *context) const;
   int32_t LastTokenOf(uint32_t hypothesis) const;  // -1 for the empty prefix.
+  int32_t LengthOf(uint32_t hypothesis) const;     // In tokens.
   uint32_t ParentOf(uint32_t hypothesis) const;
   // Changes when a hypothesis index is reused for another prefix, so a
   // caller can keep per-hypothesis model state in arrays by index.
@@ -139,11 +140,12 @@ class TransducerPrefixSearch {
   void AddAgain(uint32_t index, float log_mass);
   void AddArrival(uint32_t index, int32_t frames_ahead, float log_mass);
   float LengthBonus(const Node &node, bool at_end) const;
-  // Keeps the best of "candidates" by "mass_of" plus scorer scores and
-  // bonus; calls "drop" for the others. Returns the kept ones, best first.
-  template <class MassOf, class Drop>
+  // Keeps the best of "candidates" by the probability each holds in "slot"
+  // (an arrival slot, or kAgainSlot) plus scorer scores and bonus, and
+  // clears and unpins the others. Returns the kept ones, best first.
+  static constexpr int32_t kAgainSlot = -1;
   std::vector<uint32_t> Prune(const std::vector<uint32_t> &candidates,
-                              MassOf mass_of, Drop drop);
+                              int32_t slot);
   // Every hypothesis holding probability, with its total log mass.
   void Outstanding(std::vector<uint32_t> *nodes,
                    std::vector<float> *log_mass) const;
@@ -162,6 +164,10 @@ class TransducerPrefixSearch {
   std::vector<std::vector<uint32_t>> arriving_;  // By frame modulo ring size.
   std::vector<int32_t> candidates_;
 };
+
+// After Expand: runs every scorer's waves for one search.
+void RunScorerWaves(TransducerPrefixSearch *search,
+                    const std::vector<Scorer *> &scorers);
 
 }  // namespace sherpa_onnx
 

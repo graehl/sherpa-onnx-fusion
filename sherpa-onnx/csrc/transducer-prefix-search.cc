@@ -126,6 +126,10 @@ int32_t TransducerPrefixSearch::LastTokenOf(uint32_t hypothesis) const {
   return trie_.At(hypothesis)->token;
 }
 
+int32_t TransducerPrefixSearch::LengthOf(uint32_t hypothesis) const {
+  return trie_.At(hypothesis)->length;
+}
+
 uint32_t TransducerPrefixSearch::ParentOf(uint32_t hypothesis) const {
   return trie_.At(hypothesis)->parent;
 }
@@ -238,14 +242,16 @@ void TransducerPrefixSearch::ApplyScorerWave(
   trie_.ApplyScorerWave(scorer, results);
 }
 
-template <class MassOf, class Drop>
 std::vector<uint32_t> TransducerPrefixSearch::Prune(
-    const std::vector<uint32_t> &candidates, MassOf mass_of, Drop drop) {
+    const std::vector<uint32_t> &candidates, int32_t slot) {
+  auto mass_in = [slot](State *state) -> float & {
+    return slot == kAgainSlot ? state->again : state->arrive[slot];
+  };
   std::vector<float> scores(candidates.size());
   for (size_t i = 0; i != candidates.size(); ++i) {
     Node *node = trie_.At(candidates[i]);
     scores[i] = node->rejected ? kLogZero
-                               : mass_of(StateOf(node)) + node->scorer_total +
+                               : mass_in(StateOf(node)) + node->scorer_total +
                                      LengthBonus(*node, false);
   }
   std::vector<uint32_t> order(candidates.size());
@@ -266,7 +272,11 @@ std::vector<uint32_t> TransducerPrefixSearch::Prune(
   }
   std::vector<uint32_t> kept;
   for (size_t i = 0; i != keep; ++i) kept.push_back(candidates[order[i]]);
-  for (size_t i = keep; i != order.size(); ++i) drop(candidates[order[i]]);
+  for (size_t i = keep; i != order.size(); ++i) {
+    uint32_t index = candidates[order[i]];
+    mass_in(StateOf(trie_.At(index))) = kLogZero;
+    Unpin(index);
+  }
   return kept;
 }
 
@@ -276,12 +286,7 @@ bool TransducerPrefixSearch::EndRound() {
   // The frontier is spent; it leaves through Unpin below, after the
   // next frontier is chosen, so a prefix in both is not freed in between.
   std::vector<uint32_t> spent = std::move(frontier_);
-  frontier_ = Prune(
-      again_, [](State *state) { return state->again; },
-      [this](uint32_t index) {
-        StateOf(trie_.At(index))->again = kLogZero;
-        Unpin(index);
-      });
+  frontier_ = Prune(again_, kAgainSlot);
   for (uint32_t index : frontier_) {
     State *state = StateOf(trie_.At(index));
     state->now = state->again;
@@ -306,12 +311,7 @@ void TransducerPrefixSearch::EndFrame() {
   int32_t slot = frame_ % ring_size_;
   std::vector<uint32_t> arrived = std::move(arriving_[slot]);
   arriving_[slot].clear();
-  frontier_ = Prune(
-      arrived, [slot](State *state) { return state->arrive[slot]; },
-      [this, slot](uint32_t index) {
-        StateOf(trie_.At(index))->arrive[slot] = kLogZero;
-        Unpin(index);
-      });
+  frontier_ = Prune(arrived, slot);
   for (uint32_t index : frontier_) {
     State *state = StateOf(trie_.At(index));
     state->now = state->arrive[slot];
@@ -425,6 +425,22 @@ std::vector<TransducerPrefixHypothesis> TransducerPrefixSearch::Finish(
         final_scores.data() + entry.second * num_scorers));
   }
   return hypotheses;
+}
+
+void RunScorerWaves(TransducerPrefixSearch *search,
+                    const std::vector<Scorer *> &scorers) {
+  std::vector<ScorerExtension> extensions;
+  std::vector<ScorerAdvanceResult> results;
+  for (size_t s = 0; s != scorers.size(); ++s) {
+    extensions.clear();
+    while (search->GatherScorerWave(s, &extensions)) {
+      results.assign(extensions.size(), ScorerAdvanceResult());
+      scorers[s]->Advance({extensions.data(), extensions.size()},
+                          results.data());
+      search->ApplyScorerWave(s, results.data());
+      extensions.clear();
+    }
+  }
 }
 
 }  // namespace sherpa_onnx

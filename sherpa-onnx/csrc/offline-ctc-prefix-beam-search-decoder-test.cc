@@ -152,7 +152,7 @@ TEST(FusionConfig, RegistersScorersAndSearchOptions) {
                         "--length-bonus=1.5",
                         "--length-bonus-unit=word",
                         "--ctc-alignment=max",
-                        "--ctc-token-candidates=5"};
+                        "--token-candidates=5"};
   po.Read(8, argv);
   ASSERT_EQ(config.scorers.size(), 2u);
   EXPECT_EQ(config.scorers[0].type, "kenlm");
@@ -167,7 +167,7 @@ TEST(FusionConfig, RegistersScorersAndSearchOptions) {
   EXPECT_EQ(options.length_bonus_unit, LengthBonusUnit::kWord);
   EXPECT_FLOAT_EQ(options.length_bonus, 1.5f);
 
-  config.ctc_score_beam = 0;
+  config.score_beam = 0;
   EXPECT_TRUE(std::isinf(MakeCtcPrefixSearchOptions(config, 16).beam));
 
   config.ctc_alignment = "best";

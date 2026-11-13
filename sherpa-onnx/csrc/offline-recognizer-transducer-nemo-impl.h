@@ -20,6 +20,7 @@
 #include "sherpa-onnx/csrc/offline-transducer-greedy-search-nemo-decoder.h"
 #include "sherpa-onnx/csrc/offline-transducer-modified-beam-search-nemo-decoder.h"
 #include "sherpa-onnx/csrc/offline-transducer-nemo-model.h"
+#include "sherpa-onnx/csrc/offline-transducer-prefix-beam-search-decoder.h"
 #include "sherpa-onnx/csrc/pad-sequence.h"
 #include "sherpa-onnx/csrc/symbol-table.h"
 #include "sherpa-onnx/csrc/transpose.h"
@@ -67,6 +68,16 @@ class OfflineRecognizerTransducerNeMoImpl : public OfflineRecognizerImpl {
           std::make_unique<OfflineTransducerModifiedBeamSearchNeMoDecoder>(
               model_.get(), config_.max_active_paths, unk_id_,
               config_.blank_penalty, model_->IsTDT(), config_.hotwords_score);
+    } else if (config_.decoding_method == "prefix_beam_search") {
+      try {
+        decoder_ =
+            std::make_unique<OfflineTransducerPrefixBeamSearchNeMoDecoder>(
+                model_.get(), config_.fusion, config_.max_active_paths,
+                symbol_table_, config_.blank_penalty);
+      } catch (const std::exception &e) {
+        SHERPA_ONNX_LOGE("%s", e.what());
+        SHERPA_ONNX_EXIT(-1);
+      }
     } else {
       SHERPA_ONNX_LOGE("Unsupported decoding method: %s",
                        config_.decoding_method.c_str());
@@ -107,6 +118,16 @@ class OfflineRecognizerTransducerNeMoImpl : public OfflineRecognizerImpl {
           std::make_unique<OfflineTransducerModifiedBeamSearchNeMoDecoder>(
               model_.get(), config_.max_active_paths, unk_id_,
               config_.blank_penalty, model_->IsTDT(), config_.hotwords_score);
+    } else if (config_.decoding_method == "prefix_beam_search") {
+      try {
+        decoder_ =
+            std::make_unique<OfflineTransducerPrefixBeamSearchNeMoDecoder>(
+                model_.get(), config_.fusion, config_.max_active_paths,
+                symbol_table_, config_.blank_penalty);
+      } catch (const std::exception &e) {
+        SHERPA_ONNX_LOGE("%s", e.what());
+        SHERPA_ONNX_EXIT(-1);
+      }
     } else {
       SHERPA_ONNX_LOGE("Unsupported decoding method: %s",
                        config_.decoding_method.c_str());

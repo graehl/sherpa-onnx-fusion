@@ -53,8 +53,8 @@ FusionConfig GetFusionConfig(const SherpaOnnxFusionConfig &c) {
   f.length_bonus = c.length_bonus;
   SetIfGiven(c.length_bonus_unit, &f.length_bonus_unit);
   SetIfGiven(c.ctc_alignment, &f.ctc_alignment);
-  if (c.token_candidates > 0) f.ctc_token_candidates = c.token_candidates;
-  if (c.score_beam != 0) f.ctc_score_beam = c.score_beam;
+  if (c.token_candidates > 0) f.token_candidates = c.token_candidates;
+  if (c.score_beam != 0) f.score_beam = c.score_beam;
   return f;
 }
 
