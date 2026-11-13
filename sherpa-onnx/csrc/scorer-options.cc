@@ -54,6 +54,9 @@ void ScorerOptions::Register(ParseOptions *po) {
   common.Register(po);
   po->Register("weight", &weight,
                "Weight of this scorer's log score in the search.");
+  po->Register("rescore", &rescore,
+               "Apply this scorer only to the hypotheses that survive the "
+               "search (n-best rescoring) instead of during the search.");
   po->Register("extra", &extra,
                "JSON object of options specific to the scorer type.");
 }
@@ -72,6 +75,7 @@ std::string ScorerOptions::ToString() const {
   os << "type=\"" << type << "\", ";
   os << "common=" << common.ToString() << ", ";
   os << "weight=" << weight << ", ";
+  os << "rescore=" << (rescore ? "True" : "False") << ", ";
   os << "extra=\"" << extra << "\")";
   return os.str();
 }

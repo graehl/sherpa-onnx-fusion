@@ -151,6 +151,7 @@ set(sources
   provider.cc
   recognizer-options-json.cc
   recurrent-lm-scorer.cc
+  rescoring-scorer.cc
   scored-prefix-trie.cc
   scorer-options.cc
   scorer.cc
@@ -883,6 +884,7 @@ if(SHERPA_ONNX_ENABLE_TESTS)
     online-recognizer-transducer-impl-test.cc
     recognizer-result-json-test.cc
     recurrent-lm-scorer-test.cc
+    rescoring-scorer-test.cc
     regex-lang-test.cc
     scorer-test.cc
     session-test.cc
