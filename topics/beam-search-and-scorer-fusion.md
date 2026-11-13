@@ -122,8 +122,14 @@ design for what does not.
   synchronous, end-of-input scoring is per utterance, and the recognizers
   do not use this class yet: they batch within one `Decode` call.
 
+- **Survival trace**: `trace_survival` adds 40 bytes to each record when
+  on and nothing when off, and reports per result the score gap and
+  hypothesis-beam rank it needed; a search given those reproduces the
+  result (see the sweep section for what that means in each mode). Other traces would be further optional
+  byte groups in the record, each with its own switch.
+
 Not built yet: the early
-partial-score beam and the tuning traces.
+partial-score beam and the other tuning traces.
 
 ### Scope across model families
 
@@ -213,10 +219,22 @@ which is not error rate against references.
 A constant is a first default. The right gap depends on how far apart
 competing hypotheses' scores sit, which depends on the recognizer's score
 scale and on each scorer's weight and range; a default derived from those
-would hold across models where a constant will not. The per-hypothesis
-survival traces described under tuning are the better instrument for this:
-one unlimited run reports the gap each final result needed at every frame,
-in place of one run per candidate gap.
+would hold across models where a constant will not; see the sketches
+companion.
+
+The survival trace (`CtcPrefixSearchOptions::trace_survival`) reports, for
+each result, the score gap and the hypothesis-beam rank it needed. In max
+mode it follows the result's one best alignment, per ending, the way a
+backpointer would, and a search given the traced gap plus a small margin,
+or the traced rank, reproduces the result and its score exactly; tests
+check this with and without recombination. In sum mode it takes the most
+demanding of every alignment that added to the output, which also
+reproduces the result exactly but asks for more than a search needs: an
+earlier, looser version of the trace reported gaps of 11.5 to 18.3 on
+these clips while no transcript changed at a gap of 10, because a prefix
+pruned on the first weak frame of a new token is created again on the next
+with little lost. For choosing a default in sum mode a sweep remains the
+measure.
 
 ## Search semantics
 
