@@ -16,6 +16,7 @@ set(sources
   cat.cc
   circular-buffer.cc
   context-graph.cc
+  ctc-prefix-search.cc
   endpoint.cc
   fa-feature-extractor.cc
   fa-lexicon.cc
@@ -837,6 +838,7 @@ if(SHERPA_ONNX_ENABLE_TESTS)
     cat-test.cc
     circular-buffer-test.cc
     context-graph-test.cc
+    ctc-prefix-search-test.cc
     fa-lexicon-test.cc
     forced-aligner-test.cc
     lfr-test.cc
