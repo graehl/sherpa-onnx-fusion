@@ -638,46 +638,50 @@ std::vector<CtcPrefixHypothesis> CtcPrefixSearch::Finish(int32_t nbest) {
   return hypotheses;
 }
 
+void RunScorerWavesTogether(const std::vector<CtcPrefixSearch *> &searches,
+                            const std::vector<Scorer *> &scorers) {
+  std::vector<size_t> counts;
+  std::vector<ScorerExtension> extensions;
+  std::vector<ScorerAdvanceResult> results;
+  for (size_t s = 0; s != scorers.size(); ++s) {
+    while (true) {
+      extensions.clear();
+      counts.assign(searches.size(), 0);
+      for (size_t k = 0; k != searches.size(); ++k) {
+        size_t before = extensions.size();
+        searches[k]->GatherScorerWave(s, &extensions);
+        counts[k] = extensions.size() - before;
+      }
+      if (extensions.empty()) break;
+      results.assign(extensions.size(), ScorerAdvanceResult());
+      scorers[s]->Advance({extensions.data(), extensions.size()},
+                          results.data());
+      size_t offset = 0;
+      for (size_t k = 0; k != searches.size(); ++k) {
+        if (counts[k] != 0) {
+          searches[k]->ApplyScorerWave(s, results.data() + offset);
+        }
+        offset += counts[k];
+      }
+    }
+  }
+}
+
 void DecodeFramesTogether(const std::vector<CtcPrefixSearch *> &searches,
                           const std::vector<Scorer *> &scorers,
                           const float *log_probs, int32_t num_frames,
                           int32_t vocab_size, const int64_t *lengths) {
-  std::vector<size_t> live;
-  std::vector<size_t> counts;
-  std::vector<ScorerExtension> extensions;
-  std::vector<ScorerAdvanceResult> results;
+  std::vector<CtcPrefixSearch *> live;
   for (int32_t t = 0; t != num_frames; ++t) {
     live.clear();
     for (size_t i = 0; i != searches.size(); ++i) {
-      if (lengths == nullptr || t < lengths[i]) live.push_back(i);
+      if (lengths != nullptr && t >= lengths[i]) continue;
+      searches[i]->BeginFrame(log_probs + (i * num_frames + t) * vocab_size);
+      live.push_back(searches[i]);
     }
     if (live.empty()) break;
-    for (size_t i : live) {
-      searches[i]->BeginFrame(log_probs + (i * num_frames + t) * vocab_size);
-    }
-    for (size_t s = 0; s != scorers.size(); ++s) {
-      while (true) {
-        extensions.clear();
-        counts.assign(live.size(), 0);
-        for (size_t k = 0; k != live.size(); ++k) {
-          size_t before = extensions.size();
-          searches[live[k]]->GatherScorerWave(s, &extensions);
-          counts[k] = extensions.size() - before;
-        }
-        if (extensions.empty()) break;
-        results.assign(extensions.size(), ScorerAdvanceResult());
-        scorers[s]->Advance({extensions.data(), extensions.size()},
-                            results.data());
-        size_t offset = 0;
-        for (size_t k = 0; k != live.size(); ++k) {
-          if (counts[k] != 0) {
-            searches[live[k]]->ApplyScorerWave(s, results.data() + offset);
-          }
-          offset += counts[k];
-        }
-      }
-    }
-    for (size_t i : live) searches[i]->EndFrame();
+    RunScorerWavesTogether(live, scorers);
+    for (CtcPrefixSearch *search : live) search->EndFrame();
   }
 }
 
