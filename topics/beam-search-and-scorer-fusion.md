@@ -69,7 +69,13 @@ design for what does not.
   most probability. Tests compare unpruned search with enumeration of all
   alignments.
 
-Not built yet: the KenLM and ONNX recurrent scorers, recognizer options and
+- **Scorer type `kenlm`**: `sherpa-onnx/csrc/kenlm-scorer.h`, built only
+  with `-DSHERPA_ONNX_ENABLE_KENLM=ON` (default off; KenLM is LGPL and is
+  fetched at configure time, query sources only, no Boost). A character
+  n-gram model in ARPA or KenLM binary form. Its state is KenLM's own, with
+  unused bytes zeroed, so equal contexts are equal bytes.
+
+Not built yet: recognizer options and
 wiring, recombination in max mode, the multi-utterance `Decoder`, the early
 partial-score beam, score beam defaults, and the tuning traces.
 

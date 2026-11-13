@@ -179,6 +179,10 @@ class ScorerFactory {
 void RegisterScorerFactory(const std::string &type,
                            std::unique_ptr<ScorerFactory> factory);
 
+// Registers the scorer types built into this library, once: "onnx-rnn", and
+// "kenlm" when built with SHERPA_ONNX_ENABLE_KENLM. CreateScorer calls it.
+void RegisterBuiltinScorerFactories();
+
 // Throws std::runtime_error naming the registered types for an unknown type.
 std::unique_ptr<Scorer> CreateScorer(const ScorerOptions &options);
 
