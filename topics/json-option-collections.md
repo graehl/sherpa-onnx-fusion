@@ -9,10 +9,13 @@ Topic: `json-option-collections`
 ## Scope and status
 
 This is the convention for configuring the multiple
-[fusion scorers](beam-search-and-scorer-fusion.md), and it is not
-implemented yet. It works for any `std::vector` of a struct that has the
-project's usual `Register(ParseOptions *)`; a list of FST inputs is another
-possible consumer. Existing options and `--config` files keep their
+[fusion scorers](beam-search-and-scorer-fusion.md). The mechanism is
+implemented and tested with a fixture collection
+(`sherpa-onnx/csrc/option-collection.h`, `option-json.h`,
+`option-collection-test.cc`); no recognizer option uses it until the scorer
+configuration lands. It works for any `std::vector` of a struct that has
+the project's usual `Register(ParseOptions *)`; a list of FST inputs is
+another possible consumer. Existing options and `--config` files keep their
 behavior. The configs it serves are simple: scalars, nested structs, and
 vectors of structs. Maps, config-file inclusion, and path expansion are out
 of scope.
@@ -54,22 +57,23 @@ a `ParseOptions`, validates, and prints, like every other config here.
 Nested structs register through the existing prefix constructor. Defaults
 live in the struct. There is one list of fields and no JSON schema.
 
-**The parser gains one hook.** `ParseOptions` treats an unknown key as an
-error. Add a prefix handler: when a key is unknown and begins with a
-registered prefix, the parser passes the rest of the key and the value to
-the handler before failing. This is the only change to an upstream file,
-and it is additive.
+**The parser has one hook.** `ParseOptions` treats an unknown key as an
+error. `ParseOptions::RegisterHandler` adds a handler for a name: when a
+key is unknown and is that name or begins with it and a dot, the parser
+passes the rest of the key and the value to the handler before failing.
+With `ParseOptions::Assign`, which sets one option by name, this is the
+only change to an upstream file, and it is additive.
 
-**A collection handler assigns one path at a time.** For
-`scorer.1.weight=0.3` it grows the vector to two default-constructed
+**A collection handler assigns one path at a time.**
+`RegisterOptionCollection` installs it. For `scorer.1.weight=0.3` it grows the vector to two default-constructed
 elements, registers element 1 on a local `ParseOptions`, and gives that
 parser `--weight=0.3`. The existing string conversions and nested prefixes
 apply unchanged, and no pointer into the vector outlives the call, so
 growth cannot invalidate anything. A key that the element does not register
 is an error naming the full path.
 
-**JSON is applied as option paths.** The file is ordinary nested JSON. The
-reader walks it: an object member appends `.name` to the path, an array
+**JSON is applied as option paths.** The file is ordinary nested JSON.
+`ApplyJsonOptions` walks it: an object member appends `.name` to the path, an array
 element appends `.index`, and each scalar becomes one assignment given to
 the same parser. JSON, the command line, and `--config` therefore share
 names, defaults, validation, and errors. A JSON key containing `.` is
@@ -80,10 +84,13 @@ it out of scorer factory interfaces.
 
 ## Rules
 
-- Order: the JSON file is applied first, then command-line assignments in
-  order, then `Validate()`. A later assignment to the same path wins.
-- Indices are zero-based decimal and need not arrive in order. Assigning
-  index N creates elements 0 through N with default values; an element
+- Order: options apply in command-line order, and a later assignment to
+  the same path wins. A JSON file named by an option
+  (`RegisterJsonOptionsFile`) is applied at that option's position, so put
+  it before the options that override it. `Validate()` runs after all of
+  them.
+- Indices are zero-based decimal, below 256, and need not arrive in order.
+  Assigning index N creates elements 0 through N with default values; an element
   nobody assigned then fails its own validation (a scorer with no type).
 - A JSON array replaces nothing by itself: it assigns the paths it
   contains. Giving both a JSON file and indexed options for one element is

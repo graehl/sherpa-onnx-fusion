@@ -8,6 +8,7 @@
 #define SHERPA_ONNX_CSRC_PARSE_OPTIONS_H_
 
 #include <cstdint>
+#include <functional>
 #include <sstream>
 #include <string>
 #include <unordered_map>
@@ -122,6 +123,26 @@ class ParseOptions {
   /// this is just hardwired to bash.  It's useful for debug output.
   static std::string Escape(const std::string &str);
 
+  /// Option handler: receives an option that is not registered and whose name
+  /// is "name" or begins with "name.". "rest" is what follows "name." and is
+  /// empty for "name" itself. Returns false when "rest" names nothing it
+  /// accepts. See sherpa-onnx/csrc/option-collection.h for the main use.
+  using OptionHandler = std::function<bool(
+      const std::string &rest, const std::string &value, bool has_equal_sign)>;
+
+  /// "usage" is printed with the program's options; give complete lines.
+  void RegisterHandler(const std::string &name, OptionHandler handler,
+                       const std::string &usage);
+
+  /// Assign one option by name, as --key=value on the command line would.
+  /// Returns false when no option or handler accepts "key".
+  bool Assign(const std::string &key, const std::string &value,
+              bool has_equal_sign = true);
+
+  /// Usage lines of the application-specific options, each name preceded by
+  /// "name_prefix".
+  std::string OptionsUsage(const std::string &name_prefix) const;
+
  private:
   /// Template to register various variable types,
   /// used for program-specific parameters
@@ -198,6 +219,14 @@ class ParseOptions {
   };
   using DocMapType = std::unordered_map<std::string, DocInfo>;
   DocMapType doc_map_;  ///< map for the documentation
+
+  /// Offers an unregistered "key" to the handler registered for it or for
+  /// its longest dotted prefix.
+  bool SetByHandler(const std::string &key, const std::string &value,
+                    bool has_equal_sign);
+
+  std::unordered_map<std::string, OptionHandler> handler_map_;
+  std::string handler_usage_;
 
   bool print_args_;     ///< variable for the implicit --print-args parameter
   bool help_;           ///< variable for the implicit --help parameter
