@@ -65,8 +65,10 @@ CtcPrefixSearch::CtcPrefixSearch(
             RoundUpTo8(sizeof(CtcState)) +
                 (options.trace_survival ? sizeof(SurvivalTrace) : 0),
             options.word_boundary_char) {
-  recombine_ = options_.alignment == CtcAlignmentMode::kMax &&
-               options_.recombine && trie_.ScorersRecombine();
+  recombine_ = (options_.alignment == CtcAlignmentMode::kMax
+                    ? options_.recombine
+                    : options_.prune_dominated_in_sum) &&
+               trie_.ScorersRecombine();
 
   Node *root = trie_.At(ScoredPrefixTrie::kRoot);
   *Ctc(root) = {0.0f, kLogZero, kLogZero, kLogZero, 0, 0, kLogZero};

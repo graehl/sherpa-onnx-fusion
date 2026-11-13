@@ -40,6 +40,12 @@ struct CtcPrefixSearchOptions {
   // matches or beats (see CtcAlignmentMode::kMax). Off only for comparison.
   bool recombine = true;
 
+  // Experimental, sum mode: drop a hypothesis that another with the same
+  // future matches or beats in both of its sums, as max mode does. Unlike
+  // there it is an approximation: the dropped prefix's probability so far
+  // is lost if later frames bring it back.
+  bool prune_dominated_in_sum = false;
+
   // Hypothesis beam: at most this many output prefixes survive a frame.
   int32_t max_active = 8;
   // A prefix survives only within this score of the frame's best.
