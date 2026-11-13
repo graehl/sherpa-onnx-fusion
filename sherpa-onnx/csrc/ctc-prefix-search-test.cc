@@ -161,8 +161,8 @@ TEST(CtcPrefixSearch, PrunedMaxModeWithoutScorersIsGreedy) {
     int32_t previous = 0;
     for (int32_t t = 0; t != num_frames; ++t) {
       const float *row = log_probs.data() + t * vocab_size;
-      auto best = static_cast<int32_t>(
-          std::max_element(row, row + vocab_size) - row);
+      auto best =
+          static_cast<int32_t>(std::max_element(row, row + vocab_size) - row);
       greedy_score += row[best];
       if (best != 0 && best != previous) greedy.push_back(best);
       previous = best;
@@ -234,6 +234,40 @@ TEST(CtcPrefixSearch, MaxModeRecombinesOnEqualScorerStatesExactly) {
     EXPECT_EQ(unmerged.Finish(1000).size(), outputs.size());
   }
   EXPECT_EQ(HistoryScorer::LiveStates(), 0);
+}
+
+// Sum mode can drop dominated hypotheses too. The dropped prefix's
+// probability is lost, so a result's score never exceeds its true sum.
+TEST(CtcPrefixSearch, SumModeDominancePruningNeverOverstatesAScore) {
+  const int32_t num_frames = 6, vocab_size = 4;
+  BigramTableScorer bigram(ScorerUnit::kAsrToken, -2.0f);
+  bigram.Set(BigramTableScorer::kStart, 2, -0.2f);
+  bigram.Set(2, 3, -0.1f);
+  const float weight = 0.7f;
+  int64_t recombined = 0;
+  for (uint32_t seed = 800; seed != 820; ++seed) {
+    auto log_probs = RandomLogProbs(num_frames, vocab_size, seed);
+    auto outputs = EnumerateOutputs(log_probs, num_frames, vocab_size, true);
+    CtcPrefixSearchOptions options = Exhaustive(vocab_size);
+    options.prune_dominated_in_sum = true;
+    CtcPrefixSearch search(options, PlainVocabulary(vocab_size), {&bigram},
+                           {weight});
+    search.Decode(log_probs.data(), num_frames);
+    auto nbest = search.Finish(1000);
+    ASSERT_FALSE(nbest.empty());
+    for (const auto &hypothesis : nbest) {
+      EXPECT_LE(hypothesis.acoustic_log_prob,
+                outputs.at(hypothesis.tokens) + 1e-4);
+    }
+    recombined += search.NumRecombined();
+
+    options.prune_dominated_in_sum = false;
+    CtcPrefixSearch plain(options, PlainVocabulary(vocab_size), {&bigram},
+                          {weight});
+    plain.Decode(log_probs.data(), num_frames);
+    EXPECT_EQ(plain.NumRecombined(), 0);
+  }
+  EXPECT_GT(recombined, 0);
 }
 
 // Decodes with "scorer" and returns the best result.
