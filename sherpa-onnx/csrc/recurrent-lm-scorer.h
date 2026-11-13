@@ -39,18 +39,25 @@ class RecurrentLmStep {
 };
 
 struct RecurrentLmVocabulary {
+  // The model's unit IDs are the recognizer's token IDs, for a model trained
+  // on the recognizer's tokens; id_of_char is then unused.
+  bool token_units = false;
+  // The end of input adds the score of boundary_id after the last unit, as
+  // rescoring a whole sentence does. Shallow fusion in the existing
+  // streaming decoders adds none.
+  bool score_end = true;
   // The model's unit ID for each character it knows. The boundary between
   // words is the entry for ' '.
   CharacterIndex id_of_char;
   int32_t boundary_id = 0;  // Begins and ends a sentence.
-  int32_t unknown_id = 1;   // Stands for a character without an entry.
+  int32_t unknown_id = 1;   // Stands for a unit the model does not know.
 };
 
-// A character scorer over a recurrent LM. A hypothesis's state refers to a
-// node holding the recurrent state after its last unit and, once computed,
-// the next-unit distribution. A node is computed only when a unit is scored
-// after it, in one batched step with the other nodes that call needs, and
-// freed when no hypothesis or uncomputed successor refers to it.
+// A character or recognizer-token scorer over a recurrent LM. A hypothesis's
+// state refers to a node holding the recurrent state after its last unit and,
+// once computed, the next-unit distribution. A node is computed only when a
+// unit is scored after it, in one batched step with the other nodes that call
+// needs, and freed when no hypothesis or uncomputed successor refers to it.
 std::unique_ptr<Scorer> MakeRecurrentLmScorer(
     std::unique_ptr<RecurrentLmStep> step, RecurrentLmVocabulary vocabulary);
 
@@ -63,13 +70,19 @@ int32_t RecurrentLmLiveNodes();
 // inputs are recurrent state tensors [layers, batch, hidden], and whose
 // outputs are log probabilities [batch, vocab] followed by the new states in
 // the same order. The boundary between words is the unit
-// CommonScorerOptions::space.
+// CommonScorerOptions::space. With unit=token the model's unit IDs are the
+// recognizer's token IDs and no vocab file is read; this is the form of the
+// "with-state" RNN LMs that OnlineRnnLM loads.
 //
 // Type-specific options ("extra"):
-//   "vocab": file with one unit per line, in unit ID order. Required.
+//   "vocab": file with one unit per line, in unit ID order. Required for
+//     unit=char.
 //   "vocab-encoding": "utf8" (default) or "hex" (each line the unit's UTF-8
 //     bytes in hexadecimal).
-//   "boundary-id", "unknown-id": defaults 0 and 1.
+//   "boundary-id", "unknown-id": defaults 0 and 1 for unit=char; for
+//     unit=token, 1 (the usual sos/eos ID) and the recognizer's blank, 0.
+//   "score-end": whether the end of input adds the boundary's score.
+//     Default true.
 std::unique_ptr<ScorerFactory> MakeOnnxRecurrentLmScorerFactory();
 
 }  // namespace sherpa_onnx

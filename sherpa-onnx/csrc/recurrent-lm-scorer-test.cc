@@ -144,6 +144,55 @@ TEST(RecurrentLmScorer, ScoresMatchSteppingOneHistoryAtATime) {
   }
 }
 
+// A model trained on the recognizer's tokens: unit IDs are token IDs.
+TEST(RecurrentLmScorer, TokenUnitsAreTheModelsOwnIds) {
+  RecurrentLmVocabulary vocabulary;
+  vocabulary.token_units = true;
+  vocabulary.boundary_id = 0;  // What ReferenceLogProbs starts from.
+  vocabulary.unknown_id = 1;
+  auto scorer = MakeRecurrentLmScorer(std::make_unique<FakeStep>(), vocabulary);
+  const ScorerInfo &info = scorer->Info();
+  EXPECT_EQ(info.unit, ScorerUnit::kAsrToken);
+  auto utterance = scorer->NewUtterance();
+  alignas(8) std::byte start[8], three[8], three_two[8], beyond[8];
+  scorer->Start(utterance.get(), start);
+
+  ScorerExtension first = {{utterance.get(), start}, 3, three};
+  ScorerAdvanceResult result;
+  scorer->Advance({&first, 1}, &result);
+  EXPECT_FLOAT_EQ(result.log_score, ReferenceLogProbs({})[3]);
+
+  // A token ID the model does not score counts as the unknown unit.
+  ScorerExtension second[2] = {{{utterance.get(), three}, 2, three_two},
+                               {{utterance.get(), three}, kVocab + 5, beyond}};
+  ScorerAdvanceResult results[2];
+  scorer->Advance({second, 2}, results);
+  EXPECT_FLOAT_EQ(results[0].log_score, ReferenceLogProbs({3})[2]);
+  EXPECT_FLOAT_EQ(results[1].log_score, ReferenceLogProbs({3})[1]);
+
+  // The end of input scores the boundary, unless turned off.
+  ScorerStateRef end = {utterance.get(), three_two};
+  ScorerFinalScore final_score;
+  scorer->Finish({&end, 1}, &final_score);
+  EXPECT_FLOAT_EQ(final_score.log_score, ReferenceLogProbs({3, 2})[0]);
+  EXPECT_TRUE(final_score.accepted);
+
+  vocabulary.score_end = false;
+  auto no_end = MakeRecurrentLmScorer(std::make_unique<FakeStep>(), vocabulary);
+  auto no_end_utterance = no_end->NewUtterance();
+  alignas(8) std::byte no_end_start[8];
+  no_end->Start(no_end_utterance.get(), no_end_start);
+  ScorerStateRef no_end_state = {no_end_utterance.get(), no_end_start};
+  no_end->Finish({&no_end_state, 1}, &final_score);
+  EXPECT_EQ(final_score.log_score, 0.0f);
+  no_end->Info().destroy_state(no_end_start);
+
+  for (std::byte *state : {start, three, three_two, beyond}) {
+    info.destroy_state(state);
+  }
+  EXPECT_EQ(RecurrentLmLiveNodes(), 0);
+}
+
 TEST(RecurrentLmScorer, ComputesANodeOnlyWhenScoredAfterAndInOneBatch) {
   Fixture f;
   const ScorerInfo &info = f.scorer->Info();

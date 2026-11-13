@@ -128,10 +128,15 @@ struct Extra {
   bool hex = false;
   int32_t boundary_id = 0;
   int32_t unknown_id = 1;
+  bool score_end = true;
 };
 
-Extra ParseExtra(const std::string &text) {
+Extra ParseExtra(const std::string &text, bool token_units) {
   Extra extra;
+  if (token_units) {
+    extra.boundary_id = 1;
+    extra.unknown_id = 0;
+  }
   nlohmann::json options;
   try {
     options = nlohmann::json::parse(text);
@@ -154,12 +159,14 @@ Extra ParseExtra(const std::string &text) {
       extra.boundary_id = value.get<int32_t>();
     } else if (key == "unknown-id" && value.is_number_integer()) {
       extra.unknown_id = value.get<int32_t>();
+    } else if (key == "score-end" && value.is_boolean()) {
+      extra.score_end = value.get<bool>();
     } else {
       throw std::runtime_error("onnx-rnn scorer: unknown or invalid option '" +
                                key + "'");
     }
   }
-  if (extra.vocab.empty()) {
+  if (extra.vocab.empty() && !token_units) {
     throw std::runtime_error(
         "onnx-rnn scorer: extra needs \"vocab\", the unit list file");
   }
@@ -208,14 +215,23 @@ class OnnxRecurrentLmScorerFactory : public ScorerFactory {
  public:
   std::unique_ptr<Scorer> Create(const CommonScorerOptions &common,
                                  const std::string &extra_text) const override {
-    if (common.unit != "char") {
-      throw std::runtime_error(
-          "onnx-rnn scorer: only unit=char is supported. Given: " +
-          common.unit);
-    }
-    Extra extra = ParseExtra(extra_text);
+    bool token_units = common.unit == "token";
+    Extra extra = ParseExtra(extra_text, token_units);
     auto step = std::make_unique<OnnxRecurrentLmStep>(common);
-    auto vocabulary = ReadVocabulary(extra, common.space, step->VocabSize());
+    RecurrentLmVocabulary vocabulary;
+    if (token_units) {
+      vocabulary.token_units = true;
+      vocabulary.boundary_id = extra.boundary_id;
+      vocabulary.unknown_id = extra.unknown_id;
+      if (extra.boundary_id < 0 || extra.boundary_id >= step->VocabSize() ||
+          extra.unknown_id < 0 || extra.unknown_id >= step->VocabSize()) {
+        throw std::runtime_error(
+            "onnx-rnn scorer: a special ID is out of range");
+      }
+    } else {
+      vocabulary = ReadVocabulary(extra, common.space, step->VocabSize());
+    }
+    vocabulary.score_end = extra.score_end;
     return MakeRecurrentLmScorer(std::move(step), std::move(vocabulary));
   }
 };
