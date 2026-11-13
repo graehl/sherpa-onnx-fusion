@@ -333,17 +333,25 @@ bool ScoredPrefixTrie::SameScorerFuture(const Node &a, const Node &b) const {
 }
 
 uint64_t ScoredPrefixTrie::HashScorerFuture(const Node &node) const {
-  uint64_t hash = 1469598103934665603ull;
-  auto mix = [&hash](const void *data, size_t size) {
-    const auto *bytes = static_cast<const unsigned char *>(data);
-    for (size_t k = 0; k != size; ++k) {
-      hash = (hash ^ bytes[k]) * 1099511628211ull;
-    }
+  uint64_t hash = node.word_open ? 0x9e3779b97f4a7c15ull : 0;
+  auto mix = [&hash](uint64_t word) {
+    hash = (hash ^ word) * 0xff51afd7ed558ccdull;
+    hash ^= hash >> 32;
   };
-  mix(&node.word_open, sizeof(node.word_open));
   for (size_t s = 0; s != scorers_.size(); ++s) {
-    mix(ScorerState(const_cast<Node *>(&node), s),
-        scorers_[s]->Info().state_bytes);
+    const std::byte *bytes = ScorerState(const_cast<Node *>(&node), s);
+    size_t size = scorers_[s]->Info().state_bytes;
+    size_t k = 0;
+    for (; k + 8 <= size; k += 8) {
+      uint64_t word;
+      std::memcpy(&word, bytes + k, 8);
+      mix(word);
+    }
+    if (k != size) {
+      uint64_t word = 0;
+      std::memcpy(&word, bytes + k, size - k);
+      mix(word);
+    }
   }
   return hash;
 }
