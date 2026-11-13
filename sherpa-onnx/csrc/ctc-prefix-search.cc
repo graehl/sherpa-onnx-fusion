@@ -243,49 +243,85 @@ void CtcPrefixSearch::ApplyScorerWave(int32_t scorer,
   trie_.ApplyScorerWave(scorer, results);
 }
 
-// Among this frame's hypotheses with the same future (last token, word
-// state, and scorer states), drops each one that another matches or beats
-// both ending in blank and ending in its last token. Everything scored
-// from here on is the same for both, so the dropped one cannot win.
-void CtcPrefixSearch::Recombine() {
-  // (hash of the future, position in touched_), sorted to bring equal
-  // futures together.
-  by_future_.clear();
-  for (size_t i = 0; i != touched_.size(); ++i) {
-    if (touched_scores_[i] == kLogZero) continue;
-    const Node &node = *trie_.At(touched_[i]);
-    uint64_t hash = trie_.HashScorerFuture(node) * 1099511628211ull ^
-                    static_cast<uint32_t>(node.token);
-    by_future_.emplace_back(hash, static_cast<uint32_t>(i));
-  }
-  std::sort(by_future_.begin(), by_future_.end());
-
-  for (size_t begin = 0; begin != by_future_.size();) {
-    size_t end = begin + 1;
-    while (end != by_future_.size() &&
-           by_future_[end].first == by_future_[begin].first) {
-      ++end;
+// Puts the hypotheses to keep at the front of "order" (positions in
+// touched_), best first, and returns how many: the best "limit" within the
+// score beam, passing over each one that a kept hypothesis with the same
+// future (last token, word state, and scorer states) matches or beats both
+// ending in blank and ending in its last token. Everything scored from
+// here on is the same for both, so the one passed over cannot win. Only
+// hypotheses that reach the front of the ranking are examined.
+size_t CtcPrefixSearch::KeepUndominated(std::vector<uint32_t> *order,
+                                        size_t limit) {
+  auto worse = [this](uint32_t a, uint32_t b) {
+    if (touched_scores_[a] != touched_scores_[b]) {
+      return touched_scores_[a] < touched_scores_[b];
     }
-    for (size_t x = begin; end - begin > 1 && x != end; ++x) {
-      uint32_t ax = by_future_[x].second;
-      if (touched_scores_[ax] == kLogZero) continue;
-      Node *a = trie_.At(touched_[ax]);
+    return touched_[a] > touched_[b];
+  };
+  std::make_heap(order->begin(), order->end(), worse);
+  auto heap_end = order->end();
+
+  // Kept hypotheses chained by a hash of their future.
+  size_t table_size = 16;
+  while (table_size < 2 * limit) table_size *= 2;
+  future_heads_.assign(table_size, ScoredPrefixTrie::kNone);
+  future_chain_.clear();
+  kept_.clear();
+  dropped_.clear();
+
+  float cutoff = kLogZero;
+  while (kept_.size() != limit && heap_end != order->begin()) {
+    std::pop_heap(order->begin(), heap_end, worse);
+    uint32_t candidate = *--heap_end;
+    float score = touched_scores_[candidate];
+    if (score == kLogZero || score < cutoff) {
+      ++heap_end;  // Neither it nor anything after it is kept.
+      break;
+    }
+    if (kept_.empty()) cutoff = score - options_.beam;
+
+    Node *b = trie_.At(touched_[candidate]);
+    float b_rest = b->scorer_total + LengthBonus(*b, false);
+    float b_blank = Ctc(b)->next_blank + b_rest;
+    float b_nonblank = Ctc(b)->next_nonblank + b_rest;
+    size_t slot =
+        (trie_.HashScorerFuture(*b) ^ static_cast<uint32_t>(b->token)) &
+        (table_size - 1);
+    bool dominated = false;
+    for (uint32_t k = future_heads_[slot]; k != ScoredPrefixTrie::kNone;
+         k = future_chain_[k]) {
+      Node *a = trie_.At(touched_[kept_[k]]);
+      if (a->token != b->token || !trie_.SameScorerFuture(*a, *b)) continue;
       float a_rest = a->scorer_total + LengthBonus(*a, false);
-      for (size_t y = begin; y != end; ++y) {
-        uint32_t by = by_future_[y].second;
-        if (x == y || touched_scores_[by] == kLogZero) continue;
-        Node *b = trie_.At(touched_[by]);
-        if (a->token != b->token || !trie_.SameScorerFuture(*a, *b)) continue;
-        float b_rest = b->scorer_total + LengthBonus(*b, false);
-        if (Ctc(a)->next_blank + a_rest >= Ctc(b)->next_blank + b_rest &&
-            Ctc(a)->next_nonblank + a_rest >= Ctc(b)->next_nonblank + b_rest) {
-          touched_scores_[by] = kLogZero;
-          ++num_recombined_;
-        }
+      float a_blank = Ctc(a)->next_blank + a_rest;
+      float a_nonblank = Ctc(a)->next_nonblank + a_rest;
+      if (a_blank >= b_blank && a_nonblank >= b_nonblank) {
+        dominated = true;
+        break;
+      }
+      if (b_blank >= a_blank && b_nonblank >= a_nonblank) {
+        // Possible only when their scores tie: b takes a's place.
+        std::swap(kept_[k], candidate);
+        dominated = true;
+        break;
       }
     }
-    begin = end;
+    if (dominated) {
+      dropped_.push_back(candidate);
+      ++num_recombined_;
+      continue;
+    }
+    future_chain_.push_back(future_heads_[slot]);
+    future_heads_[slot] = static_cast<uint32_t>(kept_.size());
+    kept_.push_back(candidate);
   }
+
+  // Kept, then passed over, then never reached.
+  size_t keep = kept_.size();
+  dropped_.insert(dropped_.end(), order->begin(), heap_end);
+  std::copy(kept_.begin(), kept_.end(), order->begin());
+  std::copy(dropped_.begin(), dropped_.end(), order->begin() + keep);
+  return keep;
 }
 
 void CtcPrefixSearch::EndFrame() {
@@ -301,25 +337,27 @@ void CtcPrefixSearch::EndFrame() {
                   node->scorer_total + LengthBonus(*node, false);
   }
 
-  if (recombine_) Recombine();
-
   // Best first; equal scores keep the order of their records' indices.
   std::vector<uint32_t> order(touched_.size());
   std::iota(order.begin(), order.end(), 0);
   size_t keep = std::min(order.size(),
                          static_cast<size_t>(std::max(options_.max_active, 0)));
-  auto better = [this](uint32_t a, uint32_t b) {
-    if (touched_scores_[a] != touched_scores_[b]) {
-      return touched_scores_[a] > touched_scores_[b];
-    }
-    return touched_[a] < touched_[b];
-  };
-  std::partial_sort(order.begin(), order.begin() + keep, order.end(), better);
-  if (keep != 0) {
-    float cutoff = touched_scores_[order[0]] - options_.beam;
-    while (keep != 0 && (touched_scores_[order[keep - 1]] == kLogZero ||
-                         touched_scores_[order[keep - 1]] < cutoff)) {
-      --keep;
+  if (recombine_) {
+    keep = KeepUndominated(&order, keep);
+  } else {
+    auto better = [this](uint32_t a, uint32_t b) {
+      if (touched_scores_[a] != touched_scores_[b]) {
+        return touched_scores_[a] > touched_scores_[b];
+      }
+      return touched_[a] < touched_[b];
+    };
+    std::partial_sort(order.begin(), order.begin() + keep, order.end(), better);
+    if (keep != 0) {
+      float cutoff = touched_scores_[order[0]] - options_.beam;
+      while (keep != 0 && (touched_scores_[order[keep - 1]] == kLogZero ||
+                           touched_scores_[order[keep - 1]] < cutoff)) {
+        --keep;
+      }
     }
   }
 

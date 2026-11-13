@@ -157,7 +157,7 @@ class CtcPrefixSearch {
   SurvivalTrace *SurvivalOf(Node *node) const;
 
   void Touch(uint32_t index);
-  void Recombine();
+  size_t KeepUndominated(std::vector<uint32_t> *order, size_t limit);
   void NoteContribution(float term, const SurvivalNeed &from, float *best_term,
                         SurvivalNeed *next) const;
   float Acoustic(float blank, float nonblank) const;
@@ -183,7 +183,8 @@ class CtcPrefixSearch {
   std::vector<uint32_t> touched_;
   std::vector<float> touched_scores_;
   std::vector<int32_t> candidates_;
-  std::vector<std::pair<uint64_t, uint32_t>> by_future_;
+  // KeepUndominated's scratch.
+  std::vector<uint32_t> kept_, dropped_, future_heads_, future_chain_;
 };
 
 // Between BeginFrame and EndFrame of each search in "searches": runs every

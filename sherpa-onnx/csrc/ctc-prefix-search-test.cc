@@ -145,6 +145,48 @@ TEST(CtcPrefixSearch, UnprunedSearchMatchesEnumerationWithoutScorers) {
   }
 }
 
+// With no scorer the best alignment takes each frame's most probable
+// token, and its prefix ranks first at every frame, so no pruning or
+// recombination can lose it.
+TEST(CtcPrefixSearch, PrunedMaxModeWithoutScorersIsGreedy) {
+  const int32_t num_frames = 60, vocab_size = 7;
+  auto vocabulary = PlainVocabulary(vocab_size);
+  vocabulary->tokens[1].starts_word = true;
+  vocabulary->tokens[2].starts_word = true;
+  vocabulary->tokens[2].chars.clear();  // A bare word delimiter.
+  for (uint32_t seed = 600; seed != 700; ++seed) {
+    auto log_probs = RandomLogProbs(num_frames, vocab_size, seed);
+    Tokens greedy;
+    double greedy_score = 0;
+    int32_t previous = 0;
+    for (int32_t t = 0; t != num_frames; ++t) {
+      const float *row = log_probs.data() + t * vocab_size;
+      auto best = static_cast<int32_t>(
+          std::max_element(row, row + vocab_size) - row);
+      greedy_score += row[best];
+      if (best != 0 && best != previous) greedy.push_back(best);
+      previous = best;
+    }
+    for (bool recombine : {false, true}) {
+      for (int32_t max_active : {1, 2, 3, 8}) {
+        CtcPrefixSearchOptions options;
+        options.alignment = CtcAlignmentMode::kMax;
+        options.recombine = recombine;
+        options.max_active = max_active;
+        options.max_token_candidates = 3;
+        CtcPrefixSearch search(options, vocabulary, {}, {});
+        search.Decode(log_probs.data(), num_frames);
+        auto nbest = search.Finish(1);
+        ASSERT_EQ(nbest.size(), 1u);
+        EXPECT_EQ(nbest[0].tokens, greedy)
+            << "seed " << seed << " recombine " << recombine << " max_active "
+            << max_active;
+        EXPECT_NEAR(nbest[0].score, greedy_score, 1e-3);
+      }
+    }
+  }
+}
+
 TEST(CtcPrefixSearch, MaxModeRecombinesOnEqualScorerStatesExactly) {
   const int32_t num_frames = 6, vocab_size = 4;
   // A bigram scorer's state is the last token, so hypotheses ending in the
