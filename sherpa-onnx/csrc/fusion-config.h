@@ -32,6 +32,10 @@ struct FusionConfig {
   // Zero or less means no limit. See the topic for the sweep behind 12.
   float score_beam = 12.0f;
 
+  // The case of the text that character scorers are given: "keep" as the
+  // recognizer writes it, or "lower". The recognizer's output is unchanged.
+  std::string scorer_text_case = "keep";
+
   void Register(ParseOptions *po);
   bool Validate() const;
   std::string ToString() const;

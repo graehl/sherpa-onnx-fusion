@@ -68,6 +68,14 @@ TEST(CtcSearchVocabulary, TakesTextWordStartsAndSpecialsFromTheTokenTable) {
 
   EXPECT_FALSE(vocabulary->tokens[4].emit);
   EXPECT_EQ(vocabulary->tokens[5].chars, std::vector<UnitId>({0xe9}));
+
+  // Lowercase for the scorers, beyond ASCII: Ạ (U+1EA0) becomes ạ.
+  SymbolTable capitals("<blk> 0\n▁THẠ 1\n", false);
+  auto lowered = MakeCtcSearchVocabulary(capitals, 0, true);
+  EXPECT_EQ(lowered->tokens[1].chars, std::vector<UnitId>({'t', 'h', 0x1ea1}));
+  EXPECT_TRUE(lowered->tokens[1].starts_word);
+  auto kept = MakeCtcSearchVocabulary(capitals, 0);
+  EXPECT_EQ(kept->tokens[1].chars, std::vector<UnitId>({'T', 'H', 0x1ea0}));
 }
 
 TEST(CtcSearchVocabulary, SilenceTokenHasNoTextAndJoinMarkersAreKept) {

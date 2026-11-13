@@ -17,7 +17,7 @@
 namespace sherpa_onnx {
 
 std::shared_ptr<CtcSearchVocabulary> MakeCtcSearchVocabulary(
-    const SymbolTable &symbol_table, int32_t blank_id) {
+    const SymbolTable &symbol_table, int32_t blank_id, bool lowercase) {
   if (symbol_table.IsByteBpe()) {
     throw std::runtime_error(
         "prefix_beam_search does not support byte-BPE token tables yet");
@@ -51,6 +51,7 @@ std::shared_ptr<CtcSearchVocabulary> MakeCtcSearchVocabulary(
       token.starts_word = true;
       text.erase(0, 1);
     }
+    if (lowercase) text = ToLowerCase(text);
     for (char32_t c : Utf8ToUtf32(text)) {
       token.chars.push_back(static_cast<UnitId>(c));
     }
@@ -85,7 +86,8 @@ OfflineCtcPrefixBeamSearchDecoder::OfflineCtcPrefixBeamSearchDecoder(
     const FusionConfig &config, int32_t max_active,
     const SymbolTable &symbol_table, int32_t blank_id)
     : options_(MakeCtcPrefixSearchOptions(config, max_active)),
-      vocabulary_(MakeCtcSearchVocabulary(symbol_table, blank_id)),
+      vocabulary_(MakeCtcSearchVocabulary(symbol_table, blank_id,
+                                          ScorersWantLowercase(config))),
       scorers_(CreateScorers(config.scorers)) {
   for (const auto &scorer : config.scorers) weights_.push_back(scorer.weight);
 }
