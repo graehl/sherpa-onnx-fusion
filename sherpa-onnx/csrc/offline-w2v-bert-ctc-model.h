@@ -15,8 +15,8 @@
 namespace sherpa_onnx {
 
 // A w2v-BERT 2.0 encoder with a CTC head, exported from Hugging Face
-// transformers (Wav2Vec2BertForCTC) with one input, "input_features" of
-// shape (N, T, 160), and one output of logits (N, T, vocab_size).
+// transformers (Wav2Vec2BertForCTC) with the input "input_features" of
+// shape (N, T, 160) and an output of logits (N, T, vocab_size).
 //
 // The input is what transformers' SeamlessM4TFeatureExtractor makes: 80
 // Kaldi filterbank energies per 10 ms from samples scaled to 16 bits, each
@@ -25,8 +25,12 @@ namespace sherpa_onnx {
 // supplies the filterbank frames (OfflineModelConfig::w2v_bert_ctc sets its
 // options); NormalizeFeatures and Forward do the rest.
 //
-// The export has no attention mask, so a padded batch would change the
-// output; utterances are run one at a time.
+// An export with a second input, "input_lengths" (int64 (N,), each
+// utterance's valid frames on the T axis of input_features), masks padding
+// inside the graph and is run on padded batches; it may return a second
+// output, the valid output frames, int64 (N,). An export with the one input
+// has no mask, so a padded batch would change its output, and utterances are
+// run one at a time.
 class OfflineW2vBertCtcModel : public OfflineCtcModel {
  public:
   explicit OfflineW2vBertCtcModel(const OfflineModelConfig &config);
@@ -36,15 +40,16 @@ class OfflineW2vBertCtcModel : public OfflineCtcModel {
 
   ~OfflineW2vBertCtcModel() override;
 
-  // features is (1, T, 80), normalized. Returns log probabilities
-  // (1, T / 2, vocab_size) and their length, int64 (1,).
+  // features is (N, T, 80), normalized, with features_length int64 (N,);
+  // N is 1 unless SupportBatchProcessing(). Returns log probabilities
+  // (N, T / 2, vocab_size) and their lengths, int64 (N,).
   std::vector<Ort::Value> Forward(Ort::Value features,
                                   Ort::Value features_length) override;
 
   int32_t VocabSize() const override;
   OrtAllocator *Allocator() const override;
   int32_t SubsamplingFactor() const override { return 2; }
-  bool SupportBatchProcessing() const override { return false; }
+  bool SupportBatchProcessing() const override;
 
   // Each bin to zero mean and unit variance over the utterance.
   void NormalizeFeatures(float *features, int32_t num_frames,

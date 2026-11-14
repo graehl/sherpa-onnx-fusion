@@ -61,41 +61,77 @@ class OfflineW2vBertCtcModel::Impl {
     Init();
   }
 
-  std::vector<Ort::Value> Forward(Ort::Value features) {
+  std::vector<Ort::Value> Forward(Ort::Value features,
+                                  Ort::Value features_length) {
     auto shape = features.GetTensorTypeAndShapeInfo().GetShape();
+    auto batch = static_cast<int32_t>(shape[0]);
     auto num_frames = static_cast<int32_t>(shape[1]);
     auto feat_dim = static_cast<int32_t>(shape[2]);
     // An odd last frame is dropped, as the feature extractor drops it.
     int32_t stacked_frames = num_frames / kStack;
+    size_t row = static_cast<size_t>(stacked_frames) * feat_dim * kStack;
 
-    std::array<int64_t, 3> stacked_shape = {1, stacked_frames,
+    std::array<int64_t, 3> stacked_shape = {batch, stacked_frames,
                                             feat_dim * kStack};
-    // The frames are already consecutive in memory: the same values with a
-    // different shape.
+    // Each utterance's frames are already consecutive in memory: the same
+    // values with a different shape, less the odd frame.
     Ort::Value stacked = Ort::Value::CreateTensor<float>(
         allocator_, stacked_shape.data(), stacked_shape.size());
     const float *p = features.GetTensorData<float>();
-    std::copy(p, p + static_cast<size_t>(stacked_frames) * feat_dim * kStack,
-              stacked.GetTensorMutableData<float>());
+    float *q = stacked.GetTensorMutableData<float>();
+    for (int32_t b = 0; b != batch; ++b) {
+      std::copy(p + static_cast<size_t>(b) * num_frames * feat_dim,
+                p + static_cast<size_t>(b) * num_frames * feat_dim + row,
+                q + b * row);
+    }
 
-    auto out = sess_->Run({}, input_names_ptr_.data(), &stacked, 1,
-                          output_names_ptr_.data(), output_names_ptr_.size());
+    std::array<int64_t, 1> length_shape = {batch};
+    Ort::Value length = Ort::Value::CreateTensor<int64_t>(
+        allocator_, length_shape.data(), length_shape.size());
+    int64_t *stacked_length = length.GetTensorMutableData<int64_t>();
+    const int64_t *frames_length = features_length.GetTensorData<int64_t>();
+    for (int32_t b = 0; b != batch; ++b) {
+      stacked_length[b] = frames_length[b] / kStack;
+    }
+
+    std::vector<Ort::Value> out;
+    if (takes_lengths_) {
+      // Padding is finite and the model masks it; zero is the value its
+      // normalized features have on average.
+      for (int32_t b = 0; b != batch; ++b) {
+        std::fill(q + b * row + stacked_length[b] * feat_dim * kStack,
+                  q + (b + 1) * row, 0.0f);
+      }
+      std::array<Ort::Value, 2> inputs = {std::move(stacked), View(&length)};
+      out =
+          sess_->Run({}, input_names_ptr_.data(), inputs.data(), inputs.size(),
+                     output_names_ptr_.data(), output_names_ptr_.size());
+    } else {
+      out = sess_->Run({}, input_names_ptr_.data(), &stacked, 1,
+                       output_names_ptr_.data(), output_names_ptr_.size());
+    }
     auto out_shape = out[0].GetTensorTypeAndShapeInfo().GetShape();
     auto out_frames = static_cast<int32_t>(out_shape[1]);
     auto vocab_size = static_cast<int32_t>(out_shape[2]);
-    LogSoftmax(out[0].GetTensorMutableData<float>(), vocab_size, out_frames);
-
-    std::array<int64_t, 1> length_shape = {1};
-    Ort::Value length = Ort::Value::CreateTensor<int64_t>(
-        allocator_, length_shape.data(), length_shape.size());
-    length.GetTensorMutableData<int64_t>()[0] = out_frames;
+    LogSoftmax(out[0].GetTensorMutableData<float>(), vocab_size,
+               batch * out_frames);
 
     std::vector<Ort::Value> ans;
     ans.push_back(std::move(out[0]));
-    ans.push_back(std::move(length));
+    if (out.size() > 1) {
+      // The model's own count of valid output frames.
+      ans.push_back(std::move(out[1]));
+    } else {
+      // One output frame per stacked input frame.
+      for (int32_t b = 0; b != batch; ++b) {
+        stacked_length[b] = std::min<int64_t>(stacked_length[b], out_frames);
+      }
+      ans.push_back(std::move(length));
+    }
     return ans;
   }
 
+  bool TakesLengths() const { return takes_lengths_; }
   int32_t VocabSize() const { return vocab_size_; }
   OrtAllocator *Allocator() { return allocator_; }
 
@@ -103,10 +139,14 @@ class OfflineW2vBertCtcModel::Impl {
   void Init() {
     GetInputNames(sess_.get(), &input_names_, &input_names_ptr_);
     GetOutputNames(sess_.get(), &output_names_, &output_names_ptr_);
-    if (input_names_.size() != 1) {
+    // The first input is the features. A second one is each utterance's
+    // count of valid (stacked) input frames, from an export that masks
+    // padding; a second output is then the count of valid output frames.
+    takes_lengths_ = input_names_.size() == 2;
+    if (input_names_.size() > 2) {
       SHERPA_ONNX_LOGE(
-          "A w2v-BERT CTC model takes one input, input_features. This one "
-          "takes %d.",
+          "A w2v-BERT CTC model takes input_features and optionally "
+          "input_lengths. This one takes %d inputs.",
           static_cast<int32_t>(input_names_.size()));
       SHERPA_ONNX_EXIT(-1);
     }
@@ -128,6 +168,7 @@ class OfflineW2vBertCtcModel::Impl {
   std::vector<const char *> output_names_ptr_;
 
   int32_t vocab_size_ = 0;
+  bool takes_lengths_ = false;
 };
 
 OfflineW2vBertCtcModel::OfflineW2vBertCtcModel(const OfflineModelConfig &config)
@@ -141,8 +182,12 @@ OfflineW2vBertCtcModel::OfflineW2vBertCtcModel(Manager *mgr,
 OfflineW2vBertCtcModel::~OfflineW2vBertCtcModel() = default;
 
 std::vector<Ort::Value> OfflineW2vBertCtcModel::Forward(
-    Ort::Value features, Ort::Value /*features_length*/) {
-  return impl_->Forward(std::move(features));
+    Ort::Value features, Ort::Value features_length) {
+  return impl_->Forward(std::move(features), std::move(features_length));
+}
+
+bool OfflineW2vBertCtcModel::SupportBatchProcessing() const {
+  return impl_->TakesLengths();
 }
 
 int32_t OfflineW2vBertCtcModel::VocabSize() const { return impl_->VocabSize(); }

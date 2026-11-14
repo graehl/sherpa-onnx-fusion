@@ -61,9 +61,6 @@ searching afterwards makes the first result wait for the last encode.
 - The search side already keeps per-utterance state independent of batch
   position, and results are written back per stream, so reordering for the
   encoder does not disturb it.
-- Models that cannot take a padded batch at all (the w2v-BERT CTC export
-  has no length or mask input) stay at one utterance per call until their
-  export takes lengths.
 - Length bucketing makes padding small but not zero. Whether the remaining
   padding changes output is the other gap's question; a model whose export
   masks correctly makes the two independent.
