@@ -1,7 +1,7 @@
 # Glossary
 
-Terms this fork uses in a sense of its own. Upstream sherpa-onnx vocabulary
-keeps its upstream meaning.
+Terms this fork uses in a sense of its own, and a few outside terms worth
+having at hand. Upstream sherpa-onnx vocabulary keeps its upstream meaning.
 
 | term | definition | topic / refs |
 |---|---|---|
@@ -14,6 +14,7 @@ keeps its upstream meaning.
 | hypothesis beam | The retained set of distinct output prefixes, limited by a count (`--max-active-paths`) and by a score gap below the best (`--score-beam`). | [beam-search-and-scorer-fusion](topics/beam-search-and-scorer-fusion.md#options) |
 | inflight batching | Admitting, finishing, and cancelling individual utterances while others in the same decoder stay active, with ready work batched across them. | [beam-search-and-scorer-fusion](topics/beam-search-and-scorer-fusion.md#inflight-batching) |
 | json-option-collections | Configure a vector of option structs through indexed command-line paths such as `--scorer.1.weight`, and through JSON that maps onto the same paths, using each struct's ordinary `Register(ParseOptions*)`. | [json-option-collections](topics/json-option-collections.md) |
+| LODR | Low-order density ratio: during LM fusion, also subtract the score of a low-order LM (usually a bigram over the recognizer's tokens) estimated from transcripts like the recognizer's training text. It is an attempt to undo the text prior the recognizer itself learned, so that the external LM is not counted on top of it; it is aimed at transducers and attention decoders, whose decoders model text. Upstream applies it as `--lodr-fst` with a negative scale. Here it needs no mechanism of its own: fusion takes several scorers, and LODR is a second scorer with a negative weight. | [tuning sketch](gaps/sketches/fusion-parameter-tuning.md#a-parameter-to-include-subtracting-a-transcript-lm); [Zheng et al. 2022](https://arxiv.org/abs/2203.16776) |
 | max-alignment mode | CTC search that scores an output by its single best alignment and, among hypotheses with the same last token, word state, and scorer state bytes, drops each one that another matches or beats in both its blank and nonblank endings. | [beam-search-and-scorer-fusion](topics/beam-search-and-scorer-fusion.md#max-alignment-mode) |
 | scorer | A pluggable model that adds a log score to a hypothesis as its output grows: an LM, or anything with the same state-and-advance contract. | [beam-search-and-scorer-fusion](topics/beam-search-and-scorer-fusion.md#scorer-interface) |
 | scorer state | A fixed number of bytes per hypothesis per scorer, owned by the decoder. The scorer declares the size and optional copy and destroy functions; an n-gram's bytes are its context, a recurrent LM's hold a reference to its own storage. | [beam-search-and-scorer-fusion](topics/beam-search-and-scorer-fusion.md#scorer-interface) |

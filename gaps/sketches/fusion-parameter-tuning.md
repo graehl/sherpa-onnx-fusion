@@ -100,6 +100,18 @@ weight makes a prefix's score rise as it is extended, which the beams and
 the survival trace were not designed around. Check that first on a few
 recordings. It applies to transducers; a CTC model has no such component.
 
+Where a score-raising scorer meets an assumption (graehl, 2026-11-14):
+
+- The default searches apply every scorer to a candidate before pruning,
+  so nothing is cut on a partial score.
+- `--modified-beam-search-rules` prunes candidate steps on the recognizer's
+  score and scores only the survivors, so a step the subtracted model would
+  have promoted can be cut unscored.
+- The early partial-score beam, when built, assumes the rest of a scorer's
+  charge can only lower a score. It must leave negative-weight scorers out
+  of the early cut or bound them from the other side.
+- The default score gap of 12 was chosen with scorers that only subtract.
+
 ## Completion evidence
 
 On one model and scorer, weights and bonus fit from one or two decodes
