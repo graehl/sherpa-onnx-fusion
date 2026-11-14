@@ -86,9 +86,9 @@ void DecodeTransducerFrames(TransducerPrefixSearch *search,
 
 namespace {
 
-OfflineTransducerDecoderResult ToResult(TransducerPrefixSearch *search) {
+OfflineTransducerDecoderResult ToResult(
+    std::vector<TransducerPrefixHypothesis> best) {
   OfflineTransducerDecoderResult result;
-  auto best = search->Finish(1);
   if (best.empty()) return result;
   result.tokens.assign(best[0].tokens.begin(), best[0].tokens.end());
   result.timestamps = std::move(best[0].timestamps);
@@ -139,9 +139,11 @@ OfflineTransducerPrefixBeamSearchDecoder::Decode(
   OrtAllocator *allocator = model_->Allocator();
 
   std::vector<OfflineTransducerDecoderResult> ans(batch_size);
+  std::vector<std::unique_ptr<TransducerPrefixSearch>> searches;
   for (int32_t b = 0; b != batch_size; ++b) {
     const float *frames = p + static_cast<size_t>(b) * max_frames * encoder_dim;
-    auto search = fusion_.NewSearch(options_);
+    searches.push_back(fusion_.NewSearch(options_));
+    TransducerPrefixSearch *search = searches.back().get();
     auto run_model = [&](int32_t frame, const std::vector<uint32_t> &frontier,
                          std::vector<float> *log_probs,
                          std::vector<float> * /*durations*/) {
@@ -179,9 +181,15 @@ OfflineTransducerPrefixBeamSearchDecoder::Decode(
       log_probs->assign(p_logit, p_logit + num * vocab_size);
     };
     DecodeTransducerFrames(
-        search.get(), fusion_.Scorers(),
+        search, fusion_.Scorers(),
         static_cast<int32_t>(LengthAt(encoder_out_length, b)), run_model);
-    ans[b] = ToResult(search.get());
+  }
+  // The scorers' end-of-input calls serve the whole batch at once.
+  std::vector<TransducerPrefixSearch *> pointers;
+  for (const auto &search : searches) pointers.push_back(search.get());
+  auto finished = TransducerPrefixSearch::FinishTogether(pointers, 1);
+  for (int32_t b = 0; b != batch_size; ++b) {
+    ans[b] = ToResult(std::move(finished[b]));
   }
   return ans;
 }
@@ -364,7 +372,7 @@ OfflineTransducerPrefixBeamSearchNeMoDecoder::DecodeOne(
   search = fusion_.NewSearch(options);
   DecodeTransducerFrames(search.get(), fusion_.Scorers(), num_frames,
                          run_model);
-  return ToResult(search.get());
+  return ToResult(search->Finish(1));
 }
 
 std::vector<OfflineTransducerDecoderResult>

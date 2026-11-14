@@ -297,19 +297,45 @@ void ScoredPrefixTrie::FinishScoring() {
 void ScoredPrefixTrie::FinalScores(const std::vector<uint32_t> &nodes,
                                    std::vector<float> *final_scores,
                                    std::vector<bool> *accepted) const {
-  size_t num_scorers = scorers_.size();
-  final_scores->assign(nodes.size() * num_scorers, 0);
-  accepted->assign(nodes.size(), true);
-  std::vector<ScorerStateRef> states(nodes.size());
-  std::vector<ScorerFinalScore> results(nodes.size());
+  std::vector<std::vector<float>> scores;
+  std::vector<std::vector<bool>> accepts;
+  FinalScoresTogether({this}, {nodes}, &scores, &accepts);
+  *final_scores = std::move(scores[0]);
+  *accepted = std::move(accepts[0]);
+}
+
+void ScoredPrefixTrie::FinalScoresTogether(
+    const std::vector<const ScoredPrefixTrie *> &tries,
+    const std::vector<std::vector<uint32_t>> &nodes,
+    std::vector<std::vector<float>> *final_scores,
+    std::vector<std::vector<bool>> *accepted) {
+  final_scores->assign(tries.size(), {});
+  accepted->assign(tries.size(), {});
+  if (tries.empty()) return;
+  size_t num_scorers = tries[0]->scorers_.size();
+  size_t total = 0;
+  for (size_t t = 0; t != tries.size(); ++t) {
+    (*final_scores)[t].assign(nodes[t].size() * num_scorers, 0);
+    (*accepted)[t].assign(nodes[t].size(), true);
+    total += nodes[t].size();
+  }
+  std::vector<ScorerStateRef> states(total);
+  std::vector<ScorerFinalScore> results(total);
   for (size_t s = 0; s != num_scorers; ++s) {
-    for (size_t i = 0; i != nodes.size(); ++i) {
-      states[i] = {utterances_[s].get(), ScorerState(At(nodes[i]), s)};
+    size_t k = 0;
+    for (size_t t = 0; t != tries.size(); ++t) {
+      for (uint32_t node : nodes[t]) {
+        states[k++] = {tries[t]->utterances_[s].get(),
+                       tries[t]->ScorerState(tries[t]->At(node), s)};
+      }
     }
-    scorers_[s]->Finish({states.data(), nodes.size()}, results.data());
-    for (size_t i = 0; i != nodes.size(); ++i) {
-      (*final_scores)[i * num_scorers + s] = results[i].log_score;
-      if (!results[i].accepted) (*accepted)[i] = false;
+    tries[0]->scorers_[s]->Finish({states.data(), total}, results.data());
+    k = 0;
+    for (size_t t = 0; t != tries.size(); ++t) {
+      for (size_t i = 0; i != nodes[t].size(); ++i, ++k) {
+        (*final_scores)[t][i * num_scorers + s] = results[k].log_score;
+        if (!results[k].accepted) (*accepted)[t][i] = false;
+      }
     }
   }
 }
