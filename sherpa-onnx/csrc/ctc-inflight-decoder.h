@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <deque>
+#include <map>
 #include <memory>
 #include <optional>
 #include <vector>
@@ -118,8 +119,9 @@ class CtcInflightDecoder {
   std::vector<std::shared_ptr<Scorer>> scorers_;
   std::vector<Scorer *> scorer_pointers_;
 
-  // Indexed by handle ID; null once released.
-  std::vector<std::unique_ptr<Utterance>> utterances_;
+  // Only unreleased handles are retained; IDs are never reused.
+  std::map<uint64_t, std::unique_ptr<Utterance>> utterances_;
+  uint64_t next_handle_ = 0;
   int32_t num_active_ = 0;
   size_t queued_bytes_ = 0;
 

@@ -11,6 +11,7 @@
 
 #include "sherpa-onnx/csrc/macros.h"
 #include "sherpa-onnx/csrc/math.h"
+#include "sherpa-onnx/csrc/online-stream.h"
 #include "sherpa-onnx/csrc/onnx-utils.h"
 #include "sherpa-onnx/csrc/transducer-prefix-search.h"
 
@@ -32,9 +33,38 @@ void OnlineTransducerPrefixBeamSearchDecoder::StripLeadingBlanks(
 }
 
 void OnlineTransducerPrefixBeamSearchDecoder::Decode(
-    Ort::Value encoder_out, OnlineStream ** /*ss*/,
+    Ort::Value encoder_out, OnlineStream **ss,
     std::vector<OnlineTransducerDecoderResult> *result) {
   Decode(std::move(encoder_out), result);
+  if (ss == nullptr) return;
+
+  // Streams whose input has ended report the result with the scorers'
+  // end-of-input scores, finished together.
+  std::vector<TransducerPrefixSearch *> ending;
+  std::vector<size_t> ending_stream;
+  for (size_t b = 0; b != result->size(); ++b) {
+    int32_t ready = ss[b]->NumFramesReady();
+    if (ready > 0 && ss[b]->IsLastFrame(ready - 1) &&
+        (*result)[b].prefix_search != nullptr) {
+      ending.push_back((*result)[b].prefix_search.get());
+      ending_stream.push_back(b);
+    }
+  }
+  auto finished = TransducerPrefixSearch::FinishTogether(ending, 1);
+  int32_t context_size = model_->ContextSize();
+  for (size_t i = 0; i != ending.size(); ++i) {
+    OnlineTransducerDecoderResult &r = (*result)[ending_stream[i]];
+    r.tokens.resize(context_size);
+    r.timestamps.clear();
+    if (!finished[i].empty()) {
+      r.tokens.insert(r.tokens.end(), finished[i][0].tokens.begin(),
+                      finished[i][0].tokens.end());
+      r.timestamps = std::move(finished[i][0].timestamps);
+    }
+    r.num_trailing_blanks = r.timestamps.empty()
+                                ? ending[i]->Frame()
+                                : ending[i]->Frame() - 1 - r.timestamps.back();
+  }
 }
 
 void OnlineTransducerPrefixBeamSearchDecoder::Decode(

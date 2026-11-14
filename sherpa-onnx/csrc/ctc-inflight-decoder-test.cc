@@ -205,6 +205,27 @@ TEST(CtcInflightDecoder, RefusesWorkBeyondItsCapacity) {
   EXPECT_THROW(decoder.TryAdd(wrong), std::invalid_argument);
 }
 
+TEST(CtcInflightDecoder, ReleasedHandlesStayInvalidAfterReadmission) {
+  auto options = Options();
+  options.max_active_utterances = 1;
+  CtcInflightDecoder decoder(options, Vocabulary(),
+                             {std::make_shared<CountingScorer>()});
+  const auto first = *decoder.TryAdd();
+  decoder.Cancel(first);
+  decoder.Release(first);
+  for (int32_t i = 0; i != 1000; ++i) {
+    const auto handle = *decoder.TryAdd();
+    EXPECT_GT(handle.id, first.id);
+    EXPECT_THROW(decoder.Status(first), std::out_of_range);
+    decoder.InputFinished(handle);
+    decoder.Step();
+    EXPECT_EQ(decoder.Status(handle), DecodeStatus::kComplete);
+    decoder.Release(handle);
+  }
+  EXPECT_EQ(decoder.NumActiveUtterances(), 0);
+  EXPECT_FALSE(decoder.Step().has_ready_work);
+}
+
 TEST(CtcInflightDecoder, RejectedPrefixesLeaveTheEmptyOutput) {
   auto scorer = std::make_shared<BigramTableScorer>(ScorerUnit::kAsrToken);
   for (int32_t token = 1; token != kVocabSize; ++token) {

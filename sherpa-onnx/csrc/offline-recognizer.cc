@@ -100,6 +100,12 @@ bool OfflineRecognizerConfig::Validate() const {
   }
 
   if (decoding_method == "prefix_beam_search") {
+    if (!ctc_fst_decoder_config.graph.empty()) {
+      SHERPA_ONNX_LOGE(
+          "--decoding-method=prefix_beam_search cannot be used with "
+          "--ctc-graph");
+      return false;
+    }
     if (max_active_paths <= 0) {
       SHERPA_ONNX_LOGE("max_active_paths is less than 0! Given: %d",
                        max_active_paths);

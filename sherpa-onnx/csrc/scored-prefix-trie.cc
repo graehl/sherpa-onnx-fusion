@@ -286,7 +286,7 @@ void ScoredPrefixTrie::FinishScoring() {
         }
       }
       Subtotals(node)[s] = Subtotals(parent)[s] + pending.sum;
-      total += weights_[s] * pending.sum;
+      if (weights_[s] != 0) total += weights_[s] * pending.sum;
     }
     node->scorer_total = total;
     node->scored = true;

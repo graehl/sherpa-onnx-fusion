@@ -142,6 +142,10 @@ class CtcPrefixSearch {
   // Empty if every scorer-accepted hypothesis was pruned. The search stays
   // usable for further frames.
   std::vector<CtcPrefixHypothesis> Finish(int32_t nbest = 1);
+  // Finish for several searches created with the same scorers, with one
+  // end-of-input call per scorer serving all of them.
+  static std::vector<std::vector<CtcPrefixHypothesis>> FinishTogether(
+      const std::vector<CtcPrefixSearch *> &searches, int32_t nbest = 1);
 
   int32_t NumFramesDecoded() const { return frame_; }
   // Hypotheses dropped so far because another with the same future scored
@@ -169,6 +173,9 @@ class CtcPrefixSearch {
   float Acoustic(float blank, float nonblank) const;
   float Accumulate(float sum, float term) const;
   float LengthBonus(const Node &node, bool at_end) const;
+  std::vector<CtcPrefixHypothesis> RankFinished(
+      const std::vector<float> &final_scores, const std::vector<bool> &accepted,
+      int32_t nbest) const;
   CtcPrefixHypothesis MakeHypothesis(uint32_t index, float score,
                                      float acoustic,
                                      const float *final_scores) const;

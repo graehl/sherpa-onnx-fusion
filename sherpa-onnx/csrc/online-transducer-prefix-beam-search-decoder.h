@@ -24,9 +24,11 @@ namespace sherpa_onnx {
 // across chunks; the recognizer's reset at an endpoint makes an empty
 // result, which starts a new search whose model context is the previous
 // segment's last tokens, as for the other decoders. A result after each
-// chunk is the search's best prefix so far. The scorers' end-of-input
-// scores are not applied, since this interface does not learn that input
-// has finished; a rescore-only scorer therefore has no effect here.
+// chunk is the search's best prefix so far; once a stream's input has
+// ended, each decoded chunk's result includes the scorers' end-of-input
+// scores, so the last one is the final result and a rescore-only scorer
+// takes effect there. Streams of one call are searched one after another
+// and finished together.
 class OnlineTransducerPrefixBeamSearchDecoder : public OnlineTransducerDecoder {
  public:
   // Throws std::runtime_error if a scorer cannot be created.

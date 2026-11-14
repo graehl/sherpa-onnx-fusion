@@ -124,9 +124,11 @@ std::vector<OfflineCtcDecoderResult> OfflineCtcPrefixBeamSearchDecoder::Decode(
   DecodeFramesTogether(search_pointers, scorers, p_log_probs, num_frames,
                        vocab_size, p_length);
 
+  // The scorers' end-of-input calls serve the whole batch at once.
+  auto finished = CtcPrefixSearch::FinishTogether(search_pointers, 1);
   std::vector<OfflineCtcDecoderResult> ans(batch_size);
   for (int32_t b = 0; b != batch_size; ++b) {
-    auto best = searches[b]->Finish(1);
+    auto &best = finished[b];
     if (best.empty()) continue;
     ans[b].tokens.assign(best[0].tokens.begin(), best[0].tokens.end());
     ans[b].timestamps = std::move(best[0].timestamps);

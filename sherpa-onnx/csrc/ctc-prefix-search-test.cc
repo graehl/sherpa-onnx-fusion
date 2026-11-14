@@ -551,6 +551,40 @@ TEST(CtcPrefixSearch, RejectedContinuationsNeverAppear) {
   }
 }
 
+TEST(CtcPrefixSearch, ZeroWeightIgnoresInfiniteScoresButNotRejection) {
+  for (bool final_only : {false, true}) {
+    BigramTableScorer scorer(ScorerUnit::kAsrToken, final_only ? 0 : kLogZero);
+    scorer.SetFinal(1, kLogZero);
+    scorer.Reject(BigramTableScorer::kStart, 2);
+    CtcPrefixSearch search(CtcPrefixSearchOptions(), PlainVocabulary(3),
+                           {&scorer}, {0});
+    const float row[] = {-10, -1, 0};
+    search.Decode(row, 1);
+    auto result = search.Finish();
+    ASSERT_EQ(result.size(), 1u);
+    EXPECT_EQ(result[0].tokens, Tokens({1}));
+    EXPECT_FLOAT_EQ(result[0].score, -1);
+    EXPECT_EQ(result[0].scorer_log_scores[0], kLogZero);
+  }
+}
+
+TEST(CtcPrefixSearch, SurvivalTraceHandlesImpossibleEndings) {
+  for (CtcAlignmentMode mode :
+       {CtcAlignmentMode::kSum, CtcAlignmentMode::kMax}) {
+    CtcPrefixSearchOptions options;
+    options.trace_survival = true;
+    options.alignment = mode;
+    CtcPrefixSearch search(options, PlainVocabulary(2), {}, {});
+    const float rows[] = {kLogZero, 0, 0, kLogZero, kLogZero, 0};
+    search.Decode(rows, 3);
+    auto result = search.Finish();
+    ASSERT_EQ(result.size(), 1u);
+    EXPECT_EQ(result[0].tokens, Tokens({1, 1}));
+    EXPECT_FLOAT_EQ(result[0].required_score_beam, 0);
+    EXPECT_EQ(result[0].required_max_active, 1);
+  }
+}
+
 TEST(CtcPrefixSearch, WrappedScorerStatesAreAllReleased) {
   const int32_t num_frames = 60, vocab_size = 4;
   auto log_probs = RandomLogProbs(num_frames, vocab_size, 11);
