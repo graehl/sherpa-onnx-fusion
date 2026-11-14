@@ -253,6 +253,95 @@ TEST(TransducerPrefixSearch, ScorerFusionMatchesEnumeration) {
   }
 }
 
+// modified_beam_search as the existing decoders run it: each frame keeps the
+// best steps before equal outputs are combined, one token counts as blank,
+// and the result is the best score over length with the context counted.
+TEST(TransducerPrefixSearch, PruneStepsReproducesModifiedBeamSearch) {
+  const int32_t num_frames = 14, context_size = 2, unknown = 3;
+  int32_t differs_from_default = 0;
+  for (int32_t max_active : {1, 2, 4}) {
+    for (int32_t shift = 0; shift != 12; ++shift) {
+      // The reference: outputs with their log probabilities.
+      std::map<Tokens, double> hyps = {{{}, 0.0}};
+      for (int32_t t = 0; t != num_frames; ++t) {
+        struct Step {
+          double score;
+          Tokens tokens;
+        };
+        std::vector<Step> steps;
+        for (const auto &hyp : hyps) {
+          int32_t last = hyp.first.empty() ? -1 : hyp.first.back();
+          auto row = TokenLogProbs(t + 100 * shift, last);
+          for (int32_t v = 0; v != kVocab; ++v) {
+            Tokens tokens = hyp.first;
+            if (v != 0 && v != unknown) tokens.push_back(v);
+            steps.push_back({hyp.second + row[v], tokens});
+          }
+        }
+        std::stable_sort(
+            steps.begin(), steps.end(),
+            [](const Step &a, const Step &b) { return a.score > b.score; });
+        steps.resize(std::min<size_t>(steps.size(), max_active));
+        hyps.clear();
+        for (const Step &step : steps) {
+          auto inserted = hyps.emplace(step.tokens, step.score);
+          if (!inserted.second) {
+            inserted.first->second = LogAdd(inserted.first->second, step.score);
+          }
+        }
+      }
+      Tokens expected;
+      double expected_key = kLogZero;
+      for (const auto &hyp : hyps) {
+        double key = hyp.second / (context_size + hyp.first.size());
+        if (key > expected_key) {
+          expected_key = key;
+          expected = hyp.first;
+        }
+      }
+
+      TransducerPrefixSearchOptions options;
+      options.topology = TransducerTopology::kOneSymbolPerFrame;
+      options.max_active = max_active;
+      options.max_token_candidates = kVocab;
+      options.prune_steps = true;
+      options.blank_like_token = unknown;
+      options.rank_length_offset = context_size;
+      auto vocabulary = Vocabulary();
+      vocabulary->tokens[unknown].emit = false;
+
+      // The stand-in model with this case's frames.
+      auto decode = [&](TransducerPrefixSearch *search) {
+        std::vector<float> log_probs;
+        while (search->Frame() < num_frames) {
+          log_probs.clear();
+          for (uint32_t hypothesis : search->Frontier()) {
+            auto row = TokenLogProbs(search->Frame() + 100 * shift,
+                                     search->LastTokenOf(hypothesis));
+            log_probs.insert(log_probs.end(), row.begin(), row.end());
+          }
+          search->Expand(log_probs.data(), nullptr);
+          search->EndRound();
+          search->EndFrame();
+        }
+      };
+      TransducerPrefixSearch search(options, vocabulary, {}, {});
+      decode(&search);
+      auto best = search.Finish(1);
+      ASSERT_EQ(best.size(), 1u);
+      EXPECT_EQ(best[0].tokens, expected)
+          << "max_active " << max_active << " shift " << shift;
+
+      options.prune_steps = false;
+      TransducerPrefixSearch plain(options, vocabulary, {}, {});
+      decode(&plain);
+      differs_from_default += plain.Finish(1)[0].tokens != expected;
+    }
+  }
+  // The rule is a real difference from the default search.
+  EXPECT_GT(differs_from_default, 0);
+}
+
 TEST(TransducerPrefixSearch, PrunedSearchReleasesWrappedScorerStates) {
   ASSERT_EQ(HistoryScorer::LiveStates(), 0);
   for (const Case &c : kCases) {

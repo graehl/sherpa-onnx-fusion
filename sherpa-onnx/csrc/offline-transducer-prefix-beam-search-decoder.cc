@@ -18,8 +18,8 @@
 namespace sherpa_onnx {
 
 TransducerPrefixSearchOptions MakeTransducerPrefixSearchOptions(
-    const FusionConfig &config, int32_t max_active,
-    TransducerTopology topology) {
+    const FusionConfig &config, int32_t max_active, TransducerTopology topology,
+    int32_t context_size) {
   TransducerPrefixSearchOptions options;
   options.topology = topology;
   options.max_active = max_active;
@@ -29,7 +29,18 @@ TransducerPrefixSearchOptions MakeTransducerPrefixSearchOptions(
   options.length_bonus_unit = config.length_bonus_unit == "word"
                                   ? LengthBonusUnit::kWord
                                   : LengthBonusUnit::kToken;
+  if (config.length_normalize || config.modified_beam_search_rules) {
+    options.rank_length_offset = context_size;
+  }
+  options.prune_steps = config.modified_beam_search_rules;
   return options;
+}
+
+int32_t UnknownTokenAsBlank(const FusionConfig &config,
+                            const SymbolTable &symbol_table) {
+  return config.modified_beam_search_rules && symbol_table.Contains("<unk>")
+             ? symbol_table["<unk>"]
+             : -1;
 }
 
 TransducerFusion::TransducerFusion(const FusionConfig &config,
@@ -107,9 +118,12 @@ OfflineTransducerPrefixBeamSearchDecoder::
                                              float blank_penalty)
     : model_(model),
       options_(MakeTransducerPrefixSearchOptions(
-          config, max_active, TransducerTopology::kOneSymbolPerFrame)),
+          config, max_active, TransducerTopology::kOneSymbolPerFrame,
+          model->ContextSize())),
       fusion_(config, symbol_table, 0, model->VocabSize()),
-      blank_penalty_(blank_penalty) {}
+      blank_penalty_(blank_penalty) {
+  options_.blank_like_token = UnknownTokenAsBlank(config, symbol_table);
+}
 
 std::vector<OfflineTransducerDecoderResult>
 OfflineTransducerPrefixBeamSearchDecoder::Decode(
@@ -322,7 +336,7 @@ OfflineTransducerPrefixBeamSearchNeMoDecoder::DecodeOne(
 
   TransducerPrefixSearchOptions options = MakeTransducerPrefixSearchOptions(
       config_, max_active_,
-      tdt ? TransducerTopology::kTdt : TransducerTopology::kRnnt);
+      tdt ? TransducerTopology::kTdt : TransducerTopology::kRnnt, 1);
   if (tdt) {
     // The joiner's output is the token logits followed by one logit per
     // duration, from no advance up.

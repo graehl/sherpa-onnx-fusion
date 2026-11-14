@@ -152,6 +152,37 @@ void TransducerPrefixSearch::Expand(const float *log_probs,
   bool last_round = round_ + 1 >= options_.max_symbols_per_frame;
   int32_t num_durations = options_.max_duration + 1;
 
+  bool prune_steps =
+      options_.prune_steps &&
+      options_.topology == TransducerTopology::kOneSymbolPerFrame;
+  if (prune_steps) {
+    // The best max_active steps over the whole frontier, best first.
+    size_t keep = static_cast<size_t>(std::max(options_.max_active, 0));
+    steps_.clear();
+    for (size_t i = 0; i != frontier_.size(); ++i) {
+      const Node &node = *trie_.At(frontier_[i]);
+      const float *row = log_probs + i * vocab_size;
+      float base = StateOf(trie_.At(frontier_[i]))->now + node.scorer_total +
+                   LengthBonus(node, false);
+      for (int32_t token = 0; token != vocab_size; ++token) {
+        if (token != blank && token != options_.blank_like_token &&
+            !vocabulary.tokens[token].emit) {
+          continue;
+        }
+        float key = base + row[token];
+        if (steps_.size() == keep &&
+            (keep == 0 || !(key > steps_.back().key))) {
+          continue;
+        }
+        auto position = std::upper_bound(
+            steps_.begin(), steps_.end(), key,
+            [](float k, const Step &step) { return k > step.key; });
+        steps_.insert(position, {key, static_cast<uint32_t>(i), token});
+        if (steps_.size() > keep) steps_.pop_back();
+      }
+    }
+  }
+
   for (size_t i = 0; i != frontier_.size(); ++i) {
     uint32_t index = frontier_[i];
     const float *row = log_probs + i * vocab_size;
@@ -161,7 +192,14 @@ void TransducerPrefixSearch::Expand(const float *log_probs,
 
     // Blank: the same prefix at a later frame. A blank with no advance is
     // treated as advancing one frame.
-    if (tdt) {
+    if (prune_steps) {
+      for (const Step &step : steps_) {
+        if (step.position != i) continue;
+        if (step.token == blank || step.token == options_.blank_like_token) {
+          AddArrival(index, 1, mass + row[step.token]);
+        }
+      }
+    } else if (tdt) {
       for (int32_t d = 0; d != num_durations; ++d) {
         AddArrival(index, std::max(d, 1), mass + row[blank] + durations[d]);
       }
@@ -171,7 +209,15 @@ void TransducerPrefixSearch::Expand(const float *log_probs,
 
     // The most probable emittable tokens, ties to the lower ID.
     candidates_.clear();
-    for (int32_t token = 0; token != vocab_size; ++token) {
+    if (prune_steps) {
+      for (const Step &step : steps_) {
+        if (step.position == i && step.token != blank &&
+            step.token != options_.blank_like_token) {
+          candidates_.push_back(step.token);
+        }
+      }
+    }
+    for (int32_t token = 0; !prune_steps && token != vocab_size; ++token) {
       if (token == blank || !vocabulary.tokens[token].emit) continue;
       if (candidates_.size() == limit &&
           (limit == 0 || !(row[token] > row[candidates_.back()]))) {
@@ -363,18 +409,26 @@ TransducerPrefixHypothesis TransducerPrefixSearch::MakeHypothesis(
   return hypothesis;
 }
 
+float TransducerPrefixSearch::RankKey(const Node &node, float score) const {
+  if (options_.rank_length_offset < 0) return score;
+  return score / std::max(options_.rank_length_offset + node.length, 1);
+}
+
 TransducerPrefixHypothesis TransducerPrefixSearch::Best() const {
   std::vector<uint32_t> nodes;
   std::vector<float> log_mass;
   Outstanding(&nodes, &log_mass);
   size_t best = nodes.size();
   float best_score = kLogZero;
+  float best_key = kLogZero;
   for (size_t i = 0; i != nodes.size(); ++i) {
     const Node &node = *trie_.At(nodes[i]);
     if (node.rejected) continue;
     float score = log_mass[i] + node.scorer_total + LengthBonus(node, false);
-    if (best == nodes.size() || score > best_score) {
+    float key = RankKey(node, score);
+    if (best == nodes.size() || key > best_key) {
       best = i;
+      best_key = key;
       best_score = score;
     }
   }
@@ -411,9 +465,11 @@ std::vector<TransducerPrefixHypothesis> TransducerPrefixSearch::Finish(
     }
     ranked.emplace_back(score, i);
   }
-  std::stable_sort(
-      ranked.begin(), ranked.end(),
-      [](const auto &a, const auto &b) { return a.first > b.first; });
+  std::stable_sort(ranked.begin(), ranked.end(),
+                   [this, &scored](const auto &a, const auto &b) {
+                     return RankKey(*trie_.At(scored[a.second]), a.first) >
+                            RankKey(*trie_.At(scored[b.second]), b.first);
+                   });
   if (ranked.size() > static_cast<size_t>(std::max(nbest, 0))) {
     ranked.resize(std::max(nbest, 0));
   }

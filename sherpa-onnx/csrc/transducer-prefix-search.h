@@ -58,6 +58,23 @@ struct TransducerPrefixSearchOptions {
 
   // The character a character scorer is given between words.
   UnitId word_boundary_char = ' ';
+
+  // kOneSymbolPerFrame only, to reproduce modified_beam_search: each frame
+  // keeps the max_active best single steps (a hypothesis and blank or one
+  // token) before equal outputs are combined, where the search otherwise
+  // combines every step into its output first and keeps the max_active best
+  // outputs. A step's rank is its hypothesis's score plus the step's log
+  // probability; the token's own scorer scores count from the next frame.
+  bool prune_steps = false;
+  // With prune_steps: a token that is taken as blank, as that decoder takes
+  // the unknown-word token. Negative for none.
+  int32_t blank_like_token = -1;
+
+  // If not negative, Best and Finish rank hypotheses by score divided by
+  // (this + number of tokens), as modified_beam_search ranks its final
+  // hypotheses with its leading context counted. Pruning during the search
+  // and the scores reported are unaffected.
+  int32_t rank_length_offset = -1;
 };
 
 struct TransducerPrefixHypothesis {
@@ -140,6 +157,8 @@ class TransducerPrefixSearch {
   void AddAgain(uint32_t index, float log_mass);
   void AddArrival(uint32_t index, int32_t frames_ahead, float log_mass);
   float LengthBonus(const Node &node, bool at_end) const;
+  // What results are ordered by: "score", or that over length.
+  float RankKey(const Node &node, float score) const;
   // Keeps the best of "candidates" by the probability each holds in "slot"
   // (an arrival slot, or kAgainSlot) plus scorer scores and bonus, and
   // clears and unpins the others. Returns the kept ones, best first.
@@ -163,6 +182,13 @@ class TransducerPrefixSearch {
   std::vector<uint32_t> again_;  // Received probability for the next round.
   std::vector<std::vector<uint32_t>> arriving_;  // By frame modulo ring size.
   std::vector<int32_t> candidates_;
+  // With prune_steps: the chosen steps, as (rank, frontier position, token).
+  struct Step {
+    float key;
+    uint32_t position;
+    int32_t token;
+  };
+  std::vector<Step> steps_;
 };
 
 // After Expand: runs every scorer's waves for one search.

@@ -26,9 +26,17 @@ namespace sherpa_onnx {
 
 // The search options a validated configuration, a hypothesis beam, and a
 // model's topology describe.
+// "context_size" is how many leading entries modified_beam_search counts in
+// a hypothesis's length before its first token (FusionConfig's
+// length_normalize).
 TransducerPrefixSearchOptions MakeTransducerPrefixSearchOptions(
-    const FusionConfig &config, int32_t max_active,
-    TransducerTopology topology);
+    const FusionConfig &config, int32_t max_active, TransducerTopology topology,
+    int32_t context_size);
+
+// TransducerPrefixSearchOptions::blank_like_token for a configuration: the
+// table's "<unk>" under modified_beam_search_rules, otherwise none.
+int32_t UnknownTokenAsBlank(const FusionConfig &config,
+                            const SymbolTable &symbol_table);
 
 // Scorers, weights, and the search's view of the token table, shared by the
 // decoders below.
