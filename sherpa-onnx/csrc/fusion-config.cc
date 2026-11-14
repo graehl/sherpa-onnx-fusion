@@ -30,6 +30,15 @@ void FusionConfig::Register(ParseOptions *po) {
                "Used only when decoding_method is prefix_beam_search. sum: "
                "score an output by the total probability of its alignments. "
                "max: by its best alignment.");
+  po->Register("ctc-prior", &ctc_prior,
+               "Used only when decoding_method is prefix_beam_search, for "
+               "CTC models. A text file with one 'token-id log-prior' pair "
+               "per line. Each listed token other than blank has "
+               "--ctc-prior-weight times its log prior subtracted from its "
+               "log probability in every frame; unlisted tokens are "
+               "unchanged.");
+  po->Register("ctc-prior-weight", &ctc_prior_weight,
+               "The weight of --ctc-prior. 0 turns it off.");
   po->Register("score-beam", &score_beam,
                "Used only when decoding_method is prefix_beam_search. A "
                "hypothesis survives a frame only if its score is within "
@@ -93,6 +102,8 @@ std::string FusionConfig::ToString() const {
   os << "length_bonus=" << length_bonus << ", ";
   os << "length_bonus_unit=\"" << length_bonus_unit << "\", ";
   os << "ctc_alignment=\"" << ctc_alignment << "\", ";
+  os << "ctc_prior=\"" << ctc_prior << "\", ";
+  os << "ctc_prior_weight=" << ctc_prior_weight << ", ";
   os << "scorer_text_case=\"" << scorer_text_case << "\", ";
   os << "length_normalize=" << (length_normalize ? "True" : "False") << ", ";
   os << "modified_beam_search_rules="

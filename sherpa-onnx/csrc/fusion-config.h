@@ -31,6 +31,11 @@ struct FusionConfig {
   // A hypothesis survives a frame only within this score of the best.
   // Zero or less means no limit. See the topic for the sweep behind 12.
   float score_beam = 12.0f;
+  // A label-prior correction: a file of "token-id log-prior" lines. Each
+  // listed token other than blank has ctc_prior_weight times its log prior
+  // subtracted from its log probability in every frame.
+  std::string ctc_prior;
+  float ctc_prior_weight = 1.0f;
 
   // The case of the text that character scorers are given: "keep" as the
   // recognizer writes it, or "lower". The recognizer's output is unchanged.

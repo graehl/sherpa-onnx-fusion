@@ -73,9 +73,6 @@ on public models except where noted; details and limits are in
 - The recognizers' use of the multi-utterance decoder (they batch within
   one decode call); streams of one streaming-transducer call are searched
   one after another.
-- Token-unit scoring for `kenlm`. `onnx-rnn` takes recognizer tokens
-  (`--scorer.unit=token`), which is the form of the RNN LMs the existing
-  fusion loads.
 - The early partial-score beam, `Next`-based candidate scoring, and the
   tuning traces other than survival.
 - Streaming TDT (the streaming NeMo model class here is RNN-T only).
@@ -944,11 +941,25 @@ offline NeMo transducer models. The options are fields of `FusionConfig`
 | `--fusion-config` | | JSON file of any of these options |
 | `--length-bonus`, `--length-bonus-unit` | 0, `token` | Added to a prefix's score per token or per word |
 | `--ctc-alignment` | `sum` | CTC only: `sum` or `max` (§ Search semantics) |
+| `--ctc-prior`, `--ctc-prior-weight` | none, 1 | CTC only: a label-prior correction (below) |
 | `--scorer-text-case` | `keep` | `lower` gives character scorers lowercase text; the output keeps its case |
 | `--scorer.N.rescore` | false | Apply the scorer only to the hypotheses that survive the search |
 | `--scorer.N.unit` | `char` | `token` for a scorer trained on the recognizer's tokens (`onnx-rnn`) |
 | `--modified-beam-search-rules` | false | Stateless transducers: search exactly as `modified_beam_search` does |
 | `--length-normalize` | false | Transducers: rank results by score over output length |
+
+`--ctc-prior` names a text file of `token-id log-prior` lines, where a
+token's prior is the recognizer's average probability for it over some
+set of frames. In every frame each listed token other than blank has the
+weight times its log prior subtracted from its log probability, before the
+frame's candidates are chosen; blank and unlisted tokens are unchanged.
+Log priors are negative, so listed tokens gain on blank, rarer ones more,
+which offsets the deletions a fused LM otherwise encourages. It is a
+vector as long as the vocabulary and specific to one recognizer, hence a
+file and not an option per entry; and it is not a scorer, because a scorer
+is charged once per emitted token and this applies to every frame of an
+alignment. The vector is estimated and its weight chosen on tuning data
+by whoever prepares the recognizer.
 
 Scorer options and the JSON form are described in
 [option collections](json-option-collections.md). Giving a scorer with

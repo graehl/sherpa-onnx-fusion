@@ -148,6 +148,16 @@ void CtcPrefixSearch::BeginFrame(const float *log_probs) {
   const SearchVocabulary &vocabulary = trie_.Vocabulary();
   int32_t blank = vocabulary.blank_id;
   int32_t vocab_size = static_cast<int32_t>(vocabulary.tokens.size());
+  if (options_.token_offsets) {
+    const std::vector<float> &offsets = *options_.token_offsets;
+    offset_frame_.assign(log_probs, log_probs + vocab_size);
+    size_t n = std::min(offsets.size(), offset_frame_.size());
+    for (size_t token = 0; token != n; ++token) {
+      offset_frame_[token] += offsets[token];
+    }
+    offset_frame_[blank] = log_probs[blank];
+    log_probs = offset_frame_.data();
+  }
   size_t limit =
       static_cast<size_t>(std::max(options_.max_token_candidates, 0));
   candidates_.clear();
