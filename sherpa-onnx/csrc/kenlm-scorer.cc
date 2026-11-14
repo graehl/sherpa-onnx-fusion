@@ -56,6 +56,13 @@ class KenLmScorer : public PerItemScorer {
     }
   }
 
+  // For a model built so that its own word index is the token ID plus
+  // "offset": no word is looked up by its spelling.
+  void UseWordIndices(int32_t offset) {
+    indices_are_ids_ = true;
+    index_offset_ = offset;
+  }
+
   const ScorerInfo &Info() const override { return info_; }
   std::unique_ptr<ScorerUtterance> NewUtterance() override { return nullptr; }
 
@@ -97,6 +104,13 @@ class KenLmScorer : public PerItemScorer {
 
   // The LM word for a unit; one the LM lacks is its <unk>.
   lm::WordIndex WordOf(UnitId unit) {
+    if (indices_are_ids_) {
+      int64_t index = static_cast<int64_t>(unit) + index_offset_;
+      // KenLM does not expose its vocabulary size here; the builder's
+      // numbering is trusted to cover every token the recognizer can emit.
+      return unit >= 0 && index >= 0 ? static_cast<lm::WordIndex>(index)
+                                     : model_->BaseVocabulary().NotFound();
+    }
     if (info_.unit == ScorerUnit::kAsrToken && !ids_are_words_) {
       return static_cast<size_t>(unit) < word_of_token_.size()
                  ? word_of_token_[unit]
@@ -122,6 +136,8 @@ class KenLmScorer : public PerItemScorer {
   bool ids_are_words_ = false;
   int32_t id_offset_ = 0;
   std::string id_prefix_;
+  bool indices_are_ids_ = false;
+  int32_t index_offset_ = 0;
   CharacterIndex word_of_;                    // Filled as units are first seen.
   std::vector<lm::WordIndex> word_of_token_;  // By token ID, for token units.
 };
@@ -176,6 +192,8 @@ class KenLmScorerFactory : public ScorerFactory {
     bool by_id = false;
     int32_t id_offset = 0;
     std::string id_prefix;
+    bool by_index = false;
+    int32_t index_offset = 0;
     std::vector<std::string> token_words;
     for (const auto &option : options.items()) {
       if (option.key() == "tokens" && option.value().is_string() && tokens) {
@@ -193,6 +211,13 @@ class KenLmScorerFactory : public ScorerFactory {
         id_prefix = option.value().get<std::string>();
         continue;
       }
+      if (option.key() == "index-offset" &&
+          option.value().is_number_integer() && tokens) {
+        by_id = true;
+        by_index = true;
+        index_offset = option.value().get<int32_t>();
+        continue;
+      }
       throw std::runtime_error("kenlm scorer: unknown or invalid option '" +
                                option.key() + "'");
     }
@@ -201,8 +226,10 @@ class KenLmScorerFactory : public ScorerFactory {
           "kenlm scorer: unit=token needs exactly one of extra \"tokens\", "
           "the recognizer's token table, and \"id-offset\" or \"id-prefix\"");
     }
-    return std::make_unique<KenLmScorer>(common.model, common.space, tokens,
-                                         token_words, id_offset, id_prefix);
+    auto scorer = std::make_unique<KenLmScorer>(
+        common.model, common.space, tokens, token_words, id_offset, id_prefix);
+    if (by_index) scorer->UseWordIndices(index_offset);
+    return scorer;
   }
 };
 

@@ -86,9 +86,9 @@ void OnlineTransducerPrefixBeamSearchNeMoDecoder::Decode(Ort::Value encoder_out,
   // end-of-input scores, finished together.
   auto finished = TransducerPrefixSearch::FinishTogether(ending, 1);
   for (size_t i = 0; i != ending.size(); ++i) {
-    if (finished[i].empty()) continue;
-    SetResult(std::move(finished[i][0]), ending[i]->Frame(),
-              &ss[ending_stream[i]]->GetResult());
+    SetResult(finished[i].empty() ? TransducerPrefixHypothesis{}
+                                  : std::move(finished[i][0]),
+              ending[i]->Frame(), &ss[ending_stream[i]]->GetResult());
   }
 }
 
