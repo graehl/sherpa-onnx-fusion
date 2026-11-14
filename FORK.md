@@ -55,6 +55,7 @@ present and prints a warning describing the correct result.
 - [Decoding several recordings in one call changes some transcripts](gaps/offline-batch-changes-transcripts.md).
 - [Encoder batches are formed without regard to length](gaps/encoder-batches-ignore-length.md).
 - [The parallel batch program batches in list order](gaps/parallel-driver-batches-in-list-order.md).
+- [LSTM fusion lacks a result anyone can reproduce](gaps/public-lstm-fusion-evidence.md).
 - [Encoder-inclusive inflight scheduling](gaps/sketches/encoder-decoder-inflight-scheduling.md),
   deferred beyond the decoder's own inflight batching.
 - [Tuning fusion weights and bonuses from the search's own evidence](gaps/sketches/fusion-parameter-tuning.md).
