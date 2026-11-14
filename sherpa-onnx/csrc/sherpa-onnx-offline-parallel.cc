@@ -103,12 +103,15 @@ class OrderedOutput {
 //
 // @param first_index Position of wav_paths[0] in the input list.
 // @param duration On return, increased by the seconds of audio decoded.
+// @param recognizer_seconds On return, increased by the seconds spent in the
+//        recognizer, which excludes reading files and computing features.
 // @return One record for each wave file, in the order of wav_paths. Each
 //         json is a single line that starts with the position of the file
 //         in the input list and its filename.
 std::vector<Record> DecodeBatch(sherpa_onnx::OfflineRecognizer *recognizer,
                                 const std::vector<std::string> &wav_paths,
-                                int32_t first_index, float *duration) {
+                                int32_t first_index, float *duration,
+                                float *recognizer_seconds) {
   // ss[i] is nullptr if wav_paths[i] cannot be read
   std::vector<std::unique_ptr<sherpa_onnx::OfflineStream>> ss;
   std::vector<sherpa_onnx::OfflineStream *> ss_pointers;
@@ -130,7 +133,11 @@ std::vector<Record> DecodeBatch(sherpa_onnx::OfflineRecognizer *recognizer,
     ss_pointers.push_back(ss.back().get());
   }
   if (!ss_pointers.empty()) {
+    const auto begin = std::chrono::steady_clock::now();
     recognizer->DecodeStreams(ss_pointers.data(), ss_pointers.size());
+    *recognizer_seconds +=
+        std::chrono::duration<float>(std::chrono::steady_clock::now() - begin)
+            .count();
   }
 
   std::vector<Record> records;
@@ -153,14 +160,15 @@ std::vector<Record> DecodeBatch(sherpa_onnx::OfflineRecognizer *recognizer,
 void AsrInference(const std::vector<std::vector<std::string>> &chunk_wav_paths,
                   int32_t batch_size, int32_t warm_up,
                   sherpa_onnx::OfflineRecognizer *recognizer,
-                  OrderedOutput *output, float *total_length,
-                  float *total_time) {
+                  OrderedOutput *output, float *total_length, float *total_time,
+                  float *total_recognizer_time) {
   float duration = 0.0f;
   float elapsed_seconds_batch = 0.0f;
+  float recognizer_seconds = 0.0f;
 
   for (int32_t i = 0; i < warm_up; ++i) {
     float unused = 0.0f;
-    DecodeBatch(recognizer, chunk_wav_paths[0], 0, &unused);
+    DecodeBatch(recognizer, chunk_wav_paths[0], 0, &unused, &unused);
   }
 
   while (true) {
@@ -172,7 +180,8 @@ void AsrInference(const std::vector<std::vector<std::string>> &chunk_wav_paths,
     const auto begin = std::chrono::steady_clock::now();
     // every chunk before the last one has batch_size wave files
     std::vector<Record> records =
-        DecodeBatch(recognizer, wav_paths, chunk * batch_size, &duration);
+        DecodeBatch(recognizer, wav_paths, chunk * batch_size, &duration,
+                    &recognizer_seconds);
     const auto end = std::chrono::steady_clock::now();
     float elapsed_seconds =
         std::chrono::duration_cast<std::chrono::milliseconds>(end - begin)
@@ -188,6 +197,7 @@ void AsrInference(const std::vector<std::vector<std::string>> &chunk_wav_paths,
     if (*total_time < elapsed_seconds_batch) {
       *total_time = elapsed_seconds_batch;
     }
+    *total_recognizer_time += recognizer_seconds;
   }
 }
 
@@ -351,11 +361,13 @@ for a list of pre-trained models to download.
       SplitToBatches(wav_paths, batch_size);
   float total_length = 0.0f;
   float total_time = 0.0f;
+  float total_recognizer_time = 0.0f;
   OrderedOutput output;
   for (int i = 0; i < nj; i++) {
     threads.emplace_back(std::thread(AsrInference, std::cref(batch_wav_paths),
                                      batch_size, warm_up, &recognizer, &output,
-                                     &total_length, &total_time));
+                                     &total_length, &total_time,
+                                     &total_recognizer_time));
   }
 
   for (auto &thread : threads) {
@@ -368,6 +380,8 @@ for a list of pre-trained models to download.
     fprintf(stderr, "max active paths: %d\n", config.max_active_paths);
   }
   fprintf(stderr, "Elapsed seconds: %.3f s\n", total_time);
+  fprintf(stderr, "Seconds in the recognizer, summed over threads: %.3f s\n",
+          total_recognizer_time);
   float rtf = total_time / total_length;
   fprintf(stderr, "Real time factor (RTF): %.6f / %.6f = %.4f\n", total_time,
           total_length, rtf);
