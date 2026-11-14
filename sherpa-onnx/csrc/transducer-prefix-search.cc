@@ -84,6 +84,7 @@ void TransducerPrefixSearch::Unpin(uint32_t index) {
 }
 
 void TransducerPrefixSearch::AddAgain(uint32_t index, float log_mass) {
+  if (log_mass == kLogZero) return;
   State *state = StateOf(trie_.At(index));
   if (state->again == kLogZero) {
     again_.push_back(index);
@@ -94,6 +95,7 @@ void TransducerPrefixSearch::AddAgain(uint32_t index, float log_mass) {
 
 void TransducerPrefixSearch::AddArrival(uint32_t index, int32_t frames_ahead,
                                         float log_mass) {
+  if (log_mass == kLogZero) return;
   int32_t slot = (frame_ + frames_ahead) % ring_size_;
   State *state = StateOf(trie_.At(index));
   if (state->arrive[slot] == kLogZero) {
@@ -328,6 +330,8 @@ std::vector<uint32_t> TransducerPrefixSearch::Prune(
 
 bool TransducerPrefixSearch::EndRound() {
   trie_.FinishScoring();
+  // A new prefix with no positive-probability transition joined no queue.
+  for (uint32_t index : trie_.NewNodes()) trie_.ReleaseIfUnused(index);
 
   // The frontier is spent; it leaves through Unpin below, after the
   // next frontier is chosen, so a prefix in both is not freed in between.
@@ -489,7 +493,9 @@ std::vector<TransducerPrefixHypothesis> TransducerPrefixSearch::RankFinished(
     const Node &node = *trie_.At(scored[i]);
     float score = scored_mass[i] + node.scorer_total + LengthBonus(node, true);
     for (size_t s = 0; s != num_scorers; ++s) {
-      score += trie_.Weights()[s] * final_scores[i * num_scorers + s];
+      if (trie_.Weights()[s] != 0) {
+        score += trie_.Weights()[s] * final_scores[i * num_scorers + s];
+      }
     }
     ranked.emplace_back(score, i);
   }

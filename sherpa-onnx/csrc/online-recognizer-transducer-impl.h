@@ -377,7 +377,8 @@ class OnlineRecognizerTransducerImpl : public OnlineRecognizerImpl {
     auto pair = model_->RunEncoder(std::move(x), std::move(states),
                                    std::move(processed_frames));
 
-    if (has_context_graph) {
+    // prefix_beam_search reads from the streams whether input has ended.
+    if (has_context_graph || config_.decoding_method == "prefix_beam_search") {
       decoder_->Decode(std::move(pair.first), ss, &results);
     } else {
       decoder_->Decode(std::move(pair.first), &results);

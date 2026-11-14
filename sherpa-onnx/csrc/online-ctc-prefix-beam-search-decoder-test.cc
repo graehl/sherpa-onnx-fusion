@@ -12,6 +12,8 @@
 
 #include "gtest/gtest.h"
 #include "sherpa-onnx/csrc/offline-ctc-prefix-beam-search-decoder.h"
+#include "sherpa-onnx/csrc/offline-recognizer.h"
+#include "sherpa-onnx/csrc/online-recognizer.h"
 #include "sherpa-onnx/csrc/online-stream.h"
 #include "sherpa-onnx/csrc/test-scorers.h"
 
@@ -158,6 +160,70 @@ TEST(OnlineCtcPrefixBeamSearchDecoder, EndOfInputRevisesTheResult) {
   blank[0] = -1e-4f;
   decoder.Decode(blank.data(), 1, 1, kVocabSize, &results, streams, 1);
   EXPECT_EQ(results[0].tokens, std::vector<int64_t>({2}));
+}
+
+class RejectFinalScorer : public BigramTableScorer {
+ public:
+  RejectFinalScorer() : BigramTableScorer(ScorerUnit::kAsrToken, 0.0f) {}
+
+  void Finish(Span<const ScorerStateRef> states,
+              ScorerFinalScore *results) override {
+    for (size_t i = 0; i != states.size; ++i) {
+      results[i] = {0.0f, false};
+    }
+  }
+};
+
+class RejectFinalFactory : public ScorerFactory {
+ public:
+  std::unique_ptr<Scorer> Create(const CommonScorerOptions & /*common*/,
+                                 const std::string & /*extra*/) const override {
+    return std::make_unique<RejectFinalScorer>();
+  }
+};
+
+TEST(OnlineCtcPrefixBeamSearchDecoder, RejectedFinalClearsPartialOutput) {
+  RegisterScorerFactory("test-reject-final",
+                        std::make_unique<RejectFinalFactory>());
+  SymbolTable symbol_table(kTokens, false);
+  FusionConfig config;
+  config.scorers.resize(1);
+  config.scorers[0].type = "test-reject-final";
+  config.scorers[0].weight = 0.0f;
+  OnlineCtcPrefixBeamSearchDecoder decoder(config, 4, symbol_table, 0);
+  OnlineStream stream;
+  OnlineStream *streams[] = {&stream};
+  std::vector<OnlineCtcDecoderResult> results(1);
+  std::vector<float> samples(16000, 0.0f);
+  stream.AcceptWaveform(16000, samples.data(), samples.size());
+  std::vector<float> frame(kVocabSize, -20.0f);
+  frame[1] = 0.0f;
+  decoder.Decode(frame.data(), 1, 1, kVocabSize, &results, streams, 1);
+  ASSERT_EQ(results[0].tokens, std::vector<int64_t>({1}));
+
+  stream.InputFinished();
+  decoder.Decode(frame.data(), 1, 1, kVocabSize, &results, streams, 1);
+  EXPECT_TRUE(results[0].tokens.empty());
+  EXPECT_TRUE(results[0].timestamps.empty());
+  EXPECT_EQ(results[0].num_trailing_blanks, 2);
+}
+
+TEST(OnlineCtcPrefixBeamSearchDecoder, GraphAndPrefixSearchAreExclusive) {
+  OfflineRecognizerConfig offline;
+  offline.decoding_method = "prefix_beam_search";
+  offline.model_config.tokens = __FILE__;
+  offline.model_config.nemo_ctc.model = __FILE__;
+  ASSERT_TRUE(offline.Validate());
+  offline.ctc_fst_decoder_config.graph = __FILE__;
+  EXPECT_FALSE(offline.Validate());
+
+  OnlineRecognizerConfig online;
+  online.decoding_method = "prefix_beam_search";
+  online.model_config.tokens = __FILE__;
+  online.model_config.nemo_ctc.model = __FILE__;
+  ASSERT_TRUE(online.Validate());
+  online.ctc_fst_decoder_config.graph = __FILE__;
+  EXPECT_FALSE(online.Validate());
 }
 
 }  // namespace

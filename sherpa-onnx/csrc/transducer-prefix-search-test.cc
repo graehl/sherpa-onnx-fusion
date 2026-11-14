@@ -257,7 +257,7 @@ TEST(TransducerPrefixSearch, ScorerFusionMatchesEnumeration) {
 // best steps before equal outputs are combined, one token counts as blank,
 // and the result is the best score over length with the context counted.
 TEST(TransducerPrefixSearch, PruneStepsReproducesModifiedBeamSearch) {
-  const int32_t num_frames = 14, context_size = 2, unknown = 3;
+  const int32_t num_frames = 14, context_size = 2, unknown = 2;
   int32_t differs_from_default = 0;
   for (int32_t max_active : {1, 2, 4}) {
     for (int32_t shift = 0; shift != 12; ++shift) {
@@ -340,6 +340,51 @@ TEST(TransducerPrefixSearch, PruneStepsReproducesModifiedBeamSearch) {
   }
   // The rule is a real difference from the default search.
   EXPECT_GT(differs_from_default, 0);
+}
+
+TEST(TransducerPrefixSearch, ZeroProbabilityTransitionsDoNotEnterQueues) {
+  auto vocabulary = std::make_shared<SearchVocabulary>();
+  vocabulary->tokens.resize(2);
+  TransducerPrefixSearchOptions options;
+  options.topology = TransducerTopology::kTdt;
+  options.max_duration = 1;
+  for (int32_t rounds : {1, 2}) {
+    options.max_symbols_per_frame = rounds;
+    TransducerPrefixSearch search(options, vocabulary, {}, {});
+    const float tokens[] = {0, kLogZero};
+    const float durations[] = {kLogZero, 0};
+    for (int32_t frame = 0; frame != 4; ++frame) {
+      search.Expand(tokens, durations);
+      EXPECT_FALSE(search.EndRound());
+      search.EndFrame();
+      ASSERT_EQ(search.Frontier().size(), 1u);
+      EXPECT_EQ(search.NumLiveRecords(), 1);
+    }
+    auto result = search.Finish();
+    ASSERT_EQ(result.size(), 1u);
+    EXPECT_TRUE(result[0].tokens.empty());
+    EXPECT_FLOAT_EQ(result[0].score, 0);
+  }
+}
+
+TEST(TransducerPrefixSearch, ZeroWeightIgnoresInfiniteScoresButNotRejection) {
+  for (bool final_only : {false, true}) {
+    BigramTableScorer scorer(ScorerUnit::kAsrToken, final_only ? 0 : kLogZero);
+    scorer.SetFinal(1, kLogZero);
+    scorer.Reject(BigramTableScorer::kStart, 2);
+    TransducerPrefixSearch search(TransducerPrefixSearchOptions(), Vocabulary(),
+                                  {&scorer}, {0});
+    const float tokens[] = {-10, -1, 0};
+    search.Expand(tokens, nullptr);
+    RunScorerWaves(&search, {&scorer});
+    search.EndRound();
+    search.EndFrame();
+    auto result = search.Finish();
+    ASSERT_EQ(result.size(), 1u);
+    EXPECT_EQ(result[0].tokens, Tokens({1}));
+    EXPECT_FLOAT_EQ(result[0].score, -1);
+    EXPECT_EQ(result[0].scorer_log_scores[0], kLogZero);
+  }
 }
 
 TEST(TransducerPrefixSearch, PrunedSearchReleasesWrappedScorerStates) {

@@ -132,6 +132,8 @@ void CtcPrefixSearch::Touch(uint32_t index) {
   state->next_blank = kLogZero;
   state->next_nonblank = kLogZero;
   if (options_.trace_survival) {
+    SurvivalOf(node)->next_blank = {0.0f, 1};
+    SurvivalOf(node)->next_nonblank = {0.0f, 1};
     SurvivalOf(node)->best_blank_term = kLogZero;
     SurvivalOf(node)->best_nonblank_term = kLogZero;
   }
@@ -469,10 +471,32 @@ CtcPrefixHypothesis CtcPrefixSearch::Best() const {
 }
 
 std::vector<CtcPrefixHypothesis> CtcPrefixSearch::Finish(int32_t nbest) {
+  return std::move(FinishTogether({this}, nbest)[0]);
+}
+
+std::vector<std::vector<CtcPrefixHypothesis>> CtcPrefixSearch::FinishTogether(
+    const std::vector<CtcPrefixSearch *> &searches, int32_t nbest) {
+  std::vector<const ScoredPrefixTrie *> tries;
+  std::vector<std::vector<uint32_t>> nodes;
+  for (const CtcPrefixSearch *search : searches) {
+    tries.push_back(&search->trie_);
+    nodes.push_back(search->active_);
+  }
+  std::vector<std::vector<float>> final_scores;
+  std::vector<std::vector<bool>> accepted;
+  ScoredPrefixTrie::FinalScoresTogether(tries, nodes, &final_scores, &accepted);
+  std::vector<std::vector<CtcPrefixHypothesis>> results;
+  for (size_t i = 0; i != searches.size(); ++i) {
+    results.push_back(
+        searches[i]->RankFinished(final_scores[i], accepted[i], nbest));
+  }
+  return results;
+}
+
+std::vector<CtcPrefixHypothesis> CtcPrefixSearch::RankFinished(
+    const std::vector<float> &final_scores, const std::vector<bool> &accepted,
+    int32_t nbest) const {
   size_t num_scorers = trie_.NumScorers();
-  std::vector<float> final_scores;
-  std::vector<bool> accepted;
-  trie_.FinalScores(active_, &final_scores, &accepted);
 
   std::vector<std::pair<float, size_t>> ranked;
   for (size_t i = 0; i != active_.size(); ++i) {
@@ -481,7 +505,9 @@ std::vector<CtcPrefixHypothesis> CtcPrefixSearch::Finish(int32_t nbest) {
     float score = Acoustic(Ctc(node)->log_blank, Ctc(node)->log_nonblank) +
                   node->scorer_total + LengthBonus(*node, true);
     for (size_t s = 0; s != num_scorers; ++s) {
-      score += trie_.Weights()[s] * final_scores[i * num_scorers + s];
+      if (trie_.Weights()[s] != 0) {
+        score += trie_.Weights()[s] * final_scores[i * num_scorers + s];
+      }
     }
     ranked.emplace_back(score, i);
   }

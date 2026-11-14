@@ -58,15 +58,27 @@ void OnlineCtcPrefixBeamSearchDecoder::Decode(
   DecodeFramesTogether(searches, scorer_pointers_, log_probs, num_frames,
                        vocab_size, nullptr);
 
+  // Once a stream's input has ended, report its result with the scorers'
+  // end-of-input scores, which can change which prefix is best. Streams
+  // ending in this call are finished together.
+  std::vector<CtcPrefixSearch *> ending;
+  std::vector<int32_t> ending_stream(batch_size, -1);
   for (int32_t b = 0; b != batch_size; ++b) {
-    OnlineCtcDecoderResult &r = (*results)[b];
-    // Once the stream's input has ended, report the result with the
-    // scorers' end-of-input scores, which can change which prefix is best.
-    CtcPrefixHypothesis best = searches[b]->Best();
     int32_t ready = ss[b]->NumFramesReady();
     if (ready > 0 && ss[b]->IsLastFrame(ready - 1)) {
-      auto final_best = searches[b]->Finish(1);
-      if (!final_best.empty()) best = std::move(final_best[0]);
+      ending_stream[b] = static_cast<int32_t>(ending.size());
+      ending.push_back(searches[b]);
+    }
+  }
+  auto finished = CtcPrefixSearch::FinishTogether(ending, 1);
+
+  for (int32_t b = 0; b != batch_size; ++b) {
+    OnlineCtcDecoderResult &r = (*results)[b];
+    CtcPrefixHypothesis best;
+    if (ending_stream[b] < 0) {
+      best = searches[b]->Best();
+    } else if (!finished[ending_stream[b]].empty()) {
+      best = std::move(finished[ending_stream[b]][0]);
     }
     int32_t frames = searches[b]->NumFramesDecoded();
     r.tokens.assign(best.tokens.begin(), best.tokens.end());

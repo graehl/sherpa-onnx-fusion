@@ -42,10 +42,11 @@ CtcInflightDecoder::~CtcInflightDecoder() = default;
 
 CtcInflightDecoder::Utterance &CtcInflightDecoder::Get(
     UtteranceHandle handle) const {
-  if (handle.id >= utterances_.size() || utterances_[handle.id] == nullptr) {
+  auto found = utterances_.find(handle.id);
+  if (found == utterances_.end()) {
     throw std::out_of_range("CtcInflightDecoder: no such utterance");
   }
-  return *utterances_[handle.id];
+  return *found->second;
 }
 
 std::optional<UtteranceHandle> CtcInflightDecoder::TryAdd(
@@ -64,8 +65,8 @@ std::optional<UtteranceHandle> CtcInflightDecoder::TryAdd(
       options.scorer_weights.empty() ? options_.scorer_weights
                                      : options.scorer_weights);
   UtteranceHandle handle;
-  handle.id = utterances_.size();
-  utterances_.push_back(std::move(utterance));
+  handle.id = next_handle_++;
+  utterances_.emplace(handle.id, std::move(utterance));
   ++num_active_;
   return handle;
 }
@@ -120,8 +121,9 @@ StepProgress CtcInflightDecoder::Step() {
 
   for (int32_t step = 0; step != options_.steps_per_utterance; ++step) {
     ready_.clear();
-    for (const auto &utterance : utterances_) {
-      if (utterance != nullptr && utterance->status == DecodeStatus::kActive &&
+    for (const auto &entry : utterances_) {
+      const auto &utterance = entry.second;
+      if (utterance->status == DecodeStatus::kActive &&
           !utterance->chunks.empty()) {
         ready_.push_back(utterance.get());
       }
@@ -147,8 +149,14 @@ StepProgress CtcInflightDecoder::Step() {
     progress.frames_decoded += static_cast<int32_t>(ready_.size());
   }
 
-  for (const auto &utterance : utterances_) {
-    if (utterance == nullptr || utterance->status != DecodeStatus::kActive) {
+  // Utterances whose input has ended and is used up finish together, with
+  // one end-of-input call per scorer.
+  std::vector<Utterance *> ending;
+  std::vector<CtcPrefixSearch *> ending_searches;
+  int32_t most = 0;
+  for (const auto &entry : utterances_) {
+    const auto &utterance = entry.second;
+    if (utterance->status != DecodeStatus::kActive) {
       continue;
     }
     if (!utterance->chunks.empty()) {
@@ -156,13 +164,23 @@ StepProgress CtcInflightDecoder::Step() {
     } else if (!utterance->input_finished) {
       progress.waiting_for_input = true;
     } else {
-      utterance->result = utterance->search->Finish(utterance->nbest);
-      utterance->status = utterance->result.empty()
-                              ? DecodeStatus::kNoAcceptedPath
-                              : DecodeStatus::kComplete;
-      utterance->search.reset();
-      --num_active_;
+      ending.push_back(utterance.get());
+      ending_searches.push_back(utterance->search.get());
+      most = std::max(most, utterance->nbest);
     }
+  }
+  auto finished = CtcPrefixSearch::FinishTogether(ending_searches, most);
+  for (size_t i = 0; i != ending.size(); ++i) {
+    Utterance *utterance = ending[i];
+    utterance->result = std::move(finished[i]);
+    if (utterance->result.size() > static_cast<size_t>(utterance->nbest)) {
+      utterance->result.resize(std::max(utterance->nbest, 0));
+    }
+    utterance->status = utterance->result.empty()
+                            ? DecodeStatus::kNoAcceptedPath
+                            : DecodeStatus::kComplete;
+    utterance->search.reset();
+    --num_active_;
   }
   return progress;
 }
@@ -185,7 +203,7 @@ void CtcInflightDecoder::Release(UtteranceHandle handle) {
     throw std::invalid_argument(
         "CtcInflightDecoder: Release of an active utterance; Cancel it first");
   }
-  utterances_[handle.id].reset();
+  utterances_.erase(handle.id);
 }
 
 }  // namespace sherpa_onnx
