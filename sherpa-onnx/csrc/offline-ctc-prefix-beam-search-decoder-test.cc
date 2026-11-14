@@ -6,6 +6,7 @@
 
 #include <array>
 #include <cmath>
+#include <limits>
 #include <memory>
 #include <random>
 #include <stdexcept>
@@ -138,6 +139,59 @@ TEST(OfflineCtcPrefixBeamSearchDecoder, BatchMatchesDecodingEachUtterance) {
     }
   }
   EXPECT_EQ(HistoryScorer::LiveStates(), 0);
+}
+
+// Frames past an utterance's length are padding: whatever they hold, the
+// result is the same. Each poison would change or break a search that read
+// one padded frame.
+TEST(OfflineCtcPrefixBeamSearchDecoder, PaddedFramesAreNeverRead) {
+  SymbolTable symbol_table(kTokens, false);
+  const int32_t batch = 3, num_frames = 9, max_active = 4;
+  std::array<int64_t, 3> lengths = {9, 4, 6};
+  std::array<int64_t, 3> shape = {batch, num_frames, kVocabSize};
+  std::array<int64_t, 1> length_shape = {batch};
+  auto memory =
+      Ort::MemoryInfo::CreateCpu(OrtDeviceAllocator, OrtMemTypeDefault);
+
+  for (const char *alignment : {"sum", "max"}) {
+    FusionConfig config;
+    config.ctc_alignment = alignment;
+    config.length_bonus = 0.2f;
+    OfflineCtcPrefixBeamSearchDecoder decoder(config, max_active, symbol_table,
+                                              0);
+    auto decode = [&](std::vector<float> log_probs) {
+      return decoder.Decode(
+          Ort::Value::CreateTensor<float>(memory, log_probs.data(),
+                                          log_probs.size(), shape.data(), 3),
+          Ort::Value::CreateTensor<int64_t>(
+              memory, lengths.data(), lengths.size(), length_shape.data(), 1));
+    };
+    auto clean = RandomLogProbs(batch, num_frames, 11);
+    auto expected = decode(clean);
+
+    const float poisons[] = {std::numeric_limits<float>::quiet_NaN(),
+                             std::numeric_limits<float>::infinity(), 1e30f,
+                             0.0f};
+    for (float poison : poisons) {
+      auto poisoned = clean;
+      for (int32_t b = 0; b != batch; ++b) {
+        for (int32_t t = static_cast<int32_t>(lengths[b]); t != num_frames;
+             ++t) {
+          for (int32_t v = 0; v != kVocabSize; ++v) {
+            poisoned[(b * num_frames + t) * kVocabSize + v] = poison;
+          }
+        }
+      }
+      auto results = decode(poisoned);
+      ASSERT_EQ(results.size(), expected.size());
+      for (int32_t b = 0; b != batch; ++b) {
+        EXPECT_EQ(results[b].tokens, expected[b].tokens)
+            << alignment << " utterance " << b << " poison " << poison;
+        EXPECT_EQ(results[b].timestamps, expected[b].timestamps)
+            << alignment << " utterance " << b << " poison " << poison;
+      }
+    }
+  }
 }
 
 TEST(OfflineCtcPrefixBeamSearchDecoder, UnknownScorerTypeIsAnError) {
