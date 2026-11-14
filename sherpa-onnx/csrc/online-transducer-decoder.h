@@ -5,6 +5,7 @@
 #ifndef SHERPA_ONNX_CSRC_ONLINE_TRANSDUCER_DECODER_H_
 #define SHERPA_ONNX_CSRC_ONLINE_TRANSDUCER_DECODER_H_
 
+#include <memory>
 #include <vector>
 
 #include "onnxruntime_cxx_api.h"  // NOLINT
@@ -12,6 +13,8 @@
 #include "sherpa-onnx/csrc/macros.h"
 
 namespace sherpa_onnx {
+
+class TransducerPrefixSearch;
 
 struct OnlineTransducerDecoderResult {
   /// Number of frames after subsampling we have decoded so far
@@ -35,6 +38,10 @@ struct OnlineTransducerDecoderResult {
 
   // used only in modified beam_search
   Hypotheses hyps;
+
+  // used only in prefix_beam_search: this segment's search, shared by the
+  // copies of this result and absent from an empty result
+  std::shared_ptr<TransducerPrefixSearch> prefix_search;
 
   OnlineTransducerDecoderResult() : tokens{}, decoder_out{nullptr}, hyps{} {}
 

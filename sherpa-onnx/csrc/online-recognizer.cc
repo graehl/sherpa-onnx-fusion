@@ -115,8 +115,8 @@ void OnlineRecognizerConfig::Register(ParseOptions *po) {
   po->Register("decoding-method", &decoding_method,
                "decoding method,"
                "now support greedy_search, modified_beam_search, and "
-               "prefix_beam_search (CTC models; can fuse the scorers given "
-               "by --scorer).");
+               "prefix_beam_search (CTC and stateless-decoder transducer "
+               "models; can fuse the scorers given by --scorer).");
   po->Register("temperature-scale", &temperature_scale,
                "Temperature scale for confidence computation in decoding.");
   po->Register(

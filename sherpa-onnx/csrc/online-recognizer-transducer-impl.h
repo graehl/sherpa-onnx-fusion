@@ -24,6 +24,7 @@
 #include "sherpa-onnx/csrc/online-transducer-greedy-search-decoder.h"
 #include "sherpa-onnx/csrc/online-transducer-model.h"
 #include "sherpa-onnx/csrc/online-transducer-modified-beam-search-decoder.h"
+#include "sherpa-onnx/csrc/online-transducer-prefix-beam-search-decoder.h"
 #include "sherpa-onnx/csrc/onnx-utils.h"
 #include "sherpa-onnx/csrc/symbol-table.h"
 #include "sherpa-onnx/csrc/text-utils.h"
@@ -141,6 +142,11 @@ class OnlineRecognizerTransducerImpl : public OnlineRecognizerImpl {
           model_.get(), unk_id_, config_.blank_penalty,
           config_.temperature_scale);
 
+    } else if (config.decoding_method == "prefix_beam_search") {
+      decoder_ = std::make_unique<OnlineTransducerPrefixBeamSearchDecoder>(
+          model_.get(), config_.fusion, config_.max_active_paths, sym_,
+          config_.blank_penalty);
+
     } else {
       SHERPA_ONNX_LOGE("Unsupported decoding method: %s",
                        config.decoding_method.c_str());
@@ -195,6 +201,11 @@ class OnlineRecognizerTransducerImpl : public OnlineRecognizerImpl {
       decoder_ = std::make_unique<OnlineTransducerGreedySearchDecoder>(
           model_.get(), unk_id_, config_.blank_penalty,
           config_.temperature_scale);
+
+    } else if (config.decoding_method == "prefix_beam_search") {
+      decoder_ = std::make_unique<OnlineTransducerPrefixBeamSearchDecoder>(
+          model_.get(), config_.fusion, config_.max_active_paths, sym_,
+          config_.blank_penalty);
 
     } else {
       SHERPA_ONNX_LOGE("Unsupported decoding method: %s",
