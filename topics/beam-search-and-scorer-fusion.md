@@ -37,6 +37,8 @@ everything is kept in the
 | Streaming CTC recognizer | `online-ctc-prefix-beam-search-decoder.h` | search kept per stream |
 | Offline transducer recognizers | `offline-transducer-prefix-beam-search-decoder.h` | stateless and NeMo |
 | Streaming stateless-transducer recognizer | `online-transducer-prefix-beam-search-decoder.h` | search kept per segment |
+| NeMo RNN-T/TDT search, offline and streaming | `nemo-transducer-prefix-segment.h`, `online-transducer-prefix-beam-search-nemo-decoder.h` | one class for both; on 300 LibriSpeech recordings a public streaming RNN-T gave ER2 7.55 greedy, 7.23 with the existing beam search, 7.31 with prefix search |
+| Scorers over the recognizer's tokens | `kenlm-scorer.h`, `recurrent-lm-scorer.h` (`--scorer.unit=token`) | § Scorers over the recognizer's tokens |
 | Rescore-only mode for any scorer | `rescoring-scorer.h` (`--scorer.N.rescore`) | n-best rescoring |
 | `modified_beam_search` rules | `TransducerPrefixSearchOptions::prune_steps` (`--modified-beam-search-rules`) | § Transducers |
 | Multi-utterance CTC decoder | `ctc-inflight-decoder.h` | § Decoder lifecycle |
@@ -75,7 +77,7 @@ on public models except where noted; details and limits are in
   fusion loads.
 - The early partial-score beam, `Next`-based candidate scoring, and the
   tuning traces other than survival.
-- Streaming NeMo transducers.
+- Streaming TDT (the streaming NeMo model class here is RNN-T only).
 - The `FasterDecoder` comparison on a graph with a lexicon and LM.
 - Byte-BPE token tables, join-marker conventions the recognizer does not
   itself remove, and text normalization between recognizer and scorer.
