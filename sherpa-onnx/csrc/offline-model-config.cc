@@ -33,6 +33,9 @@ void OfflineModelConfig::Register(ParseOptions *po) {
 
   po->Register("telespeech-ctc", &telespeech_ctc,
                "Path to model.onnx for telespeech ctc");
+  po->Register("w2v-bert-ctc", &w2v_bert_ctc,
+               "Path to model.onnx of a w2v-BERT 2.0 CTC model exported from "
+               "transformers, with the single input input_features");
 
   po->Register("tokens", &tokens, "Path to tokens.txt");
 
@@ -187,6 +190,11 @@ bool OfflineModelConfig::Validate() const {
     return qwen3_asr.Validate();
   }
 
+  if (!w2v_bert_ctc.empty() && !FileExists(w2v_bert_ctc)) {
+    SHERPA_ONNX_LOGE("w2v_bert_ctc: '%s' does not exist", w2v_bert_ctc.c_str());
+    return false;
+  }
+
   if (!telespeech_ctc.empty() && !FileExists(telespeech_ctc)) {
     SHERPA_ONNX_LOGE("telespeech_ctc: '%s' does not exist",
                      telespeech_ctc.c_str());
@@ -247,6 +255,7 @@ std::string OfflineModelConfig::ToString() const {
   os << "fire_red_asr_ctc=" << fire_red_asr_ctc.ToString() << ", ";
   os << "qwen3_asr=" << qwen3_asr.ToString() << ", ";
   os << "telespeech_ctc=\"" << telespeech_ctc << "\", ";
+  os << "w2v_bert_ctc=\"" << w2v_bert_ctc << "\", ";
   os << "tokens=\"" << tokens << "\", ";
   os << "num_threads=" << num_threads << ", ";
   os << "debug=" << (debug ? "True" : "False") << ", ";

@@ -133,6 +133,17 @@ class OfflineRecognizerCtcImpl : public OfflineRecognizerImpl {
       }
     }
 
+    if (!config_.model_config.w2v_bert_ctc.empty()) {
+      // What transformers' SeamlessM4TFeatureExtractor computes: Kaldi
+      // filterbanks on 16-bit-scaled samples, no padding at the edges.
+      config_.feat_config.feature_dim = 80;
+      config_.feat_config.low_freq = 20;
+      config_.feat_config.high_freq = 0;
+      config_.feat_config.dither = 0;
+      config_.feat_config.snip_edges = true;
+      config_.feat_config.normalize_samples = false;
+    }
+
     if (!config_.model_config.dolphin.model.empty()) {
       config_.feat_config.low_freq = 0;
       config_.feat_config.high_freq = 8000;

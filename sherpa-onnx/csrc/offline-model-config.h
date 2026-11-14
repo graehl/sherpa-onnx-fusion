@@ -47,6 +47,9 @@ struct OfflineModelConfig {
   OfflineFireRedAsrCtcModelConfig fire_red_asr_ctc;
   OfflineQwen3ASRModelConfig qwen3_asr;
   std::string telespeech_ctc;
+  // A w2v-BERT 2.0 CTC model exported from transformers; see
+  // offline-w2v-bert-ctc-model.h.
+  std::string w2v_bert_ctc;
 
   std::string tokens;
   int32_t num_threads = 2;

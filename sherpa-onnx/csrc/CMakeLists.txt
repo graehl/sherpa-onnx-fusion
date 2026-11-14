@@ -102,6 +102,7 @@ set(sources
   offline-whisper-model.cc
   offline-whisper-timestamp-rules.cc
   offline-zipformer-ctc-model-config.cc
+  offline-w2v-bert-ctc-model.cc
   offline-zipformer-ctc-model.cc
   online-conformer-transducer-model.cc
   online-ctc-fst-decoder-config.cc

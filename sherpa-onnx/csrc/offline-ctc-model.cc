@@ -27,6 +27,7 @@
 #include "sherpa-onnx/csrc/offline-omnilingual-asr-ctc-model.h"
 #include "sherpa-onnx/csrc/offline-tdnn-ctc-model.h"
 #include "sherpa-onnx/csrc/offline-telespeech-ctc-model.h"
+#include "sherpa-onnx/csrc/offline-w2v-bert-ctc-model.h"
 #include "sherpa-onnx/csrc/offline-wenet-ctc-model.h"
 #include "sherpa-onnx/csrc/offline-zipformer-ctc-model.h"
 #include "sherpa-onnx/csrc/onnx-utils.h"
@@ -179,7 +180,9 @@ static ModelType GetModelType(char *model_data, size_t model_data_length,
 
 std::unique_ptr<OfflineCtcModel> OfflineCtcModel::Create(
     const OfflineModelConfig &config) {
-  if (!config.dolphin.model.empty()) {
+  if (!config.w2v_bert_ctc.empty()) {
+    return std::make_unique<OfflineW2vBertCtcModel>(config);
+  } else if (!config.dolphin.model.empty()) {
     return std::make_unique<OfflineDolphinModel>(config);
   } else if (!config.nemo_ctc.model.empty()) {
     return std::make_unique<OfflineNemoEncDecCtcModel>(config);
@@ -245,7 +248,9 @@ std::unique_ptr<OfflineCtcModel> OfflineCtcModel::Create(
 template <typename Manager>
 std::unique_ptr<OfflineCtcModel> OfflineCtcModel::Create(
     Manager *mgr, const OfflineModelConfig &config) {
-  if (!config.dolphin.model.empty()) {
+  if (!config.w2v_bert_ctc.empty()) {
+    return std::make_unique<OfflineW2vBertCtcModel>(mgr, config);
+  } else if (!config.dolphin.model.empty()) {
     return std::make_unique<OfflineDolphinModel>(mgr, config);
   } else if (!config.nemo_ctc.model.empty()) {
     return std::make_unique<OfflineNemoEncDecCtcModel>(mgr, config);
