@@ -230,7 +230,7 @@ std::pair<Ort::Value, Ort::Value> TokenInput(int32_t token,
 
 }  // namespace
 
-OfflineTransducerDecoderResult
+std::unique_ptr<TransducerPrefixSearch>
 OfflineTransducerPrefixBeamSearchNeMoDecoder::DecodeOne(
     const float *encoder_out, int32_t num_frames, int32_t encoder_dim) const {
   auto memory_info =
@@ -274,6 +274,97 @@ OfflineTransducerPrefixBeamSearchNeMoDecoder::DecodeOne(
 
   std::array<int64_t, 3> encoder_shape = {1, encoder_dim, 1};
   int32_t num_durations = 0;
+  // Computes, in one prediction-network call, the predictions the frontier
+  // still lacks. Each new hypothesis's parent already has its own, since the
+  // search asked about the parent first.
+  auto predict_together = [&](const std::vector<uint32_t> &frontier) {
+    std::vector<uint32_t> missing;
+    for (uint32_t hypothesis : frontier) {
+      if (predictions.size() <= hypothesis) predictions.resize(hypothesis + 1);
+      const Prediction &prediction = predictions[hypothesis];
+      if (prediction.valid &&
+          prediction.serial == search->SerialOf(hypothesis)) {
+        continue;
+      }
+      // The empty prefix starts from the model's initial state: left to the
+      // one-at-a-time path.
+      if (search->LastTokenOf(hypothesis) < 0) continue;
+      missing.push_back(hypothesis);
+    }
+    auto num = static_cast<int32_t>(missing.size());
+    if (num < 2 || !decoder_batches_) return;
+
+    std::array<int64_t, 2> token_shape = {num, 1};
+    Ort::Value tokens = Ort::Value::CreateTensor<int32_t>(
+        allocator, token_shape.data(), token_shape.size());
+    std::array<int64_t, 1> length_shape = {num};
+    Ort::Value lengths = Ort::Value::CreateTensor<int32_t>(
+        allocator, length_shape.data(), length_shape.size());
+    const auto &first_states = predictions[search->ParentOf(missing[0])].states;
+    std::vector<Ort::Value> states;
+    std::vector<std::vector<int64_t>> state_shapes;
+    for (const Ort::Value &state : first_states) {
+      // [layers, 1, hidden] per hypothesis; [layers, num, hidden] together.
+      auto shape = state.GetTensorTypeAndShapeInfo().GetShape();
+      state_shapes.push_back(shape);
+      shape[1] = num;
+      states.push_back(Ort::Value::CreateTensor<float>(allocator, shape.data(),
+                                                       shape.size()));
+    }
+    for (int32_t i = 0; i != num; ++i) {
+      tokens.GetTensorMutableData<int32_t>()[i] =
+          search->LastTokenOf(missing[i]);
+      lengths.GetTensorMutableData<int32_t>()[i] = 1;
+      const auto &parent = predictions[search->ParentOf(missing[i])].states;
+      for (size_t k = 0; k != states.size(); ++k) {
+        int64_t layers = state_shapes[k][0], hidden = state_shapes[k][2];
+        const float *from = parent[k].GetTensorData<float>();
+        float *to = states[k].GetTensorMutableData<float>();
+        for (int64_t layer = 0; layer != layers; ++layer) {
+          std::copy(from + layer * hidden, from + (layer + 1) * hidden,
+                    to + (layer * num + i) * hidden);
+        }
+      }
+    }
+    std::pair<Ort::Value, std::vector<Ort::Value>> output{
+        Ort::Value{nullptr}, std::vector<Ort::Value>()};
+    try {
+      output = model_->RunDecoder(std::move(tokens), std::move(lengths),
+                                  std::move(states));
+    } catch (const Ort::Exception &) {
+      // Some exported prediction networks take one hypothesis per call.
+      decoder_batches_ = false;
+      return;
+    }
+    auto out_shape = output.first.GetTensorTypeAndShapeInfo().GetShape();
+    size_t out_size = 1;
+    for (size_t d = 1; d != out_shape.size(); ++d) out_size *= out_shape[d];
+    out_shape[0] = 1;
+    for (int32_t i = 0; i != num; ++i) {
+      Prediction &prediction = predictions[missing[i]];
+      prediction.serial = search->SerialOf(missing[i]);
+      prediction.valid = true;
+      prediction.decoder_out = Ort::Value::CreateTensor<float>(
+          allocator, out_shape.data(), out_shape.size());
+      const float *from = output.first.GetTensorData<float>() + i * out_size;
+      std::copy(from, from + out_size,
+                prediction.decoder_out.GetTensorMutableData<float>());
+      prediction.states.clear();
+      for (size_t k = 0; k != output.second.size(); ++k) {
+        int64_t layers = state_shapes[k][0], hidden = state_shapes[k][2];
+        Ort::Value one = Ort::Value::CreateTensor<float>(
+            allocator, state_shapes[k].data(), state_shapes[k].size());
+        const float *all = output.second[k].GetTensorData<float>();
+        float *to = one.GetTensorMutableData<float>();
+        for (int64_t layer = 0; layer != layers; ++layer) {
+          std::copy(all + (layer * num + i) * hidden,
+                    all + (layer * num + i + 1) * hidden, to + layer * hidden);
+        }
+        prediction.states.push_back(std::move(one));
+      }
+    }
+  };
+
   // One joiner call for "count" hypotheses of the frontier from "first": the
   // frame repeated beside each hypothesis's prediction.
   auto join = [&](int32_t frame, const std::vector<uint32_t> &frontier,
@@ -326,6 +417,7 @@ OfflineTransducerPrefixBeamSearchNeMoDecoder::DecodeOne(
                        std::vector<float> *log_probs,
                        std::vector<float> *durations) {
     auto num = static_cast<int32_t>(frontier.size());
+    predict_together(frontier);
     if (num > 1 && joiner_batches_) {
       try {
         join(frame, frontier, 0, num, log_probs, durations);
@@ -372,7 +464,7 @@ OfflineTransducerPrefixBeamSearchNeMoDecoder::DecodeOne(
   search = fusion_.NewSearch(options);
   DecodeTransducerFrames(search.get(), fusion_.Scorers(), num_frames,
                          run_model);
-  return ToResult(search->Finish(1));
+  return search;
 }
 
 std::vector<OfflineTransducerDecoderResult>
@@ -386,11 +478,22 @@ OfflineTransducerPrefixBeamSearchNeMoDecoder::Decode(
   const float *p = encoder_out.GetTensorData<float>();
 
   std::vector<OfflineTransducerDecoderResult> ans(batch_size);
+  std::vector<std::unique_ptr<TransducerPrefixSearch>> searches;
+  std::vector<TransducerPrefixSearch *> pointers;
+  std::vector<int32_t> utterance;
   for (int32_t b = 0; b != batch_size; ++b) {
     int32_t num_frames = static_cast<int32_t>(LengthAt(encoder_out_length, b));
     if (num_frames == 0) continue;
-    ans[b] = DecodeOne(p + static_cast<size_t>(b) * max_frames * encoder_dim,
-                       num_frames, encoder_dim);
+    searches.push_back(
+        DecodeOne(p + static_cast<size_t>(b) * max_frames * encoder_dim,
+                  num_frames, encoder_dim));
+    pointers.push_back(searches.back().get());
+    utterance.push_back(b);
+  }
+  // The scorers' end-of-input calls serve the whole batch at once.
+  auto finished = TransducerPrefixSearch::FinishTogether(pointers, 1);
+  for (size_t i = 0; i != finished.size(); ++i) {
+    ans[utterance[i]] = ToResult(std::move(finished[i]));
   }
   return ans;
 }
