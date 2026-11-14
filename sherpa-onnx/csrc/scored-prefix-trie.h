@@ -110,6 +110,14 @@ class ScoredPrefixTrie {
   void FinalScores(const std::vector<uint32_t> &nodes,
                    std::vector<float> *final_scores,
                    std::vector<bool> *accepted) const;
+  // The same for several tries created with the same scorers, with one
+  // call per scorer serving all of them. Entry i of each argument belongs
+  // to tries[i].
+  static void FinalScoresTogether(
+      const std::vector<const ScoredPrefixTrie *> &tries,
+      const std::vector<std::vector<uint32_t>> &nodes,
+      std::vector<std::vector<float>> *final_scores,
+      std::vector<std::vector<bool>> *accepted);
 
   // Length bonus units of the prefix; "at_end" counts an unfinished word.
   int32_t LengthIn(const Node &node, LengthBonusUnit unit, bool at_end) const;

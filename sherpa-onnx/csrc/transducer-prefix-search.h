@@ -144,6 +144,10 @@ class TransducerPrefixSearch {
   // Scores the end of input and returns up to nbest hypotheses, best first.
   // Call after EndFrame of the last frame.
   std::vector<TransducerPrefixHypothesis> Finish(int32_t nbest = 1);
+  // Finish for several searches created with the same scorers, with one
+  // end-of-input call per scorer serving all of them.
+  static std::vector<std::vector<TransducerPrefixHypothesis>> FinishTogether(
+      const std::vector<TransducerPrefixSearch *> &searches, int32_t nbest = 1);
 
   int32_t NumLiveRecords() const { return trie_.NumLiveNodes(); }
 
@@ -168,6 +172,14 @@ class TransducerPrefixSearch {
   // Every hypothesis holding probability, with its total log mass.
   void Outstanding(std::vector<uint32_t> *nodes,
                    std::vector<float> *log_mass) const;
+  // The hypotheses that can be results, with their log mass.
+  void Finishable(std::vector<uint32_t> *nodes,
+                  std::vector<float> *log_mass) const;
+  std::vector<TransducerPrefixHypothesis> RankFinished(
+      const std::vector<uint32_t> &scored,
+      const std::vector<float> &scored_mass,
+      const std::vector<float> &final_scores, const std::vector<bool> &accepted,
+      int32_t nbest) const;
   TransducerPrefixHypothesis MakeHypothesis(uint32_t index, float score,
                                             float log_mass,
                                             const float *final_scores) const;

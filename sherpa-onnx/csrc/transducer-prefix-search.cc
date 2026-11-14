@@ -436,25 +436,53 @@ TransducerPrefixHypothesis TransducerPrefixSearch::Best() const {
   return MakeHypothesis(nodes[best], best_score, log_mass[best], nullptr);
 }
 
-std::vector<TransducerPrefixHypothesis> TransducerPrefixSearch::Finish(
-    int32_t nbest) {
+void TransducerPrefixSearch::Finishable(std::vector<uint32_t> *scored,
+                                        std::vector<float> *scored_mass) const {
   std::vector<uint32_t> nodes;
   std::vector<float> log_mass;
   Outstanding(&nodes, &log_mass);
   // A rejected prefix has no scorer states to finish.
-  std::vector<uint32_t> scored;
-  std::vector<float> scored_mass;
+  scored->clear();
+  scored_mass->clear();
   for (size_t i = 0; i != nodes.size(); ++i) {
     if (trie_.At(nodes[i])->rejected) continue;
-    scored.push_back(nodes[i]);
-    scored_mass.push_back(log_mass[i]);
+    scored->push_back(nodes[i]);
+    scored_mass->push_back(log_mass[i]);
   }
+}
 
+std::vector<TransducerPrefixHypothesis> TransducerPrefixSearch::Finish(
+    int32_t nbest) {
+  return std::move(FinishTogether({this}, nbest)[0]);
+}
+
+std::vector<std::vector<TransducerPrefixHypothesis>>
+TransducerPrefixSearch::FinishTogether(
+    const std::vector<TransducerPrefixSearch *> &searches, int32_t nbest) {
+  std::vector<const ScoredPrefixTrie *> tries;
+  std::vector<std::vector<uint32_t>> scored(searches.size());
+  std::vector<std::vector<float>> scored_mass(searches.size());
+  for (size_t i = 0; i != searches.size(); ++i) {
+    tries.push_back(&searches[i]->trie_);
+    searches[i]->Finishable(&scored[i], &scored_mass[i]);
+  }
+  std::vector<std::vector<float>> final_scores;
+  std::vector<std::vector<bool>> accepted;
+  ScoredPrefixTrie::FinalScoresTogether(tries, scored, &final_scores,
+                                        &accepted);
+  std::vector<std::vector<TransducerPrefixHypothesis>> results;
+  for (size_t i = 0; i != searches.size(); ++i) {
+    results.push_back(searches[i]->RankFinished(
+        scored[i], scored_mass[i], final_scores[i], accepted[i], nbest));
+  }
+  return results;
+}
+
+std::vector<TransducerPrefixHypothesis> TransducerPrefixSearch::RankFinished(
+    const std::vector<uint32_t> &scored, const std::vector<float> &scored_mass,
+    const std::vector<float> &final_scores, const std::vector<bool> &accepted,
+    int32_t nbest) const {
   size_t num_scorers = trie_.NumScorers();
-  std::vector<float> final_scores;
-  std::vector<bool> accepted;
-  trie_.FinalScores(scored, &final_scores, &accepted);
-
   std::vector<std::pair<float, size_t>> ranked;
   for (size_t i = 0; i != scored.size(); ++i) {
     if (!accepted[i]) continue;
