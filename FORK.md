@@ -56,6 +56,7 @@ present and prints a warning describing the correct result.
 - [Tuning fusion weights and bonuses from the search's own evidence](gaps/sketches/fusion-parameter-tuning.md).
 - [Prefix search against the FST decoder on a graph with an LM](gaps/sketches/fst-decoder-lm-graph-comparison.md).
 - [Checking that a token scorer and a recognizer share a vocabulary](gaps/sketches/scorer-vocabulary-compatibility.md).
+- [Running models through LiteRT](gaps/sketches/litert-model-backend.md).
 
 ## Relationship to upstream
 
