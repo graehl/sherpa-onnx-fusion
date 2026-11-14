@@ -166,8 +166,10 @@ class RecurrentLmScorer : public Scorer {
  private:
   int32_t IdOf(UnitId unit) const {
     if (vocabulary_.token_units) {
-      return unit >= 0 && unit < step_->VocabSize() ? unit
-                                                    : vocabulary_.unknown_id;
+      int32_t id = unit + vocabulary_.token_id_offset;
+      return unit >= 0 && id >= 0 && id < step_->VocabSize()
+                 ? id
+                 : vocabulary_.unknown_id;
     }
     int32_t id = vocabulary_.id_of_char.Lookup(unit);
     return id < 0 ? vocabulary_.unknown_id : id;

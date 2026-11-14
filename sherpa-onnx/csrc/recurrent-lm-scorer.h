@@ -42,6 +42,9 @@ struct RecurrentLmVocabulary {
   // The model's unit IDs are the recognizer's token IDs, for a model trained
   // on the recognizer's tokens; id_of_char is then unused.
   bool token_units = false;
+  // With token_units: the model's unit for recognizer token t is
+  // t + token_id_offset.
+  int32_t token_id_offset = 0;
   // The end of input adds the score of boundary_id after the last unit, as
   // rescoring a whole sentence does. Shallow fusion in the existing
   // streaming decoders adds none.
@@ -81,6 +84,8 @@ int32_t RecurrentLmLiveNodes();
 //     bytes in hexadecimal).
 //   "boundary-id", "unknown-id": defaults 0 and 1 for unit=char; for
 //     unit=token, 1 (the usual sos/eos ID) and the recognizer's blank, 0.
+//   "id-offset": with unit=token, the model's unit for recognizer token t
+//     is t + this. Default 0. Nothing checks that the two vocabularies agree.
 //   "score-end": whether the end of input adds the boundary's score.
 //     Default true.
 std::unique_ptr<ScorerFactory> MakeOnnxRecurrentLmScorerFactory();
