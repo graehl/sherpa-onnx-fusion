@@ -94,38 +94,28 @@ class OfflineTransducerPrefixBeamSearchDecoder
   float blank_penalty_;
 };
 
+struct NeMoTransducerCalls;
+
 // For NeMo transducers: RNN-T, or token-and-duration when the model is one.
-// The prediction network is stateful; its output and state are kept per
-// hypothesis. The prediction network and the joiner each run once per
-// round for all of an utterance's hypotheses that need them, where the
-// model allows several per call, and one hypothesis at a time otherwise.
+// The search is NeMoTransducerPrefixSegment's, one per utterance.
 class OfflineTransducerPrefixBeamSearchNeMoDecoder
     : public OfflineTransducerDecoder {
  public:
   OfflineTransducerPrefixBeamSearchNeMoDecoder(
       OfflineTransducerNeMoModel *model, const FusionConfig &config,
       int32_t max_active, const SymbolTable &symbol_table, float blank_penalty);
+  ~OfflineTransducerPrefixBeamSearchNeMoDecoder() override;
 
   std::vector<OfflineTransducerDecoderResult> Decode(
       Ort::Value encoder_out, Ort::Value encoder_out_length,
       OfflineStream **ss = nullptr, int32_t n = 0) override;
 
  private:
-  // Searches one utterance up to, not including, the end of input.
-  std::unique_ptr<TransducerPrefixSearch> DecodeOne(const float *encoder_out,
-                                                    int32_t num_frames,
-                                                    int32_t encoder_dim) const;
-
-  OfflineTransducerNeMoModel *model_;
   FusionConfig config_;
   int32_t max_active_;
   TransducerFusion fusion_;
   float blank_penalty_;
-  // Cleared the first time the model's joiner refuses several hypotheses in
-  // one call; they then go one at a time.
-  mutable bool joiner_batches_ = true;
-  // The same for the prediction network.
-  mutable bool decoder_batches_ = true;
+  std::unique_ptr<NeMoTransducerCalls> calls_;
 };
 
 }  // namespace sherpa_onnx

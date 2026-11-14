@@ -15,6 +15,7 @@
 namespace sherpa_onnx {
 
 class TransducerPrefixSearch;
+class NeMoTransducerPrefixSegment;
 
 struct OnlineTransducerDecoderResult {
   /// Number of frames after subsampling we have decoded so far
@@ -42,6 +43,8 @@ struct OnlineTransducerDecoderResult {
   // used only in prefix_beam_search: this segment's search, shared by the
   // copies of this result and absent from an empty result
   std::shared_ptr<TransducerPrefixSearch> prefix_search;
+  // the same for NeMo transducers, with the prediction network's states
+  std::shared_ptr<NeMoTransducerPrefixSegment> prefix_segment;
 
   OnlineTransducerDecoderResult() : tokens{}, decoder_out{nullptr}, hyps{} {}
 
