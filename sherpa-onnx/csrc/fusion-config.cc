@@ -40,6 +40,16 @@ void FusionConfig::Register(ParseOptions *po) {
                "written. lower: in lowercase, for a language model trained "
                "on lowercase text and a recognizer that writes capitals. The "
                "recognizer's output is unchanged.");
+  po->Register("length-normalize", &length_normalize,
+               "Used only when decoding_method is prefix_beam_search, for "
+               "transducer models. Rank results by score divided by output "
+               "length, as modified_beam_search does.");
+  po->Register("modified-beam-search-rules", &modified_beam_search_rules,
+               "Used only when decoding_method is prefix_beam_search, for "
+               "transducer models with a stateless decoder. Search as "
+               "modified_beam_search does: keep the best max-active-paths "
+               "single steps per frame before combining equal outputs, take "
+               "<unk> as blank, and rank results by score over length.");
   po->Register("token-candidates", &token_candidates,
                "Used only when decoding_method is prefix_beam_search. Number "
                "of most probable tokens per frame that may extend a "
@@ -84,6 +94,9 @@ std::string FusionConfig::ToString() const {
   os << "length_bonus_unit=\"" << length_bonus_unit << "\", ";
   os << "ctc_alignment=\"" << ctc_alignment << "\", ";
   os << "scorer_text_case=\"" << scorer_text_case << "\", ";
+  os << "length_normalize=" << (length_normalize ? "True" : "False") << ", ";
+  os << "modified_beam_search_rules="
+     << (modified_beam_search_rules ? "True" : "False") << ", ";
   os << "token_candidates=" << token_candidates << ", ";
   os << "score_beam=" << score_beam << ")";
   return os.str();

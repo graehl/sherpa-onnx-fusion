@@ -36,6 +36,15 @@ struct FusionConfig {
   // recognizer writes it, or "lower". The recognizer's output is unchanged.
   std::string scorer_text_case = "keep";
 
+  // Transducers: rank results by score divided by output length, counting
+  // the model's leading context, as modified_beam_search does.
+  bool length_normalize = false;
+  // Stateless-decoder transducers: search as modified_beam_search does
+  // (TransducerPrefixSearchOptions::prune_steps, the unknown-word token taken
+  // as blank, and length_normalize), so that decoder's results are
+  // reproduced, with or without scorers.
+  bool modified_beam_search_rules = false;
+
   void Register(ParseOptions *po);
   bool Validate() const;
   std::string ToString() const;
