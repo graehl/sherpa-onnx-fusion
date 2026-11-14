@@ -129,6 +129,7 @@ struct Extra {
   int32_t boundary_id = 0;
   int32_t unknown_id = 1;
   bool score_end = true;
+  int32_t id_offset = 0;
 };
 
 Extra ParseExtra(const std::string &text, bool token_units) {
@@ -159,6 +160,8 @@ Extra ParseExtra(const std::string &text, bool token_units) {
       extra.boundary_id = value.get<int32_t>();
     } else if (key == "unknown-id" && value.is_number_integer()) {
       extra.unknown_id = value.get<int32_t>();
+    } else if (key == "id-offset" && value.is_number_integer() && token_units) {
+      extra.id_offset = value.get<int32_t>();
     } else if (key == "score-end" && value.is_boolean()) {
       extra.score_end = value.get<bool>();
     } else {
@@ -221,6 +224,7 @@ class OnnxRecurrentLmScorerFactory : public ScorerFactory {
     RecurrentLmVocabulary vocabulary;
     if (token_units) {
       vocabulary.token_units = true;
+      vocabulary.token_id_offset = extra.id_offset;
       vocabulary.boundary_id = extra.boundary_id;
       vocabulary.unknown_id = extra.unknown_id;
       if (extra.boundary_id < 0 || extra.boundary_id >= step->VocabSize() ||

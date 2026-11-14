@@ -105,6 +105,34 @@ TEST_F(KenLmScorerTest, ScoresCharactersBoundariesAndEndOfSentence) {
   EXPECT_NEAR(final_score.log_score, -0.3f * kLn10, 1e-5);
 }
 
+// A model over the recognizer's tokens: the table's symbols are its words.
+TEST_F(KenLmScorerTest, TokenUnitsUseTheTokenTablesSymbols) {
+  std::string tokens = ::testing::TempDir() + "kenlm-scorer-test.tokens";
+  {
+    std::ofstream os(tokens);
+    os << "<blk> 0\nb 1\na 2\nzz 3\n";
+  }
+  auto scorer = Create("{\"tokens\": \"" + tokens + "\"}", "token");
+  EXPECT_EQ(scorer->Info().unit, ScorerUnit::kAsrToken);
+  std::vector<std::byte> state;
+  // Token 2 is "a" and token 1 is "b": the same bigrams as the characters.
+  auto scores = Scores(scorer.get(), {2, 1}, &state);
+  EXPECT_NEAR(scores[0], -0.2f * kLn10, 1e-5);
+  EXPECT_NEAR(scores[1], -0.1f * kLn10, 1e-5);
+  // A token the model lacks and one past the table are both <unk>.
+  auto unknown = Scores(scorer.get(), {3}, &state);
+  auto beyond = Scores(scorer.get(), {40}, &state);
+  EXPECT_FLOAT_EQ(unknown[0], beyond[0]);
+  EXPECT_THROW(Create("{}", "token"), std::runtime_error);
+  std::remove(tokens.c_str());
+
+  // "id-offset": the model's words are IDs; this model has none of them.
+  auto by_id = Create("{\"id-offset\": 2}", "token");
+  EXPECT_EQ(by_id->Info().unit, ScorerUnit::kAsrToken);
+  auto ids = Scores(by_id.get(), {2}, &state);
+  EXPECT_FLOAT_EQ(ids[0], beyond[0]);
+}
+
 TEST_F(KenLmScorerTest, UnknownCharacterScoresAsUnk) {
   auto scorer = Create();
   std::vector<std::byte> state;
