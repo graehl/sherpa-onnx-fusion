@@ -50,6 +50,7 @@ present and prints a warning describing the correct result.
 - [Language bindings for the fusion options](gaps/fusion-config-bindings.md).
 - [Static build aborts when a model loads (GCC 15)](gaps/static-onnxruntime-abort.md).
 - [Decoding several recordings in one call changes some transcripts](gaps/offline-batch-changes-transcripts.md).
+- [Encoder batches are formed without regard to length](gaps/encoder-batches-ignore-length.md).
 - [Encoder-inclusive inflight scheduling](gaps/sketches/encoder-decoder-inflight-scheduling.md),
   deferred beyond the decoder's own inflight batching.
 - [Tuning fusion weights and bonuses from the search's own evidence](gaps/sketches/fusion-parameter-tuning.md).
