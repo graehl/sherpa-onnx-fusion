@@ -107,7 +107,7 @@ recombine at all.
 
 Planned for a second or third pass (graehl, 2026-11-13): it finds more
 different-time CTC derivations of a string the beam already holds, and its
-setting will be varied in experiments. The no-LM evidence in the topic
+setting will be varied in experiments. A private comparison
 suggests about 0.1 points of ER2 from alignment summation as a whole.
 
 Budget these two kinds of search work independently. The main hypothesis
@@ -377,6 +377,14 @@ design for what does not.
   fetched at configure time, query sources only, no Boost). A character
   n-gram model in ARPA or KenLM binary form. Its state is KenLM's own, with
   unused bytes zeroed, so equal contexts are equal bytes.
+- **Scorer type `onnx-rnn`**: `sherpa-onnx/csrc/recurrent-lm-scorer.h`. A
+  character LSTM or GRU exported as one step: previous unit IDs and state
+  tensors in, next-unit log probabilities and new states out. A
+  hypothesis's state bytes refer to a reference-counted node per utterance;
+  a node is computed only when something is scored after it, batched with
+  the other nodes that call needs, and freed when nothing refers to it. The
+  unit list is a sidecar file named in `extra`. Tested against a
+  deterministic stand-in for the model, and on real fp32 and int8 exports.
 
 - **Offline recognizer**: `--decoding-method=prefix_beam_search` for
   offline CTC models, with `--max-active-paths` as the hypothesis beam,

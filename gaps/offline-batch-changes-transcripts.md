@@ -43,6 +43,34 @@ Neither can be fixed in the decoders. The second is a property of the
 exported model; the first needs masking in the export or a padding value
 the model was trained to ignore.
 
+## A batch of 8, with and without padding (2026-11-14)
+
+An export of the public GigaAM v3 RNN-T encoder was run on 8 recordings
+twice: with every recording cut to the same length, so the batch has no
+padding, and with mixed lengths padded as the recognizer pads. "Changed"
+compares each utterance's greedy output in the batch with its output
+alone.
+
+| Precision | Equal lengths, no padding | Mixed lengths, padded |
+|---|---|---|
+| fp32 | identical | relative RMS difference 0.22; 3 of 8 change |
+| int8 | relative RMS 0.066; 1 of 8 changes | 0.23; 3 of 8 change |
+| int8, MatMul only | relative RMS 0.046; 0 of 8 change | 0.22; 4 of 8 change |
+
+- **In fp32, batching itself is exact.** The encoder takes lengths, but
+  its output for the valid frames still depends on the padding, so it is
+  not safe to batch with padding as exported. A w2v-BERT CTC export that
+  is not public behaved the same way, with no length input at all.
+- **Dynamic quantization drift is not small**, and it appears with no
+  padding. Its effect on error rate was not measured here.
+- The decoders are not involved: with the valid encoder frames held fixed
+  and the padded tail overwritten with NaN, infinity or a huge value, no
+  decoder's result changed (CTC prefix search in a unit test; the existing
+  and prefix transducer decoders on three real models).
+
+The probe was a scratch program on the fork's C++ API, not a retained
+test.
+
 ## Why it matters here
 
 Comparisons in the fusion topic are only like for like when both sides
@@ -51,11 +79,19 @@ slightly different transcripts than one that does not.
 
 ## Closure
 
-For comparisons, decode one recording per call, as the reproduction in the
-fusion topic does. To close: identify, per model family the fork cares
+For comparisons, decode one recording per call. To close: identify, per model family the fork cares
 about, whether an fp32 export with correct length masking gives identical
 batched and single transcripts, and document which exported models must
 be decoded unbatched. Evidence: identical transcripts for a batch and for
 the same recordings decoded alone.
+
+An export can take `input_lengths` (int64, valid positions on the input's
+sequence axis) and mask padding inside the graph, so that a padded fp32
+batch equals each utterance alone. The w2v-BERT model class runs padded
+batches when the export has that input and keeps one utterance per call
+otherwise. Only its plumbing is checked so far, with a stand-in model
+whose output depends on the same frame alone (three recordings of
+different lengths, batched and single, identical); the evidence above is
+still owed for a real masked export.
 
 Contributing-model: fable-5.2

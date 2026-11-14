@@ -31,6 +31,9 @@ the fork's own terms in the [glossary](GLOSSARY.md).
 - A multi-utterance CTC decoder that admits, feeds, finishes, and cancels
   utterances individually while batching scorer calls across them.
 
+The options exist in the C++ configuration and command-line programs only;
+the language bindings do not expose them yet.
+
 ## Known defect characterized, not fixed
 
 The [streaming CTC FST characterization test](sherpa-onnx/csrc/online-ctc-fst-decoder-test.cc)

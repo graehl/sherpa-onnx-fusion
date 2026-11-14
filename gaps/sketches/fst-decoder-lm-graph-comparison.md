@@ -18,6 +18,9 @@ decoders the same language model: `FasterDecoder` on a graph composed with
 it, prefix search fusing it as a scorer, with error rate and time for
 each.
 
+User-directed (graehl, 2026-11-14): leave this an intended experiment
+until a token-level LM contrast is finished and validated.
+
 ## Design notes
 
 - **A graph from the character n-gram.** Compile the KenLM character
@@ -31,6 +34,11 @@ each.
   approximation and report how often the two scores differ, or reduce the
   order until an exact expansion fits. An 8-gram is likely too large to
   compose; order 4 to 6 may be the practical limit.
+- **A graph from a token n-gram.** A model over the recognizer's own
+  tokens needs no lexicon (L is the identity), so the graph is H composed
+  with G and should be much smaller. A CTC recognizer with a token LM is
+  what this experiment needs. The prefix search fuses such a model with
+  `--scorer.unit=token`.
 - **What to hold equal.** Identical log probabilities to both decoders (the
   comparison program for the no-scorer case already does this), the same LM
   weight, and each decoder's beam chosen for equal error rate, then equal
