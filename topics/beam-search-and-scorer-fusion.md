@@ -59,6 +59,7 @@ on public models except where noted; details and limits are in
 
 | Goal | Result | Section |
 |---|---|---|
+| Correct CTC fusion search, sum or max, which the existing decoders could not do | Sum mode gives the same transcripts as an independent implementation of the same search on 200 of 200 decodes (a private check this repository cannot reproduce); max mode equals enumeration in unit tests and the greedy score on real clips | § Max-alignment mode |
 | CTC without a scorer as good and as cheap as the Kaldi `FasterDecoder` path | Both return the best alignment on 100 of 100 recordings; prefix search in max mode takes 3 to 23 µs per frame against 380 to 3200 µs | § Matching the existing decoders |
 | Reproduce offline `modified_beam_search` | Identical transcripts on 60 of 60 recordings, same time (real-time factor 0.048 both) | same |
 | Reproduce offline RNN-LM rescoring | Identical on 60 of 60 (the LM changes 6); real-time factor 0.064 against 0.076 | same |
@@ -146,9 +147,16 @@ as the cost of sharing code.
 
 ## Evidence: alignment summation and LM fusion
 
+These are measurements made with this fork's search. ER2 is a normalized
+error rate from a scorer outside this repository
+([glossary](../GLOSSARY.md)); every comparison below is between systems
+under that one scorer. Where a recognizer or language model is not public
+the text says so, and such a result cannot be reproduced from this
+repository.
+
 ### Recognizer path
 
-The agreement above feeds the search cached log probabilities. Through the
+Through the
 recognizers, with models loaded and no scorer, `prefix_beam_search` gave
 the same transcripts as the existing decoding methods on the models' own
 test recordings (2026-11-13, shared-library build, x86-64, int8 models):
@@ -224,6 +232,41 @@ costs more LM steps: real-time factor 0.17 against 0.08 on 16 recordings
 in one call. With `--scorer.rescore=true` the prefix search does the
 existing rescoring instead, at its cost (§ Matching the existing
 decoders).
+
+### Scorers over the recognizer's tokens
+
+A scorer may be trained on the recognizer's own tokens instead of
+characters (`--scorer.unit=token`). On the Vietnamese zipformer above
+(int8 encoder and joiner, fp32 prediction network), with a 4-gram over
+its 2000 tokens and a character 8-gram on the same text, neither of them
+public, at beam 4, weight 0.3 and word bonus 2 with one recording per
+call, the 857-clip test set reads (2026-11-14): greedy 5.53, no scorer
+5.45, character 8-gram 5.36, token 4-gram 5.31. The token model is better
+than no scorer (p = 0.05) and than greedy (p = 0.003), and not
+distinguishable from the character model (p = 0.26).
+
+Three things this exercise turned up:
+
+- **A token model's words must be resolved the way it was built.** A
+  model whose word for token 17 is `t17` needs `"id-prefix": "t"`;
+  before that option every token was unknown to the model, and fusion
+  made the test score much worse (8.43) without any error. A build of the
+  same model that numbers its words so that KenLM's own index is the
+  token ID plus one, used with `"index-offset": 1`, gives exactly the
+  first model's transcripts on all 340 validation clips. The intended
+  check is in the
+  [vocabulary compatibility sketch](../gaps/sketches/scorer-vocabulary-compatibility.md).
+- **The int8 prediction network of this model is worse.** With it instead
+  of the fp32 one, ER2 without a scorer on the 340 validation clips is
+  4.75 against 4.40. The earlier Vietnamese rows in § Fusion on a
+  transducer used the int8 file, so they are lower in absolute quality
+  than these; their comparisons are within one model.
+- **Batching changes this model's output.** Four recordings per call
+  against one gives identical transcripts on 307 of 340 with prefix search
+  and 317 of 340 with the existing greedy decoder, at the same error rate.
+  The cause is in how the model runs: its dynamically quantized encoder
+  takes value ranges from the whole batch, and padding is not fully masked
+  ([gap](../gaps/offline-batch-changes-transcripts.md)).
 
 ### Fusion on RNN-T and TDT
 
@@ -305,6 +348,14 @@ it, for all such prefixes in one call.
 
 ### Score-gap beam sweep
 
+The search drops a hypothesis whose score is more than a gap below the
+frame's best (`--score-beam`). The default of 12 comes from one sweep on
+40 clips of cached log probabilities, 20 Vietnamese and 20 Sinhala, from
+two CTC recognizers that are not public, at fixed fusion settings,
+comparing each gap's transcripts with the same search without a gap
+(2026-11-13). "Changed" counts clips out of 20; "kept" is hypotheses
+kept per frame.
+
 | Clips | Scorer, weight, word bonus | Beam | Largest gap that changed a transcript | Changed at 8 | Changed at 10 | Kept, no gap | Kept at 12 | Kept at 10 |
 |---|---|---:|---:|---:|---:|---:|---:|---:|
 | Vietnamese | none | 8 | 2 | 0 | 0 | 8.0 | 8.0 | 8.0 |
@@ -359,6 +410,14 @@ Median traced gap 3.4 and rank 5 in max mode, against 17.3 and 32 in sum
 mode, where the trace's values are upper bounds as described above.
 
 ### Sum versus max on a full test set
+
+Sum-over-alignments and max-alignment CTC search were run on the same
+cached log probabilities: 857 Vietnamese clips (FLEURS test) from a small
+CTC recognizer that is not public, with a character 8-gram (KenLM, weight
+0.8, word bonus 2) or a character LSTM (int8, weight 0.5, word bonus 2).
+Search time is the whole set, one thread, one run on an otherwise idle
+x86-64 host, model loading excluded (2026-11-13). "Max, no recombination"
+is max mode with recombination turned off.
 
 | Scorer | Beam | Score gap | ER2 sum | ER2 max | ER2 max, no recombination | Search s, sum | Search s, max | Kept per frame, sum | Kept per frame, max |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
