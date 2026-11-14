@@ -14,11 +14,17 @@ the fork's own terms in the [glossary](GLOSSARY.md).
 ## What the fork adds
 
 - `--decoding-method=prefix_beam_search` for offline and streaming CTC
-  models, offline stateless-decoder transducers (zipformer), and offline
-  NeMo RNN-T and TDT models. CTC can sum over alignments or take the best.
+  models, offline and streaming stateless-decoder transducers (zipformer),
+  and offline NeMo RNN-T and TDT models. CTC can sum over alignments or take
+  the best.
+- Settings that reproduce the existing decoders exactly:
+  `--modified-beam-search-rules` for `modified_beam_search`, and a scorer's
+  `rescore` option for RNN-LM rescoring. The topic's "Goals reached" table
+  has the measurements.
 - Scorers fused during the search, several at once with independent
   weights: a KenLM character n-gram (`-DSHERPA_ONNX_ENABLE_KENLM=ON`, off by
-  default because KenLM is LGPL) and an ONNX character LSTM or GRU.
+  default because KenLM is LGPL) and an ONNX LSTM or GRU over characters or
+  over the recognizer's tokens.
 - Scorer configuration on the command line (`--scorer.type=kenlm
   --scorer.model=lm.bin`, or `--scorer.N.<option>` for several) and from a
   JSON file ([option collections](topics/json-option-collections.md)).
