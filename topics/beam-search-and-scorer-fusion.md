@@ -36,6 +36,9 @@ everything is kept in the
 | Model run ahead of the search, offline CTC | `OfflineRecognizer::EncodeStreams` | § Inflight batching |
 | Streaming CTC recognizer | `online-ctc-prefix-beam-search-decoder.h` | search kept per stream |
 | Offline transducer recognizers | `offline-transducer-prefix-beam-search-decoder.h` | stateless and NeMo |
+| Streaming stateless-transducer recognizer | `online-transducer-prefix-beam-search-decoder.h` | search kept per segment |
+| Rescore-only mode for any scorer | `rescoring-scorer.h` (`--scorer.N.rescore`) | n-best rescoring |
+| `modified_beam_search` rules | `TransducerPrefixSearchOptions::prune_steps` (`--modified-beam-search-rules`) | § Transducers |
 | Multi-utterance CTC decoder | `ctc-inflight-decoder.h` | § Decoder lifecycle |
 | Survival trace | `ctc-prefix-search.h` (`trace_survival`) | § Score-gap beam sweep |
 
@@ -43,17 +46,41 @@ All of it is selected with `--decoding-method=prefix_beam_search`. Unit
 tests sit beside each file (`*-test.cc`); the searches are tested against
 enumeration of every alignment or path.
 
+### Goals reached, with measurements
+
+The aim is that the prefix search can do everything the existing decoders
+do, reproducing each of them with some setting, and adds model families,
+finer search budgets, and batching (graehl, 2026-11-14). Measured so far,
+on public models except where noted; details and limits are in
+§ Evidence.
+
+| Goal | Result | Section |
+|---|---|---|
+| CTC without a scorer as good and as cheap as the Kaldi `FasterDecoder` path | Both return the best alignment on 100 of 100 recordings; prefix search in max mode takes 3 to 23 µs per frame against 380 to 3200 µs | § Matching the existing decoders |
+| Reproduce offline `modified_beam_search` | Identical transcripts on 60 of 60 recordings, same time (real-time factor 0.048 both) | same |
+| Reproduce offline RNN-LM rescoring | Identical on 60 of 60 (the LM changes 6); real-time factor 0.064 against 0.076 | same |
+| Reproduce streaming `modified_beam_search` and its RNN-LM shallow fusion | Identical on 40 of 40 each (the LM changes 11); the fused run took 59 s against 309 s | same |
+| Better than the existing LM use on the same model and LM | Fusion during the search: ER2 4.11 against 4.39 for rescoring and 4.64 without an LM (p = 0.0008 and p < 0.0001) | § Fusion on a transducer |
+| Fusion on families that had none (NeMo RNN-T, TDT) | Russian TDT 8.29 to 7.67, RNN-T 4.54 to 4.37, with a small character n-gram | § Fusion on RNN-T and TDT |
+| Search budgets that mean what they say | In max mode the traced score gap plus a margin, or the traced rank, reproduces the result on 100 of 100 clips, and a gap just below it on none | § Score-gap beam sweep |
+| Correct streaming silence counts | Prefix search counts 2, 4, 6 where the FST decoder counts 2, 6, 12 | [gap](../gaps/streaming-ctc-trailing-blank-overcount.md) |
+
 ### Not built
 
-- Streaming transducer recognizers, and the recognizers' use of the
-  multi-utterance decoder (they batch within one decode call).
-- Token-unit scorers for `kenlm` and `onnx-rnn` (the search supports token
-  units; the scorers lack the recognizer's token table), and the existing
-  `OnlineRnnLM` as a scorer type.
+- The recognizers' use of the multi-utterance decoder (they batch within
+  one decode call); streams of one streaming-transducer call are searched
+  one after another.
+- Token-unit scoring for `kenlm`. `onnx-rnn` takes recognizer tokens
+  (`--scorer.unit=token`), which is the form of the RNN LMs the existing
+  fusion loads.
 - The early partial-score beam, `Next`-based candidate scoring, and the
   tuning traces other than survival.
-- Batched prediction-network calls for NeMo transducers (one hypothesis at
-  a time now), and scorer end-of-input calls batched across utterances.
+- Batched prediction-network calls for NeMo transducers (the joiner is
+  batched; the prediction network runs one hypothesis at a time), and
+  end-of-input scoring across utterances outside the offline
+  stateless-transducer decoder.
+- End-of-input scores when streaming a transducer, so a rescore-only
+  scorer has no effect there; streaming NeMo transducers.
 - Byte-BPE token tables, join-marker conventions the recognizer does not
   itself remove, and text normalization between recognizer and scorer.
 - The options in the language bindings
@@ -181,10 +208,93 @@ exposed:
   validation column shows they were equally good there.
 
 Decoding time through the binary was about 1.3 times greedy's with the
-scorer (measured under parallel load, so approximate). The RNN-T and TDT
-models have no language model in their languages on hand; fusion there is
-covered by the search's unit tests against enumeration and not yet by a
-real model with a scorer.
+scorer (measured under parallel load, so approximate).
+
+The same comparison with an LM the existing decoder can also use: the
+public English zipformer transducer (`sherpa-onnx-zipformer-en-2023-06-26`)
+and the public LibriSpeech RNN LM (three 2048-unit LSTM layers over the
+recognizer's 500 tokens), 600 recordings spread over LibriSpeech
+test-other, settings chosen on 300 from dev-other (2026-11-14):
+
+| Decoding | Test ER2 | Against |
+|---|---:|---|
+| greedy | 4.70 | |
+| `modified_beam_search`, beam 4 | 4.64 | |
+| the same with RNN-LM rescoring, scale 0.5 (existing) | 4.39 | −0.25 from no LM (p = 0.0004) |
+| prefix search with the LM fused, weight 0.3, token bonus 0.5 | 4.11 | −0.29 from rescoring (−0.48 to −0.11, p = 0.0008) |
+
+Fusing during the search is better than rescoring its survivors, and
+costs more LM steps: real-time factor 0.17 against 0.08 on 16 recordings
+in one call. With `--scorer.rescore=true` the prefix search does the
+existing rescoring instead, at its cost (§ Matching the existing
+decoders).
+
+### Fusion on RNN-T and TDT
+
+The existing NeMo transducer decoders have no LM support. Two public
+Russian-capable models, GigaAM v3 (RNN-T) and Parakeet TDT 0.6B v3, were
+run on FLEURS Russian with a character 6-gram built for this check from
+49 thousand Common Voice and FLEURS-train sentences as written (2.4 MB;
+no test or validation sentence in it). Weight and word bonus were chosen
+on the 349-clip validation split at beam 4; test is 743 clips
+(2026-11-13):
+
+| Model | Greedy | Prefix search, no scorer | Prefix search + 6-gram (0.2, bonus 1) |
+|---|---:|---:|---:|
+| GigaAM v3 RNN-T | 4.54 | 4.45 (p = 0.19) | 4.37 (−0.17, p = 0.03) |
+| Parakeet TDT v3 | 8.29 | 7.74 (−0.55, p < 0.0001) | 7.67 (−0.62, p < 0.0001) |
+
+On the TDT model most of the gain comes from the search itself, probably
+because it sums over the durations greedy commits to; the small LM adds
+little on top. A
+larger LM was not tried. These runs called the joiner once per
+hypothesis and took 3 to 4 times greedy's time under load; the joiner is
+now called once per round where the model allows (Parakeet's does,
+GigaAM's does not), which on four recordings roughly halved Parakeet's
+fused time with identical transcripts.
+
+### Matching the existing decoders
+
+**Kaldi `FasterDecoder`, CTC without a scorer.** A public NeMo CTC model
+(Citrinet-512, 1025 tokens), 100 FLEURS English recordings, 11,890
+frames; `FasterDecoder` on a plain CTC topology graph built for the test
+(one state per token), which is what the FST decoder runs when given no
+lexicon or LM; identical log probabilities to both (2026-11-13, one
+thread, loaded host):
+
+| Decoder | Limits | µs per frame | Same as best alignment |
+|---|---|---:|---:|
+| greedy | | 1.5 | |
+| `FasterDecoder` | max active 3000 (the recognizer's default), beam 16 | 3201 | 100 of 100 |
+| `FasterDecoder` | max active 8, beam 12 | 472 | 100 of 100 |
+| `FasterDecoder` | max active 4, beam 12 | 380 | 100 of 100 |
+| prefix search, max | beam 32, gap 16 | 22.9 | 100 of 100 |
+| prefix search, max | beam 8, gap 12 | 9.9 | 100 of 100 |
+| prefix search, max | beam 4, gap 12 | 4.7 | 100 of 100 |
+
+The graph has a million arcs, since every token can follow every other;
+a graph composed with a lexicon and LM is a different workload, and that
+comparison (this topic's § Max-alignment mode) is still open.
+
+**`modified_beam_search` and its LM uses.** With
+`--modified-beam-search-rules=true --score-beam=0`
+(§ Transducers), same models and LM as in § Fusion on a transducer, and
+the public streaming zipformer of the same date (2026-11-14):
+
+| Existing decoder | Matching setting | Identical transcripts | Time |
+|---|---|---:|---|
+| offline `modified_beam_search` | the rules alone | 60 of 60 | real-time factor 0.048 both |
+| offline RNN-LM rescoring, scale 0.5 | `onnx-rnn`, `unit=token`, `rescore=true`, weight 0.5 | 60 of 60 (LM changes 6) | 0.064 against 0.076 |
+| streaming `modified_beam_search` | the rules alone | 40 of 40 | 18.5 s against 16.2 s |
+| streaming RNN-LM shallow fusion, scale 0.3 | `onnx-rnn`, `unit=token`, `"score-end": false`, weight 0.3 | 40 of 40 (LM changes 11) | 59 s against 309 s |
+
+Without the rules option 1 to 4 transcripts in each set differ. The
+streaming fusion is faster because the scorer steps the LM once per
+surviving hypothesis in one batch and keeps each hypothesis's next-token
+distribution, where the existing code calls the LM per hypothesis. Times
+are single runs on a loaded host. The streaming LM file is the same
+weights exported in step form for this check; the existing decoder reads
+it with three metadata entries added.
 
 ### Score-gap beam sweep
 
@@ -235,6 +345,9 @@ the Vietnamese clips, max mode with the 8-gram and a beam of 32
 (2026-11-13): the traced gap plus 0.001 reproduced 297 results, the traced
 rank 299, and a gap 0.05 below the traced one only 3, so the traced gap is
 tight. Of the four misses examined, two found a higher-scoring result.
+With the traced search's beam raised to 400, which never bound (largest
+traced rank 234), 100 of 100 clips were reproduced by the traced gap plus
+0.001 and by the traced rank, and none by a gap 0.05 below.
 Median traced gap 3.4 and rank 5 in max mode, against 17.3 and 32 in sum
 mode, where the trace's values are upper bounds as described above.
 
@@ -334,6 +447,17 @@ transitions that leave the frame; a TDT blank that would not advance is
 treated as advancing one frame. Scorers, weights, length bonus, and both
 beams work as for CTC. Only summation is built for transducers; there is
 no max mode, recombination, or trace there yet.
+
+The one-symbol-per-frame search differs from the existing
+`modified_beam_search` in three ways, and `--modified-beam-search-rules`
+removes all three so that decoder is reproduced exactly. By default the
+search adds every step into its output first and keeps the best outputs;
+that decoder keeps the best single steps (a hypothesis and blank or one
+token) and combines equal outputs afterwards, so it can end a frame with
+fewer than its beam. It takes the unknown-word token as blank. It picks
+its result by score divided by length, with its leading context counted
+(`--length-normalize` alone). The default is the more exact sum; the
+option exists for equivalence.
 
 ### Max-alignment mode
 
@@ -795,9 +919,9 @@ complete first implementation of the lifecycle.
 
 ## Options
 
-`--decoding-method=prefix_beam_search` selects the search for offline CTC,
-streaming CTC, offline stateless-decoder transducer, and offline NeMo
-transducer models. The options are fields of `FusionConfig`
+`--decoding-method=prefix_beam_search` selects the search for offline and
+streaming CTC, offline and streaming stateless-decoder transducer, and
+offline NeMo transducer models. The options are fields of `FusionConfig`
 (`fusion-config.h`), a member of the recognizer configs, plus
 `--max-active-paths`:
 
@@ -811,6 +935,10 @@ transducer models. The options are fields of `FusionConfig`
 | `--length-bonus`, `--length-bonus-unit` | 0, `token` | Added to a prefix's score per token or per word |
 | `--ctc-alignment` | `sum` | CTC only: `sum` or `max` (§ Search semantics) |
 | `--scorer-text-case` | `keep` | `lower` gives character scorers lowercase text; the output keeps its case |
+| `--scorer.N.rescore` | false | Apply the scorer only to the hypotheses that survive the search |
+| `--scorer.N.unit` | `char` | `token` for a scorer trained on the recognizer's tokens (`onnx-rnn`) |
+| `--modified-beam-search-rules` | false | Stateless transducers: search exactly as `modified_beam_search` does |
+| `--length-normalize` | false | Transducers: rank results by score over output length |
 
 Scorer options and the JSON form are described in
 [option collections](json-option-collections.md). Giving a scorer with
