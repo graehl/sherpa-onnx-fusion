@@ -34,6 +34,7 @@ OnlineTransducerDecoderResult &OnlineTransducerDecoderResult::operator=(
 
   hyps = other.hyps;
   prefix_search = other.prefix_search;
+  prefix_segment = other.prefix_segment;
 
   frame_offset = other.frame_offset;
   timestamps = other.timestamps;
@@ -62,6 +63,7 @@ OnlineTransducerDecoderResult &OnlineTransducerDecoderResult::operator=(
   decoder_out = std::move(other.decoder_out);
   hyps = std::move(other.hyps);
   prefix_search = std::move(other.prefix_search);
+  prefix_segment = std::move(other.prefix_segment);
 
   frame_offset = other.frame_offset;
   timestamps = std::move(other.timestamps);

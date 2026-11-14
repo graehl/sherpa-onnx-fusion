@@ -12,6 +12,7 @@
 
 #include "sherpa-onnx/csrc/macros.h"
 #include "sherpa-onnx/csrc/math.h"
+#include "sherpa-onnx/csrc/nemo-transducer-prefix-segment.h"
 #include "sherpa-onnx/csrc/offline-ctc-prefix-beam-search-decoder.h"
 #include "sherpa-onnx/csrc/onnx-utils.h"
 
@@ -199,273 +200,33 @@ OfflineTransducerPrefixBeamSearchNeMoDecoder::
         OfflineTransducerNeMoModel *model, const FusionConfig &config,
         int32_t max_active, const SymbolTable &symbol_table,
         float blank_penalty)
-    : model_(model),
-      config_(config),
+    : config_(config),
       max_active_(max_active),
       fusion_(config, symbol_table, model->VocabSize() - 1, model->VocabSize()),
-      blank_penalty_(blank_penalty) {}
-
-namespace {
-
-// The prediction network's output and state after one hypothesis's tokens.
-struct Prediction {
-  uint32_t serial = 0;
-  bool valid = false;
-  Ort::Value decoder_out{nullptr};
-  std::vector<Ort::Value> states;
-};
-
-std::pair<Ort::Value, Ort::Value> TokenInput(int32_t token,
-                                             OrtAllocator *allocator) {
-  std::array<int64_t, 2> shape = {1, 1};
-  Ort::Value input =
-      Ort::Value::CreateTensor<int32_t>(allocator, shape.data(), shape.size());
-  std::array<int64_t, 1> length_shape = {1};
-  Ort::Value length = Ort::Value::CreateTensor<int32_t>(
-      allocator, length_shape.data(), length_shape.size());
-  input.GetTensorMutableData<int32_t>()[0] = token;
-  length.GetTensorMutableData<int32_t>()[0] = 1;
-  return {std::move(input), std::move(length)};
-}
-
-}  // namespace
-
-std::unique_ptr<TransducerPrefixSearch>
-OfflineTransducerPrefixBeamSearchNeMoDecoder::DecodeOne(
-    const float *encoder_out, int32_t num_frames, int32_t encoder_dim) const {
-  auto memory_info =
-      Ort::MemoryInfo::CreateCpu(OrtDeviceAllocator, OrtMemTypeDefault);
-  OrtAllocator *allocator = model_->Allocator();
-  int32_t vocab_size = model_->VocabSize();
-  int32_t blank_id = vocab_size - 1;
-  bool tdt = model_->IsTDT();
-
-  std::unique_ptr<TransducerPrefixSearch> search;
-  std::vector<Prediction> predictions;  // By hypothesis index.
-
-  // The prediction for a hypothesis: computed from its parent's on first
-  // use, which the search asks for only after the parent's own.
-  auto prediction_of = [&](uint32_t hypothesis) -> Prediction & {
-    if (predictions.size() <= hypothesis) predictions.resize(hypothesis + 1);
-    Prediction &prediction = predictions[hypothesis];
-    uint32_t serial = search->SerialOf(hypothesis);
-    if (prediction.valid && prediction.serial == serial) return prediction;
-
-    int32_t token = search->LastTokenOf(hypothesis);
-    std::vector<Ort::Value> states;
-    if (token < 0) {
-      token = blank_id;
-      states = model_->GetDecoderInitStates(1);
-    } else {
-      const Prediction &parent = predictions[search->ParentOf(hypothesis)];
-      for (const Ort::Value &state : parent.states) {
-        states.push_back(Clone(allocator, &state));
-      }
-    }
-    auto input = TokenInput(token, allocator);
-    auto output = model_->RunDecoder(
-        std::move(input.first), std::move(input.second), std::move(states));
-    prediction.serial = serial;
-    prediction.valid = true;
-    prediction.decoder_out = std::move(output.first);
-    prediction.states = std::move(output.second);
-    return prediction;
-  };
-
-  std::array<int64_t, 3> encoder_shape = {1, encoder_dim, 1};
-  int32_t num_durations = 0;
-  // Computes, in one prediction-network call, the predictions the frontier
-  // still lacks. Each new hypothesis's parent already has its own, since the
-  // search asked about the parent first.
-  auto predict_together = [&](const std::vector<uint32_t> &frontier) {
-    std::vector<uint32_t> missing;
-    for (uint32_t hypothesis : frontier) {
-      if (predictions.size() <= hypothesis) predictions.resize(hypothesis + 1);
-      const Prediction &prediction = predictions[hypothesis];
-      if (prediction.valid &&
-          prediction.serial == search->SerialOf(hypothesis)) {
-        continue;
-      }
-      // The empty prefix starts from the model's initial state: left to the
-      // one-at-a-time path.
-      if (search->LastTokenOf(hypothesis) < 0) continue;
-      missing.push_back(hypothesis);
-    }
-    auto num = static_cast<int32_t>(missing.size());
-    if (num < 2 || !decoder_batches_) return;
-
-    std::array<int64_t, 2> token_shape = {num, 1};
-    Ort::Value tokens = Ort::Value::CreateTensor<int32_t>(
-        allocator, token_shape.data(), token_shape.size());
-    std::array<int64_t, 1> length_shape = {num};
+      blank_penalty_(blank_penalty),
+      calls_(std::make_unique<NeMoTransducerCalls>()) {
+  calls_->run_decoder = [model](Ort::Value tokens,
+                                std::vector<Ort::Value> states) {
+    // Every hypothesis gives the network one token.
+    int64_t num = tokens.GetTensorTypeAndShapeInfo().GetShape()[0];
+    std::array<int64_t, 1> shape = {num};
     Ort::Value lengths = Ort::Value::CreateTensor<int32_t>(
-        allocator, length_shape.data(), length_shape.size());
-    const auto &first_states = predictions[search->ParentOf(missing[0])].states;
-    std::vector<Ort::Value> states;
-    std::vector<std::vector<int64_t>> state_shapes;
-    for (const Ort::Value &state : first_states) {
-      // [layers, 1, hidden] per hypothesis; [layers, num, hidden] together.
-      auto shape = state.GetTensorTypeAndShapeInfo().GetShape();
-      state_shapes.push_back(shape);
-      shape[1] = num;
-      states.push_back(Ort::Value::CreateTensor<float>(allocator, shape.data(),
-                                                       shape.size()));
-    }
-    for (int32_t i = 0; i != num; ++i) {
-      tokens.GetTensorMutableData<int32_t>()[i] =
-          search->LastTokenOf(missing[i]);
-      lengths.GetTensorMutableData<int32_t>()[i] = 1;
-      const auto &parent = predictions[search->ParentOf(missing[i])].states;
-      for (size_t k = 0; k != states.size(); ++k) {
-        int64_t layers = state_shapes[k][0], hidden = state_shapes[k][2];
-        const float *from = parent[k].GetTensorData<float>();
-        float *to = states[k].GetTensorMutableData<float>();
-        for (int64_t layer = 0; layer != layers; ++layer) {
-          std::copy(from + layer * hidden, from + (layer + 1) * hidden,
-                    to + (layer * num + i) * hidden);
-        }
-      }
-    }
-    std::pair<Ort::Value, std::vector<Ort::Value>> output{
-        Ort::Value{nullptr}, std::vector<Ort::Value>()};
-    try {
-      output = model_->RunDecoder(std::move(tokens), std::move(lengths),
-                                  std::move(states));
-    } catch (const Ort::Exception &) {
-      // Some exported prediction networks take one hypothesis per call.
-      decoder_batches_ = false;
-      return;
-    }
-    auto out_shape = output.first.GetTensorTypeAndShapeInfo().GetShape();
-    size_t out_size = 1;
-    for (size_t d = 1; d != out_shape.size(); ++d) out_size *= out_shape[d];
-    out_shape[0] = 1;
-    for (int32_t i = 0; i != num; ++i) {
-      Prediction &prediction = predictions[missing[i]];
-      prediction.serial = search->SerialOf(missing[i]);
-      prediction.valid = true;
-      prediction.decoder_out = Ort::Value::CreateTensor<float>(
-          allocator, out_shape.data(), out_shape.size());
-      const float *from = output.first.GetTensorData<float>() + i * out_size;
-      std::copy(from, from + out_size,
-                prediction.decoder_out.GetTensorMutableData<float>());
-      prediction.states.clear();
-      for (size_t k = 0; k != output.second.size(); ++k) {
-        int64_t layers = state_shapes[k][0], hidden = state_shapes[k][2];
-        Ort::Value one = Ort::Value::CreateTensor<float>(
-            allocator, state_shapes[k].data(), state_shapes[k].size());
-        const float *all = output.second[k].GetTensorData<float>();
-        float *to = one.GetTensorMutableData<float>();
-        for (int64_t layer = 0; layer != layers; ++layer) {
-          std::copy(all + (layer * num + i) * hidden,
-                    all + (layer * num + i + 1) * hidden, to + layer * hidden);
-        }
-        prediction.states.push_back(std::move(one));
-      }
-    }
+        model->Allocator(), shape.data(), shape.size());
+    std::fill_n(lengths.GetTensorMutableData<int32_t>(), num, 1);
+    return model->RunDecoder(std::move(tokens), std::move(lengths),
+                             std::move(states));
   };
-
-  // One joiner call for "count" hypotheses of the frontier from "first": the
-  // frame repeated beside each hypothesis's prediction.
-  auto join = [&](int32_t frame, const std::vector<uint32_t> &frontier,
-                  int32_t first, int32_t count, std::vector<float> *log_probs,
-                  std::vector<float> *durations) {
-    const float *frame_data =
-        encoder_out + static_cast<size_t>(frame) * encoder_dim;
-    std::array<int64_t, 3> encoder_batch_shape = {count, encoder_dim, 1};
-    Ort::Value encoder_frames = Ort::Value::CreateTensor<float>(
-        allocator, encoder_batch_shape.data(), encoder_batch_shape.size());
-    float *p_encoder = encoder_frames.GetTensorMutableData<float>();
-    Ort::Value decoder_outs{nullptr};
-    float *p_decoder = nullptr;
-    size_t decoder_size = 0;
-    for (int32_t i = 0; i != count; ++i) {
-      std::copy(frame_data, frame_data + encoder_dim,
-                p_encoder + static_cast<size_t>(i) * encoder_dim);
-      Prediction &prediction = prediction_of(frontier[first + i]);
-      if (i == 0) {
-        auto shape =
-            prediction.decoder_out.GetTensorTypeAndShapeInfo().GetShape();
-        decoder_size = 1;
-        for (int64_t d : shape) decoder_size *= static_cast<size_t>(d);
-        shape[0] = count;
-        decoder_outs = Ort::Value::CreateTensor<float>(allocator, shape.data(),
-                                                       shape.size());
-        p_decoder = decoder_outs.GetTensorMutableData<float>();
-      }
-      const float *one = prediction.decoder_out.GetTensorData<float>();
-      std::copy(one, one + decoder_size, p_decoder + i * decoder_size);
-    }
-    Ort::Value logits =
-        model_->RunJoiner(std::move(encoder_frames), std::move(decoder_outs));
-    float *p_logits = logits.GetTensorMutableData<float>();
-    size_t output_size = vocab_size + (tdt ? num_durations : 0);
-    for (int32_t i = 0; i != count; ++i) {
-      float *p_logit = p_logits + i * output_size;
-      if (blank_penalty_ > 0) p_logit[blank_id] -= blank_penalty_;
-      LogSoftmax(p_logit, vocab_size);
-      log_probs->insert(log_probs->end(), p_logit, p_logit + vocab_size);
-      if (tdt) {
-        LogSoftmax(p_logit + vocab_size, num_durations);
-        durations->insert(durations->end(), p_logit + vocab_size,
-                          p_logit + vocab_size + num_durations);
-      }
-    }
+  calls_->run_joiner = [model](Ort::Value encoder_out, Ort::Value decoder_out) {
+    return model->RunJoiner(std::move(encoder_out), std::move(decoder_out));
   };
-
-  auto run_model = [&](int32_t frame, const std::vector<uint32_t> &frontier,
-                       std::vector<float> *log_probs,
-                       std::vector<float> *durations) {
-    auto num = static_cast<int32_t>(frontier.size());
-    predict_together(frontier);
-    if (num > 1 && joiner_batches_) {
-      try {
-        join(frame, frontier, 0, num, log_probs, durations);
-        return;
-      } catch (const Ort::Exception &) {
-        // Some exported joiners accept one hypothesis per call only.
-        joiner_batches_ = false;
-        log_probs->clear();
-        durations->clear();
-      }
-    }
-    for (int32_t i = 0; i != num; ++i) {
-      join(frame, frontier, i, 1, log_probs, durations);
-    }
-  };
-
-  TransducerPrefixSearchOptions options = MakeTransducerPrefixSearchOptions(
-      config_, max_active_,
-      tdt ? TransducerTopology::kTdt : TransducerTopology::kRnnt, 1);
-  if (tdt) {
-    // The joiner's output is the token logits followed by one logit per
-    // duration, from no advance up.
-    auto input = TokenInput(blank_id, allocator);
-    auto output =
-        model_->RunDecoder(std::move(input.first), std::move(input.second),
-                           model_->GetDecoderInitStates(1));
-    Ort::Value encoder_frame = Ort::Value::CreateTensor(
-        memory_info, const_cast<float *>(encoder_out), encoder_dim,
-        encoder_shape.data(), encoder_shape.size());
-    Ort::Value logit =
-        model_->RunJoiner(View(&encoder_frame), View(&output.first));
-    int32_t output_size = static_cast<int32_t>(
-        logit.GetTensorTypeAndShapeInfo().GetShape().back());
-    num_durations = output_size - vocab_size;
-    if (num_durations < 2 ||
-        num_durations > TransducerPrefixSearch::kMaxDuration + 1) {
-      SHERPA_ONNX_LOGE("Unsupported number of TDT durations: %d",
-                       num_durations);
-      SHERPA_ONNX_EXIT(-1);
-    }
-    options.max_duration = num_durations - 1;
-  }
-
-  search = fusion_.NewSearch(options);
-  DecodeTransducerFrames(search.get(), fusion_.Scorers(), num_frames,
-                         run_model);
-  return search;
+  calls_->init_states = [model]() { return model->GetDecoderInitStates(1); };
+  calls_->allocator = model->Allocator();
+  calls_->vocab_size = model->VocabSize();
+  calls_->tdt = model->IsTDT();
 }
+
+OfflineTransducerPrefixBeamSearchNeMoDecoder::
+    ~OfflineTransducerPrefixBeamSearchNeMoDecoder() = default;
 
 std::vector<OfflineTransducerDecoderResult>
 OfflineTransducerPrefixBeamSearchNeMoDecoder::Decode(
@@ -478,20 +239,22 @@ OfflineTransducerPrefixBeamSearchNeMoDecoder::Decode(
   const float *p = encoder_out.GetTensorData<float>();
 
   std::vector<OfflineTransducerDecoderResult> ans(batch_size);
-  std::vector<std::unique_ptr<TransducerPrefixSearch>> searches;
-  std::vector<TransducerPrefixSearch *> pointers;
+  std::vector<std::unique_ptr<NeMoTransducerPrefixSegment>> segments;
+  std::vector<TransducerPrefixSearch *> searches;
   std::vector<int32_t> utterance;
   for (int32_t b = 0; b != batch_size; ++b) {
     int32_t num_frames = static_cast<int32_t>(LengthAt(encoder_out_length, b));
     if (num_frames == 0) continue;
-    searches.push_back(
-        DecodeOne(p + static_cast<size_t>(b) * max_frames * encoder_dim,
-                  num_frames, encoder_dim));
-    pointers.push_back(searches.back().get());
+    segments.push_back(std::make_unique<NeMoTransducerPrefixSegment>(
+        calls_.get(), &fusion_, config_, max_active_, blank_penalty_));
+    segments.back()->Decode(
+        p + static_cast<size_t>(b) * max_frames * encoder_dim, num_frames,
+        encoder_dim);
+    searches.push_back(segments.back()->Search());
     utterance.push_back(b);
   }
   // The scorers' end-of-input calls serve the whole batch at once.
-  auto finished = TransducerPrefixSearch::FinishTogether(pointers, 1);
+  auto finished = TransducerPrefixSearch::FinishTogether(searches, 1);
   for (size_t i = 0; i != finished.size(); ++i) {
     ans[utterance[i]] = ToResult(std::move(finished[i]));
   }
