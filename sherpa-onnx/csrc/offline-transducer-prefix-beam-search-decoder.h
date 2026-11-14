@@ -5,6 +5,7 @@
 #ifndef SHERPA_ONNX_CSRC_OFFLINE_TRANSDUCER_PREFIX_BEAM_SEARCH_DECODER_H_
 #define SHERPA_ONNX_CSRC_OFFLINE_TRANSDUCER_PREFIX_BEAM_SEARCH_DECODER_H_
 
+#include <functional>
 #include <memory>
 #include <vector>
 
@@ -48,6 +49,19 @@ class TransducerFusion {
   std::vector<float> weights_;
 };
 
+// Fills the arrays TransducerPrefixSearch::Expand takes for the hypotheses
+// "frontier" at "frame": log_probs, and duration_log_probs for kTdt only.
+using TransducerRunModel = std::function<void(
+    int32_t frame, const std::vector<uint32_t> &frontier,
+    std::vector<float> *log_probs, std::vector<float> *duration_log_probs)>;
+
+// Advances "search" until it stands at frame "end_frame", running the model
+// and the scorers for each round.
+void DecodeTransducerFrames(TransducerPrefixSearch *search,
+                            const std::vector<Scorer *> &scorers,
+                            int32_t end_frame,
+                            const TransducerRunModel &run_model);
+
 // For transducers with a stateless decoder (zipformer and other icefall
 // models): blank or one token per frame, as modified_beam_search does. The
 // decoder and joiner run once per frame for all of an utterance's
@@ -74,7 +88,8 @@ class OfflineTransducerPrefixBeamSearchDecoder
 
 // For NeMo transducers: RNN-T, or token-and-duration when the model is one.
 // The prediction network is stateful; its output and state are kept per
-// hypothesis and computed one hypothesis at a time.
+// hypothesis and computed one hypothesis at a time. The joiner runs once
+// per round for all of an utterance's hypotheses where the model allows.
 class OfflineTransducerPrefixBeamSearchNeMoDecoder
     : public OfflineTransducerDecoder {
  public:
@@ -96,6 +111,9 @@ class OfflineTransducerPrefixBeamSearchNeMoDecoder
   int32_t max_active_;
   TransducerFusion fusion_;
   float blank_penalty_;
+  // Cleared the first time the model's joiner refuses several hypotheses in
+  // one call; they then go one at a time.
+  mutable bool joiner_batches_ = true;
 };
 
 }  // namespace sherpa_onnx
