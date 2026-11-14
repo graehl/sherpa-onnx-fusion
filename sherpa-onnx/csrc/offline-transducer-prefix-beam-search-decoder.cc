@@ -52,18 +52,13 @@ std::unique_ptr<TransducerPrefixSearch> TransducerFusion::NewSearch(
                                                   scorer_pointers_, weights_);
 }
 
-namespace {
-
-// Decodes one utterance of num_frames frames. For each round,
-// run_model(frame, frontier, &log_probs, &duration_log_probs) fills the
-// arrays Expand takes (duration_log_probs only for kTdt).
-template <class RunModel>
-void DecodeTransducerUtterance(TransducerPrefixSearch *search,
-                               const std::vector<Scorer *> &scorers,
-                               int32_t num_frames, RunModel run_model) {
+void DecodeTransducerFrames(TransducerPrefixSearch *search,
+                            const std::vector<Scorer *> &scorers,
+                            int32_t end_frame,
+                            const TransducerRunModel &run_model) {
   std::vector<float> log_probs;
   std::vector<float> duration_log_probs;
-  while (search->Frame() < num_frames) {
+  while (search->Frame() < end_frame) {
     do {
       log_probs.clear();
       duration_log_probs.clear();
@@ -77,6 +72,8 @@ void DecodeTransducerUtterance(TransducerPrefixSearch *search,
     search->EndFrame();
   }
 }
+
+namespace {
 
 OfflineTransducerDecoderResult ToResult(TransducerPrefixSearch *search) {
   OfflineTransducerDecoderResult result;
@@ -167,7 +164,7 @@ OfflineTransducerPrefixBeamSearchDecoder::Decode(
       LogSoftmax(p_logit, vocab_size, static_cast<int32_t>(num));
       log_probs->assign(p_logit, p_logit + num * vocab_size);
     };
-    DecodeTransducerUtterance(
+    DecodeTransducerFrames(
         search.get(), fusion_.Scorers(),
         static_cast<int32_t>(LengthAt(encoder_out_length, b)), run_model);
     ans[b] = ToResult(search.get());
@@ -255,19 +252,43 @@ OfflineTransducerPrefixBeamSearchNeMoDecoder::DecodeOne(
 
   std::array<int64_t, 3> encoder_shape = {1, encoder_dim, 1};
   int32_t num_durations = 0;
-  auto run_model = [&](int32_t frame, const std::vector<uint32_t> &frontier,
-                       std::vector<float> *log_probs,
-                       std::vector<float> *durations) {
-    Ort::Value encoder_frame = Ort::Value::CreateTensor(
-        memory_info,
-        const_cast<float *>(encoder_out) +
-            static_cast<size_t>(frame) * encoder_dim,
-        encoder_dim, encoder_shape.data(), encoder_shape.size());
-    for (uint32_t hypothesis : frontier) {
-      Prediction &prediction = prediction_of(hypothesis);
-      Ort::Value logit = model_->RunJoiner(View(&encoder_frame),
-                                           View(&prediction.decoder_out));
-      float *p_logit = logit.GetTensorMutableData<float>();
+  // One joiner call for "count" hypotheses of the frontier from "first": the
+  // frame repeated beside each hypothesis's prediction.
+  auto join = [&](int32_t frame, const std::vector<uint32_t> &frontier,
+                  int32_t first, int32_t count, std::vector<float> *log_probs,
+                  std::vector<float> *durations) {
+    const float *frame_data =
+        encoder_out + static_cast<size_t>(frame) * encoder_dim;
+    std::array<int64_t, 3> encoder_batch_shape = {count, encoder_dim, 1};
+    Ort::Value encoder_frames = Ort::Value::CreateTensor<float>(
+        allocator, encoder_batch_shape.data(), encoder_batch_shape.size());
+    float *p_encoder = encoder_frames.GetTensorMutableData<float>();
+    Ort::Value decoder_outs{nullptr};
+    float *p_decoder = nullptr;
+    size_t decoder_size = 0;
+    for (int32_t i = 0; i != count; ++i) {
+      std::copy(frame_data, frame_data + encoder_dim,
+                p_encoder + static_cast<size_t>(i) * encoder_dim);
+      Prediction &prediction = prediction_of(frontier[first + i]);
+      if (i == 0) {
+        auto shape =
+            prediction.decoder_out.GetTensorTypeAndShapeInfo().GetShape();
+        decoder_size = 1;
+        for (int64_t d : shape) decoder_size *= static_cast<size_t>(d);
+        shape[0] = count;
+        decoder_outs = Ort::Value::CreateTensor<float>(allocator, shape.data(),
+                                                       shape.size());
+        p_decoder = decoder_outs.GetTensorMutableData<float>();
+      }
+      const float *one = prediction.decoder_out.GetTensorData<float>();
+      std::copy(one, one + decoder_size, p_decoder + i * decoder_size);
+    }
+    Ort::Value logits =
+        model_->RunJoiner(std::move(encoder_frames), std::move(decoder_outs));
+    float *p_logits = logits.GetTensorMutableData<float>();
+    size_t output_size = vocab_size + (tdt ? num_durations : 0);
+    for (int32_t i = 0; i != count; ++i) {
+      float *p_logit = p_logits + i * output_size;
       if (blank_penalty_ > 0) p_logit[blank_id] -= blank_penalty_;
       LogSoftmax(p_logit, vocab_size);
       log_probs->insert(log_probs->end(), p_logit, p_logit + vocab_size);
@@ -276,6 +297,26 @@ OfflineTransducerPrefixBeamSearchNeMoDecoder::DecodeOne(
         durations->insert(durations->end(), p_logit + vocab_size,
                           p_logit + vocab_size + num_durations);
       }
+    }
+  };
+
+  auto run_model = [&](int32_t frame, const std::vector<uint32_t> &frontier,
+                       std::vector<float> *log_probs,
+                       std::vector<float> *durations) {
+    auto num = static_cast<int32_t>(frontier.size());
+    if (num > 1 && joiner_batches_) {
+      try {
+        join(frame, frontier, 0, num, log_probs, durations);
+        return;
+      } catch (const Ort::Exception &) {
+        // Some exported joiners accept one hypothesis per call only.
+        joiner_batches_ = false;
+        log_probs->clear();
+        durations->clear();
+      }
+    }
+    for (int32_t i = 0; i != num; ++i) {
+      join(frame, frontier, i, 1, log_probs, durations);
     }
   };
 
@@ -307,8 +348,8 @@ OfflineTransducerPrefixBeamSearchNeMoDecoder::DecodeOne(
   }
 
   search = fusion_.NewSearch(options);
-  DecodeTransducerUtterance(search.get(), fusion_.Scorers(), num_frames,
-                            run_model);
+  DecodeTransducerFrames(search.get(), fusion_.Scorers(), num_frames,
+                         run_model);
   return ToResult(search.get());
 }
 
