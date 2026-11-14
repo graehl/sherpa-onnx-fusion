@@ -1,0 +1,66 @@
+// sherpa-onnx/csrc/online-transducer-prefix-beam-search-decoder.h
+//
+// Copyright (c)  2026  graehl
+
+#ifndef SHERPA_ONNX_CSRC_ONLINE_TRANSDUCER_PREFIX_BEAM_SEARCH_DECODER_H_
+#define SHERPA_ONNX_CSRC_ONLINE_TRANSDUCER_PREFIX_BEAM_SEARCH_DECODER_H_
+
+#include <vector>
+
+#include "sherpa-onnx/csrc/fusion-config.h"
+#include "sherpa-onnx/csrc/offline-transducer-prefix-beam-search-decoder.h"
+#include "sherpa-onnx/csrc/online-transducer-decoder.h"
+#include "sherpa-onnx/csrc/online-transducer-model.h"
+#include "sherpa-onnx/csrc/symbol-table.h"
+
+namespace sherpa_onnx {
+
+// --decoding-method=prefix_beam_search for streaming transducers with a
+// stateless decoder: blank or one token per frame, as the streaming
+// modified_beam_search does, fused with the configured scorers. With one
+// token-unit scorer that is the existing shallow fusion.
+//
+// A segment's search lives in its result (prefix_search) and continues
+// across chunks; the recognizer's reset at an endpoint makes an empty
+// result, which starts a new search whose model context is the previous
+// segment's last tokens, as for the other decoders. A result after each
+// chunk is the search's best prefix so far. The scorers' end-of-input
+// scores are not applied, since this interface does not learn that input
+// has finished; a rescore-only scorer therefore has no effect here.
+class OnlineTransducerPrefixBeamSearchDecoder : public OnlineTransducerDecoder {
+ public:
+  // Throws std::runtime_error if a scorer cannot be created.
+  OnlineTransducerPrefixBeamSearchDecoder(OnlineTransducerModel *model,
+                                          const FusionConfig &config,
+                                          int32_t max_active,
+                                          const SymbolTable &symbol_table,
+                                          float blank_penalty)
+      : model_(model),
+        options_(MakeTransducerPrefixSearchOptions(
+            config, max_active, TransducerTopology::kOneSymbolPerFrame,
+            model->ContextSize())),
+        fusion_(config, symbol_table, 0, model->VocabSize()),
+        blank_penalty_(blank_penalty) {
+    options_.blank_like_token = UnknownTokenAsBlank(config, symbol_table);
+  }
+
+  OnlineTransducerDecoderResult GetEmptyResult() const override;
+
+  void StripLeadingBlanks(OnlineTransducerDecoderResult *r) const override;
+
+  void Decode(Ort::Value encoder_out,
+              std::vector<OnlineTransducerDecoderResult> *result) override;
+
+  void Decode(Ort::Value encoder_out, OnlineStream **ss,
+              std::vector<OnlineTransducerDecoderResult> *result) override;
+
+ private:
+  OnlineTransducerModel *model_;
+  TransducerPrefixSearchOptions options_;
+  TransducerFusion fusion_;
+  float blank_penalty_;
+};
+
+}  // namespace sherpa_onnx
+
+#endif  // SHERPA_ONNX_CSRC_ONLINE_TRANSDUCER_PREFIX_BEAM_SEARCH_DECODER_H_
