@@ -51,6 +51,9 @@ present and prints a warning describing the correct result.
 - [Static build aborts when a model loads (GCC 15)](gaps/static-onnxruntime-abort.md).
 - [Encoder-inclusive inflight scheduling](gaps/sketches/encoder-decoder-inflight-scheduling.md),
   deferred beyond the decoder's own inflight batching.
+- [Tuning fusion weights and bonuses from the search's own evidence](gaps/sketches/fusion-parameter-tuning.md).
+- [Prefix search against the FST decoder on a graph with an LM](gaps/sketches/fst-decoder-lm-graph-comparison.md).
+- [Checking that a token scorer and a recognizer share a vocabulary](gaps/sketches/scorer-vocabulary-compatibility.md).
 
 ## Relationship to upstream
 
