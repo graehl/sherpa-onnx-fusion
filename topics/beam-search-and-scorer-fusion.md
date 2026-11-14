@@ -61,6 +61,7 @@ on public models except where noted; details and limits are in
 |---|---|---|
 | Correct CTC fusion search, sum or max, which the existing decoders could not do | Sum mode gives the same transcripts as an independent implementation of the same search on 200 of 200 decodes (a private check this repository cannot reproduce); max mode equals enumeration in unit tests and the greedy score on real clips | § Max-alignment mode |
 | CTC without a scorer as good and as cheap as the Kaldi `FasterDecoder` path | Both return the best alignment on 100 of 100 recordings; prefix search in max mode takes 3 to 23 µs per frame against 380 to 3200 µs | § Matching the existing decoders |
+| A CTC n-gram or LSTM without a compiled graph, better than the graph released with the model | Public English zipformer CTC, 600 test-other recordings: k2-fsa's released 334 MB word-3-gram graph 5.39 WER; a 37 MB character 8-gram as a scorer 4.91 (p = 0.002); the public LSTM 4.45 (p < 0.0001) | § CTC with an LM: a compiled graph against scorers |
 | Reproduce offline `modified_beam_search` | Identical transcripts on 60 of 60 recordings, same time (real-time factor 0.048 both) | same |
 | Reproduce offline RNN-LM rescoring | Identical on 60 of 60 (the LM changes 6); real-time factor 0.064 against 0.076 | same |
 | Reproduce streaming `modified_beam_search` and its RNN-LM shallow fusion | Identical on 40 of 40 each (the LM changes 11); the fused run took 59 s against 309 s | same |
@@ -77,7 +78,6 @@ on public models except where noted; details and limits are in
 - The early partial-score beam, `Next`-based candidate scoring, and the
   tuning traces other than survival.
 - Streaming TDT (the streaming NeMo model class here is RNN-T only).
-- The `FasterDecoder` comparison on a graph with a lexicon and LM.
 - Byte-BPE token tables, join-marker conventions the recognizer does not
   itself remove, and text normalization between recognizer and scorer.
 - The options in the language bindings
@@ -268,6 +268,33 @@ Three things this exercise turned up:
   takes value ranges from the whole batch, and padding is not fully masked
   ([gap](../gaps/offline-batch-changes-transcripts.md)).
 
+### Fusion on a public CTC model
+
+NVIDIA's Vietnamese Parakeet CTC 0.6B (FastConformer, BPE tokens; the
+MatMul-only int8 export) through `sherpa-onnx-offline` with
+`--nemo-ctc-model`, one recording per call, two threads (2026-11-14). The
+prefix-search rows use beam 32 and sum alignment; the fused row adds a
+character 8-gram that is not public, given lowercase text, at weight 0.3
+and word bonus 2:
+
+| Decoding | FLEURS test (857) WER | FLEURS test ER2 | Dev ER2, clean (340) / noisy (340) / media (1,654) |
+|---|---:|---:|---|
+| greedy | 9.27 | 8.98 | 7.43 / 8.22 / 8.29 |
+| prefix search, no scorer | 9.09 | 8.81 | 7.29 / 8.07 / 8.17 |
+| prefix search + 8-gram | 6.61 | 6.62 | 5.23 / 5.96 / 7.11 |
+
+On the test set the 8-gram is −2.19 ER2 against the search without a
+scorer and greedy is +0.17 (paired bootstrap, p < 0.0001 each). The
+settings were chosen earlier on the dev sets with a private search and
+transferred unchanged. The 8-gram's text is Vietnamese Wikipedia,
+FineWeb-2, and transcripts or captions of GigaSpeech2, VietSpeech, VLSP
+2020 and YODAS2 with some private training transcripts, 29.5 million
+sentences, with sentences matching the test references removed. The
+recognizer trained on FLEURS, so its absolute scores there are flattered;
+the comparison between decodings is not affected. Upstream's graph
+decoder cannot run this model at all: it assumes blank is token 0, and
+NeMo models put it last.
+
 ### Fusion on RNN-T and TDT
 
 The existing NeMo transducer decoders have no LM support. Two public
@@ -314,8 +341,8 @@ thread, loaded host):
 | prefix search, max | beam 4, gap 12 | 4.7 | 100 of 100 |
 
 The graph has a million arcs, since every token can follow every other;
-a graph composed with a lexicon and LM is a different workload, and that
-comparison (this topic's § Max-alignment mode) is still open.
+a graph composed with a lexicon and LM is a different workload, measured
+in § CTC with an LM: a compiled graph against scorers.
 
 **`modified_beam_search` and its LM uses.** With
 `--modified-beam-search-rules=true --score-beam=0`
@@ -345,6 +372,60 @@ and runs the LM for one hypothesis per call as soon as a token is
 emitted, while the scorer keeps one state per output prefix, shared by
 reference, and runs the LM for a prefix only when a token is scored after
 it, for all such prefixes in one call.
+
+### CTC with an LM: a compiled graph against scorers
+
+The way k2-fsa sherpa-onnx gives a CTC model an n-gram is a decoding graph built
+ahead of time and passed as `--ctc.graph`; upstream's recipe (icefall's
+`local/prepare_lang_fst.py`) converts the ARPA file with backoff as epsilon
+arcs and composes it with a lexicon and the CTC topology. This was run
+against the prefix search on the public English zipformer CTC model
+(`sherpa-onnx-zipformer-ctc-en-2023-10-02`, 500 BPE tokens), which is released
+with upstream's own graph of a word 3-gram. 600 LibriSpeech test-other
+recordings, one per call, two threads, fp32 (2026-11-14):
+
+| Decoder | Language model | LM on disk | WER | Decode s |
+|---|---|---:|---:|---:|
+| greedy | | | 5.63 | 85 |
+| prefix search, best alignment, beam 8 | none | | 5.63 | 77 |
+| graph decoder | character 3-gram, compiled | 417 MB | 5.58 | 164 |
+| prefix search | the same character 3-gram | 30 KB | 5.59 | 82 |
+| graph decoder | word 3-gram, the graph released with the model | 334 MB | 5.39 | 96 |
+| prefix search | character 6-gram | 6 MB | 5.06 | 82 |
+| prefix search | character 8-gram | 37 MB | 4.91 | 82 |
+| prefix search | character 6-gram, ten times the text | 12 MB | 5.04 | 119 |
+| prefix search | character 8-gram, ten times the text | 103 MB | 4.87 | 103 |
+| prefix search, sum, beam 4 | public LibriSpeech RNN LM (LSTM over the same 500 tokens) | 388 MB | 4.45 | 534 |
+
+Against the released graph, by paired bootstrap over recordings (10,000
+resamples): the 37 MB 8-gram is −0.49 WER (95% interval −0.79 to −0.18,
+p = 0.002), the 103 MB one −0.52 (p = 0.0006), and the LSTM −0.95
+(p < 0.0001); the LSTM is −0.42 against the larger 8-gram (p < 0.0001).
+The released graph's own gain over greedy, −0.23, is not significant on
+these recordings (p = 0.20).
+
+- **The character LMs** are modified Kneser-Ney models from KenLM on the
+  public LibriSpeech LM text, a tenth of it or all of it, one LM word per
+  character. Weights were chosen on 300 dev-other recordings (0.2 for the
+  3-gram, 0.35 for the rest, no word bonus; LSTM weight 0.5 with token
+  bonus 0.5, the edge of the grid tried). The graph decoder has no LM
+  scale, so the 3-gram's weight is baked into its graph.
+- **The same LM compiled or queried scores the same.** On a bigram whose
+  backoff can never beat an explicit entry, the graph decoder and the
+  prefix search return the same transcript on 12 of 12 recordings with best
+  scores within 0.002, once the graph decoder's beam is 32; where backoff
+  can win, the graph takes the cheaper path and its scores are higher.
+- **What the graph costs.** Its lexicon here spells each of the 500 tokens
+  as characters, and the result for a trigram is 26.8 million arcs. The
+  6-gram's graph did not finish within 24 GB and an hour. The recipe's
+  final determinization of the whole graph was skipped: in the one attempt
+  made, on an earlier build, it passed 100 GB.
+- **Limits.** One recognizer and 600 of 2,939 recordings. Decode seconds
+  are summed over calls on a loaded host. A word LM compiles far more
+  compactly than a character LM under a subword recognizer, which is why
+  the released graph uses one; a graph LM pruned with a method that prunes
+  well was not tried. The graph decoder assumes blank is token 0, so it
+  cannot run NeMo CTC models.
 
 ### Score-gap beam sweep
 

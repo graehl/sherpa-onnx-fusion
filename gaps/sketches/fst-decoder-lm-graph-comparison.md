@@ -21,6 +21,15 @@ each.
 User-directed (graehl, 2026-11-14): leave this an intended experiment
 until a token-level LM contrast is finished and validated.
 
+## Status (2026-11-14)
+
+Run for a character LM on the public English zipformer CTC model; the
+result is in the fusion topic, § CTC with an LM: a compiled graph against
+scorers. Not done: a graph from a token n-gram; a graph LM pruned with a
+method that prunes well (Katz or Witten-Bell with entropy pruning) at a
+matched size; per-frame time on identical log probabilities on an idle
+host; the whole test sets.
+
 ## Design notes
 
 - **A graph from the character n-gram.** Compile the KenLM character
