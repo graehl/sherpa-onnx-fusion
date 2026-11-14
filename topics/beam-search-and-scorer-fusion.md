@@ -75,12 +75,8 @@ on public models except where noted; details and limits are in
   fusion loads.
 - The early partial-score beam, `Next`-based candidate scoring, and the
   tuning traces other than survival.
-- Batched prediction-network calls for NeMo transducers (the joiner is
-  batched; the prediction network runs one hypothesis at a time), and
-  end-of-input scoring across utterances outside the offline
-  stateless-transducer decoder.
-- End-of-input scores when streaming a transducer, so a rescore-only
-  scorer has no effect there; streaming NeMo transducers.
+- Streaming NeMo transducers.
+- The `FasterDecoder` comparison on a graph with a lexicon and LM.
 - Byte-BPE token tables, join-marker conventions the recognizer does not
   itself remove, and text normalization between recognizer and scorer.
 - The options in the language bindings
@@ -247,11 +243,13 @@ on the 349-clip validation split at beam 4; test is 743 clips
 On the TDT model most of the gain comes from the search itself, probably
 because it sums over the durations greedy commits to; the small LM adds
 little on top. A
-larger LM was not tried. These runs called the joiner once per
-hypothesis and took 3 to 4 times greedy's time under load; the joiner is
-now called once per round where the model allows (Parakeet's does,
-GigaAM's does not), which on four recordings roughly halved Parakeet's
-fused time with identical transcripts.
+larger LM was not tried. These runs called the joiner and the prediction
+network once per hypothesis and took 3 to 4 times greedy's time under
+load. Both are now called once per round for the hypotheses that need
+them, where the model allows several per call (Parakeet's joiner does,
+GigaAM's does not). On four recordings, with identical transcripts, the
+fused search then took 1.8 times greedy's time on the TDT model and 2.4
+times on the RNN-T model.
 
 ### Matching the existing decoders
 
@@ -295,6 +293,15 @@ distribution, where the existing code calls the LM per hypothesis. Times
 are single runs on a loaded host. The streaming LM file is the same
 weights exported in step form for this check; the existing decoder reads
 it with three metadata entries added.
+
+Identical transcripts mean the two searches made the same choices, so the
+streaming speedup is not a different pruning. Where it comes from was not
+measured apart; the differences in the code are that the existing decoder
+copies each kept hypothesis's LM state and next-token scores every frame
+and runs the LM for one hypothesis per call as soon as a token is
+emitted, while the scorer keeps one state per output prefix, shared by
+reference, and runs the LM for a prefix only when a token is scored after
+it, for all such prefixes in one call.
 
 ### Score-gap beam sweep
 
