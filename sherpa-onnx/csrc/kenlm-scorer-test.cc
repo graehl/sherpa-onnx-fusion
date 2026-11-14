@@ -131,6 +131,25 @@ TEST_F(KenLmScorerTest, TokenUnitsUseTheTokenTablesSymbols) {
   EXPECT_EQ(by_id->Info().unit, ScorerUnit::kAsrToken);
   auto ids = Scores(by_id.get(), {2}, &state);
   EXPECT_FLOAT_EQ(ids[0], beyond[0]);
+
+  // A model whose words are "t" and an ID: with the prefix and an offset
+  // of 10, tokens 1 and 2 are "t11" and "t12".
+  std::string ids_arpa = ::testing::TempDir() + "kenlm-scorer-test-ids.arpa";
+  {
+    std::ofstream os(ids_arpa);
+    os << "\\data\\\nngram 1=5\nngram 2=2\n\n\\1-grams:\n-1.0\t<unk>\n"
+          "-99\t<s>\t-0.5\n-0.7\t</s>\n-0.6\tt11\t-0.3\n-0.8\tt12\t-0.2\n\n"
+          "\\2-grams:\n-0.2\t<s> t11\n-0.1\tt11 t12\n\n\\end\\\n";
+  }
+  CommonScorerOptions common;
+  common.model = ids_arpa;
+  common.unit = "token";
+  auto prefixed = MakeKenLmScorerFactory()->Create(
+      common, "{\"id-prefix\": \"t\", \"id-offset\": 10}");
+  auto by_prefix = Scores(prefixed.get(), {1, 2}, &state);
+  EXPECT_NEAR(by_prefix[0], -0.2f * kLn10, 1e-5);
+  EXPECT_NEAR(by_prefix[1], -0.1f * kLn10, 1e-5);
+  std::remove(ids_arpa.c_str());
 }
 
 TEST_F(KenLmScorerTest, UnknownCharacterScoresAsUnk) {
