@@ -6,6 +6,7 @@
 
 #include <array>
 #include <cmath>
+#include <fstream>
 #include <limits>
 #include <memory>
 #include <random>
@@ -192,6 +193,65 @@ TEST(OfflineCtcPrefixBeamSearchDecoder, PaddedFramesAreNeverRead) {
       }
     }
   }
+}
+
+// --ctc-prior: the search on frames given offsets equals the search on
+// frames with weight * log prior already subtracted from the listed tokens,
+// blank and unlisted tokens left alone.
+TEST(OfflineCtcPrefixBeamSearchDecoder, CtcPriorShiftsListedTokensEachFrame) {
+  std::string filename = ::testing::TempDir() + "/ctc-prior-test.txt";
+  {
+    std::ofstream out(filename);
+    // Blank's entry is ignored; token 3 is unlisted.
+    out << "0 -0.1\n1 -0.5\n\n2 -3.0\n5 -6.0\n";
+  }
+  const float weight = 0.5f;
+  SymbolTable symbol_table(kTokens, false);
+  auto vocabulary = MakeCtcSearchVocabulary(symbol_table, 0);
+  const int32_t num_frames = 12, max_active = 4;
+  int32_t changed = 0;
+  for (const char *alignment : {"sum", "max"}) {
+    for (uint32_t seed = 1; seed != 9; ++seed) {
+      auto log_probs = RandomLogProbs(1, num_frames, seed);
+      auto shifted = log_probs;
+      const float log_priors[kVocabSize] = {0, -0.5f, -3.0f, 0, 0, -6.0f};
+      for (int32_t t = 0; t != num_frames; ++t) {
+        for (int32_t v = 1; v != kVocabSize; ++v) {
+          shifted[t * kVocabSize + v] -= weight * log_priors[v];
+        }
+      }
+
+      FusionConfig config;
+      config.ctc_alignment = alignment;
+      auto decode = [&](const std::vector<float> &frames) {
+        CtcPrefixSearch search(MakeCtcPrefixSearchOptions(config, max_active),
+                               vocabulary, {}, {});
+        search.Decode(frames.data(), num_frames);
+        return search.Finish(1)[0];
+      };
+      auto plain = decode(log_probs);
+      auto expected = decode(shifted);
+      config.ctc_prior = filename;
+      config.ctc_prior_weight = weight;
+      auto with_prior = decode(log_probs);
+      EXPECT_EQ(with_prior.tokens, expected.tokens) << alignment << seed;
+      EXPECT_NEAR(with_prior.score, expected.score, 1e-4f) << alignment << seed;
+      changed += with_prior.tokens != plain.tokens;
+
+      config.ctc_prior_weight = 0;
+      EXPECT_EQ(decode(log_probs).tokens, plain.tokens);
+    }
+  }
+  // The prior is strong enough to change some results, so the test can fail.
+  EXPECT_GT(changed, 0);
+
+  EXPECT_THROW(LoadCtcPriorOffsets(filename + ".absent", 1.0f),
+               std::runtime_error);
+  {
+    std::ofstream out(filename);
+    out << "1 0.5\n";  // A log prior above 0.
+  }
+  EXPECT_THROW(LoadCtcPriorOffsets(filename, 1.0f), std::runtime_error);
 }
 
 TEST(OfflineCtcPrefixBeamSearchDecoder, UnknownScorerTypeIsAnError) {

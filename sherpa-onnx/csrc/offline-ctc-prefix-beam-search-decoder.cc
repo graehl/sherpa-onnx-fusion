@@ -5,12 +5,16 @@
 #include "sherpa-onnx/csrc/offline-ctc-prefix-beam-search-decoder.h"
 
 #include <algorithm>
+#include <cmath>
+#include <fstream>
 #include <memory>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include "sherpa-onnx/csrc/file-utils.h"
 #include "sherpa-onnx/csrc/macros.h"
 #include "sherpa-onnx/csrc/text-utils.h"
 
@@ -67,9 +71,42 @@ std::shared_ptr<CtcSearchVocabulary> MakeCtcSearchVocabulary(
   return vocabulary;
 }
 
+std::shared_ptr<const std::vector<float>> LoadCtcPriorOffsets(
+    const std::string &filename, float weight) {
+  std::ifstream in = OpenInputFile(filename);
+  if (!in.is_open()) {
+    throw std::runtime_error("--ctc-prior: cannot open '" + filename + "'");
+  }
+  auto offsets = std::make_shared<std::vector<float>>();
+  std::string line;
+  int32_t line_number = 0;
+  while (std::getline(in, line)) {
+    ++line_number;
+    if (line.find_first_not_of(" \t\r") == std::string::npos) continue;
+    std::istringstream fields(line);
+    int32_t id = -1;
+    float log_prior = 0;
+    std::string rest;
+    if (!(fields >> id >> log_prior) || (fields >> rest) || id < 0 ||
+        !std::isfinite(log_prior) || log_prior > 0) {
+      throw std::runtime_error(
+          "--ctc-prior: '" + filename + "' line " +
+          std::to_string(line_number) +
+          " is not a token ID and a log prior (at most 0): " + line);
+    }
+    if (static_cast<size_t>(id) >= offsets->size()) offsets->resize(id + 1);
+    (*offsets)[id] = -weight * log_prior;
+  }
+  return offsets;
+}
+
 CtcPrefixSearchOptions MakeCtcPrefixSearchOptions(const FusionConfig &config,
                                                   int32_t max_active) {
   CtcPrefixSearchOptions options;
+  if (!config.ctc_prior.empty() && config.ctc_prior_weight != 0) {
+    options.token_offsets =
+        LoadCtcPriorOffsets(config.ctc_prior, config.ctc_prior_weight);
+  }
   options.alignment = config.ctc_alignment == "max" ? CtcAlignmentMode::kMax
                                                     : CtcAlignmentMode::kSum;
   options.max_active = max_active;

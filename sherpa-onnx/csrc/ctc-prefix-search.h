@@ -58,6 +58,11 @@ struct CtcPrefixSearchOptions {
   float length_bonus = 0;
   LengthBonusUnit length_bonus_unit = LengthBonusUnit::kToken;
 
+  // Optional. Entry i is added to token i's log probability in every frame,
+  // before candidates are chosen; blank's entry and tokens past the end
+  // get nothing. A label-prior correction is -weight * log prior here.
+  std::shared_ptr<const std::vector<float>> token_offsets;
+
   // The character a character scorer is given between words.
   UnitId word_boundary_char = ' ';
 
@@ -196,6 +201,8 @@ class CtcPrefixSearch {
   std::vector<uint32_t> touched_;
   std::vector<float> touched_scores_;
   std::vector<int32_t> candidates_;
+  // The frame with CtcPrefixSearchOptions::token_offsets added.
+  std::vector<float> offset_frame_;
   // KeepUndominated's scratch.
   std::vector<uint32_t> kept_, dropped_, future_heads_, future_chain_;
 };

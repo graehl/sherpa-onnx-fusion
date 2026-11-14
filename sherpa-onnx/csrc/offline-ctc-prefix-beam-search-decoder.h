@@ -6,6 +6,7 @@
 #define SHERPA_ONNX_CSRC_OFFLINE_CTC_PREFIX_BEAM_SEARCH_DECODER_H_
 
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "sherpa-onnx/csrc/ctc-prefix-search.h"
@@ -37,7 +38,14 @@ inline bool ScorersWantLowercase(const FusionConfig &config) {
   return config.scorer_text_case == "lower";
 }
 
+// What CtcPrefixSearchOptions::token_offsets takes for --ctc-prior: for each
+// "token-id log-prior" line of the file, -weight * log prior at that ID.
+// Throws std::runtime_error for a file it cannot read as that.
+std::shared_ptr<const std::vector<float>> LoadCtcPriorOffsets(
+    const std::string &filename, float weight);
+
 // The search options a validated configuration and a hypothesis beam describe.
+// Reads config.ctc_prior when it is set.
 CtcPrefixSearchOptions MakeCtcPrefixSearchOptions(const FusionConfig &config,
                                                   int32_t max_active);
 
