@@ -83,6 +83,23 @@ known for any weights without decoding again. Then:
   whether a setting should be recorded with the search rule it was fit
   under.
 
+## A parameter to include: subtracting a transcript LM
+
+User-directed (graehl, 2026-11-14): when the recognizer's decoder is itself
+LM-like, as an RNN-T's prediction network is, include in the deployment
+sweeps the option of subtracting an estimate of the LM it learned from its
+training transcripts while adding the external one. Upstream's form of
+this is LODR, a bigram over the recognizer's tokens applied with a negative
+scale inside `modified_beam_search`. graehl doubts that removing the
+transcript-LM component helps and wants it measured in case it does.
+
+Here it would be a second scorer over tokens with a negative weight, fit
+together with the external LM's weight. The option parser accepts any
+weight today; nothing has been run with a negative one, and a negative
+weight makes a prefix's score rise as it is extended, which the beams and
+the survival trace were not designed around. Check that first on a few
+recordings. It applies to transducers; a CTC model has no such component.
+
 ## Completion evidence
 
 On one model and scorer, weights and bonus fit from one or two decodes
