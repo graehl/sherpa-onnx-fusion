@@ -26,6 +26,9 @@ namespace sherpa_onnx {
 //     (defaults 0 and empty; for example "t17" with "id-prefix": "t"). Each
 //     word is resolved the first time its token is scored. Nothing checks
 //     that the model and the recognizer mean the same tokens by those IDs.
+//   "index-offset": N. The model was built so that KenLM's own index of
+//     token t's word is t + N; no word is looked up by its spelling. The
+//     builder must have verified that numbering.
 // A token the model lacks is its <unk>.
 //
 // The state is KenLM's own n-gram state, so hypotheses that reach the same

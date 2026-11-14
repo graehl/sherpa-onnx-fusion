@@ -886,6 +886,7 @@ if(SHERPA_ONNX_ENABLE_TESTS)
     online-recognizer-result-test.cc
     online-recognizer-transducer-impl-test.cc
     recognizer-result-json-test.cc
+    nemo-transducer-prefix-segment-test.cc
     recurrent-lm-scorer-test.cc
     rescoring-scorer-test.cc
     regex-lang-test.cc

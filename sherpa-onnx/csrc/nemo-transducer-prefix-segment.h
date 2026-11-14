@@ -5,6 +5,7 @@
 #ifndef SHERPA_ONNX_CSRC_NEMO_TRANSDUCER_PREFIX_SEGMENT_H_
 #define SHERPA_ONNX_CSRC_NEMO_TRANSDUCER_PREFIX_SEGMENT_H_
 
+#include <atomic>
 #include <functional>
 #include <memory>
 #include <utility>
@@ -36,8 +37,8 @@ struct NeMoTransducerCalls {
   bool tdt = false;
   // Cleared the first time the model refuses several hypotheses in one
   // call; they then go one at a time.
-  bool joiner_batches = true;
-  bool decoder_batches = true;
+  std::atomic<bool> joiner_batches{true};
+  std::atomic<bool> decoder_batches{true};
 };
 
 // One utterance's, or one streaming segment's, prefix search on a NeMo
