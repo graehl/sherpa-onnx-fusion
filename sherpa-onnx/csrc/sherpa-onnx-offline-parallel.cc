@@ -8,6 +8,8 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <condition_variable>  // NOLINT
+#include <deque>
 #include <fstream>
 #include <functional>
 #include <map>
@@ -193,20 +195,99 @@ class OrderedOutput {
   int32_t next_index_ = 0;
 };
 
-// Decodes the given wave files as one batch.
+// The wave files of one batch and their streams
+struct Batch {
+  std::vector<Utterance> utterances;
+  // streams[i] is nullptr if utterances[i] cannot be read
+  std::vector<std::unique_ptr<sherpa_onnx::OfflineStream>> streams;
+
+  // The streams that exist
+  std::vector<sherpa_onnx::OfflineStream *> Readable() const {
+    std::vector<sherpa_onnx::OfflineStream *> ans;
+    for (const auto &s : streams) {
+      if (s) ans.push_back(s.get());
+    }
+    return ans;
+  }
+};
+
+// Batches whose model output waits for a search thread. It holds at most
+// "capacity" batches: Push blocks while it is full, so the threads that run
+// the model cannot get far ahead of the search.
+class BatchQueue {
+ public:
+  explicit BatchQueue(size_t capacity) : capacity_(capacity) {}
+
+  void Push(Batch batch) {
+    std::unique_lock<std::mutex> lock(mutex_);
+    if (batches_.size() >= capacity_) ++num_full_;
+    not_full_.wait(lock, [this]() { return batches_.size() < capacity_; });
+    batches_.push_back(std::move(batch));
+    most_waiting_ = std::max(most_waiting_, batches_.size());
+    not_empty_.notify_one();
+  }
+
+  // For reporting once the threads have finished: the most batches that
+  // waited at once, and how many times Push found the queue full.
+  size_t MostWaiting() const { return most_waiting_; }
+  int32_t NumFull() const { return num_full_; }
+
+  // Returns false once the queue is closed and empty.
+  bool Pop(Batch *batch) {
+    std::unique_lock<std::mutex> lock(mutex_);
+    not_empty_.wait(lock, [this]() { return closed_ || !batches_.empty(); });
+    if (batches_.empty()) return false;
+    *batch = std::move(batches_.front());
+    batches_.pop_front();
+    not_full_.notify_one();
+    return true;
+  }
+
+  // No Push follows.
+  void Close() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    closed_ = true;
+    not_empty_.notify_all();
+  }
+
+ private:
+  size_t capacity_;
+  std::mutex mutex_;
+  std::condition_variable not_full_;
+  std::condition_variable not_empty_;
+  std::deque<Batch> batches_;
+  bool closed_ = false;
+  size_t most_waiting_ = 0;
+  int32_t num_full_ = 0;
+};
+
+// What the threads add up; guarded by mtx.
+struct Totals {
+  float audio_seconds = 0;
+  // The longest time one model thread spent on its batches
+  float thread_seconds = 0;
+  // In the recognizer, summed over threads: by the threads that run the
+  // model, and by the search threads of --decode-threads
+  float model_thread_recognizer_seconds = 0;
+  float search_thread_recognizer_seconds = 0;
+  // When the first model thread finished its warm-up
+  bool started = false;
+  std::chrono::steady_clock::time_point start;
+};
+
+float SecondsSince(std::chrono::steady_clock::time_point begin) {
+  return std::chrono::duration<float>(std::chrono::steady_clock::now() - begin)
+      .count();
+}
+
+// Reads the given wave files and computes their features.
 //
-// @param duration On return, increased by the seconds of audio decoded.
-// @param recognizer_seconds On return, increased by the seconds spent in the
-//        recognizer, which excludes reading files and computing features.
-// @return One record for each wave file, in the order of utterances. Each
-//         json is a single line that starts with the position of the file
-//         in the input list and its filename.
-std::vector<Record> DecodeBatch(sherpa_onnx::OfflineRecognizer *recognizer,
-                                const std::vector<Utterance> &utterances,
-                                float *duration, float *recognizer_seconds) {
-  // ss[i] is nullptr if utterances[i] cannot be read
-  std::vector<std::unique_ptr<sherpa_onnx::OfflineStream>> ss;
-  std::vector<sherpa_onnx::OfflineStream *> ss_pointers;
+// @param duration On return, increased by the seconds of audio read.
+Batch ReadBatch(sherpa_onnx::OfflineRecognizer *recognizer,
+                const std::vector<Utterance> &utterances, float *duration) {
+  Batch batch;
+  batch.utterances = utterances;
+  auto &ss = batch.streams;
   for (const auto &utterance : utterances) {
     const std::string &wav_filename = utterance.wav_filename;
     int32_t sampling_rate = -1;
@@ -223,16 +304,36 @@ std::vector<Record> DecodeBatch(sherpa_onnx::OfflineRecognizer *recognizer,
     s->AcceptWaveform(sampling_rate, samples.data(), samples.size());
 
     ss.push_back(std::move(s));
-    ss_pointers.push_back(ss.back().get());
   }
-  if (!ss_pointers.empty()) {
-    const auto begin = std::chrono::steady_clock::now();
-    recognizer->DecodeStreams(ss_pointers.data(), ss_pointers.size());
-    *recognizer_seconds +=
-        std::chrono::duration<float>(std::chrono::steady_clock::now() - begin)
-            .count();
-  }
+  return batch;
+}
 
+// Runs the recognizer on a batch: the model and the search, or only the
+// model when "search" is false (a later call with "search" true then only
+// searches, for a model family that separates the two; for the others the
+// first call does nothing and the second everything).
+//
+// @param recognizer_seconds On return, increased by the seconds spent in the
+//        recognizer.
+void RunRecognizer(sherpa_onnx::OfflineRecognizer *recognizer,
+                   const Batch &batch, bool search, float *recognizer_seconds) {
+  std::vector<sherpa_onnx::OfflineStream *> ss = batch.Readable();
+  if (ss.empty()) return;
+  const auto begin = std::chrono::steady_clock::now();
+  if (search) {
+    recognizer->DecodeStreams(ss.data(), ss.size());
+  } else {
+    recognizer->EncodeStreams(ss.data(), ss.size());
+  }
+  *recognizer_seconds += SecondsSince(begin);
+}
+
+// @return One record for each wave file of a decoded batch, in its order.
+//         Each json is a single line that starts with the position of the
+//         file in the input list and its filename.
+std::vector<Record> MakeRecords(const Batch &batch) {
+  const auto &utterances = batch.utterances;
+  const auto &ss = batch.streams;
   std::vector<Record> records;
   for (size_t i = 0; i != utterances.size(); ++i) {
     const Utterance &u = utterances[i];
@@ -251,17 +352,28 @@ std::vector<Record> DecodeBatch(sherpa_onnx::OfflineRecognizer *recognizer,
   return records;
 }
 
+// A thread that reads batches and runs the model on them. With a null
+// "queue" it also searches each batch and prints it; otherwise it leaves the
+// search to the SearchThreads that serve the queue.
 void AsrInference(const std::vector<std::vector<Utterance>> &chunk_wav_paths,
                   int32_t warm_up, sherpa_onnx::OfflineRecognizer *recognizer,
-                  OrderedOutput *output, float *total_length, float *total_time,
-                  float *total_recognizer_time) {
+                  OrderedOutput *output, BatchQueue *queue, Totals *totals) {
   float duration = 0.0f;
   float elapsed_seconds_batch = 0.0f;
   float recognizer_seconds = 0.0f;
 
   for (int32_t i = 0; i < warm_up; ++i) {
     float unused = 0.0f;
-    DecodeBatch(recognizer, chunk_wav_paths[0], &unused, &unused);
+    RunRecognizer(recognizer,
+                  ReadBatch(recognizer, chunk_wav_paths[0], &unused), true,
+                  &unused);
+  }
+  {
+    std::lock_guard<std::mutex> guard(mtx);
+    if (!totals->started) {
+      totals->started = true;
+      totals->start = std::chrono::steady_clock::now();
+    }
   }
 
   while (true) {
@@ -269,27 +381,39 @@ void AsrInference(const std::vector<std::vector<Utterance>> &chunk_wav_paths,
     if (chunk >= static_cast<int32_t>(chunk_wav_paths.size())) {
       break;
     }
-    const auto &wav_paths = chunk_wav_paths[chunk];
     const auto begin = std::chrono::steady_clock::now();
-    std::vector<Record> records =
-        DecodeBatch(recognizer, wav_paths, &duration, &recognizer_seconds);
-    const auto end = std::chrono::steady_clock::now();
-    float elapsed_seconds =
-        std::chrono::duration_cast<std::chrono::milliseconds>(end - begin)
-            .count() /
-        1000.;
-    elapsed_seconds_batch += elapsed_seconds;
-    output->Put(std::move(records));
+    Batch batch = ReadBatch(recognizer, chunk_wav_paths[chunk], &duration);
+    RunRecognizer(recognizer, batch, queue == nullptr, &recognizer_seconds);
+    if (queue != nullptr) {
+      queue->Push(std::move(batch));  // waits while the search is behind
+    } else {
+      output->Put(MakeRecords(batch));
+    }
+    elapsed_seconds_batch += SecondsSince(begin);
   }
 
   {
     std::lock_guard<std::mutex> guard(mtx);
-    *total_length += duration;
-    if (*total_time < elapsed_seconds_batch) {
-      *total_time = elapsed_seconds_batch;
+    totals->audio_seconds += duration;
+    if (totals->thread_seconds < elapsed_seconds_batch) {
+      totals->thread_seconds = elapsed_seconds_batch;
     }
-    *total_recognizer_time += recognizer_seconds;
+    totals->model_thread_recognizer_seconds += recognizer_seconds;
   }
+}
+
+// A thread of --decode-threads: searches the batches the model has run on.
+void SearchThread(sherpa_onnx::OfflineRecognizer *recognizer, BatchQueue *queue,
+                  OrderedOutput *output, Totals *totals) {
+  float recognizer_seconds = 0.0f;
+  Batch batch;
+  while (queue->Pop(&batch)) {
+    RunRecognizer(recognizer, batch, true, &recognizer_seconds);
+    output->Put(MakeRecords(batch));
+    batch = Batch();  // frees the streams before waiting for the next one
+  }
+  std::lock_guard<std::mutex> guard(mtx);
+  totals->search_thread_recognizer_seconds += recognizer_seconds;
 }
 
 int main(int32_t argc, char *argv[]) {
@@ -383,6 +507,10 @@ With --sort-by-length=true a batch holds wave files of similar length, which
 avoids computing on padding. --max-batch-seconds limits a batch by its
 longest wave file times its number of wave files.
 
+With --decode-threads=N the --nj threads only read files and run the model,
+and N other threads search; --decode-queue-size bounds the batches waiting
+between them.
+
 foo.wav should be of single channel, 16-bit PCM encoded wave file; its
 sampling rate can be arbitrary and does not need to be 16kHz.
 
@@ -399,6 +527,8 @@ for a list of pre-trained models to download.
   // fixed time of a recognizer call in seconds of audio; the default is so
   // large that the fewest possible batches are used
   float batch_overhead_seconds = 1e6;
+  int32_t decode_threads = 0;     // 0: a --nj thread also searches its batch
+  int32_t decode_queue_size = 0;  // 0: as many as decode_threads
   sherpa_onnx::ParseOptions po(kUsageMessage);
   sherpa_onnx::OfflineRecognizerConfig config;
   config.Register(&po);
@@ -416,6 +546,20 @@ for a list of pre-trained models to download.
   po.Register("batch-size", &batch_size,
               "number of wav files processed at once during the decoding"
               "process. default=1");
+  po.Register("decode-threads", &decode_threads,
+              "Number of threads that only search. With 0, each of the --nj "
+              "threads runs the model on a batch and then searches it. With "
+              "more, the --nj threads read the files and run the model, and "
+              "these threads search the batches after them, so the two can "
+              "be sized apart, e.g. --nj=1 for a model on a GPU and several "
+              "search threads. Only CTC models separate the two steps; for "
+              "other models these threads also run the model. default=0");
+  po.Register("decode-queue-size", &decode_queue_size,
+              "With --decode-threads: the most batches that may wait for a "
+              "search thread after the model has run on them. The --nj "
+              "threads wait while that many are waiting, which bounds the "
+              "memory held by model outputs. 0 means the value of "
+              "--decode-threads. default=0");
   po.Register("sort-by-length", &sort_by_length,
               "If true, decode the wave files from the longest to the "
               "shortest so that a batch holds files of similar length and "
@@ -519,19 +663,34 @@ for a list of pre-trained models to download.
             "%d wave files\n",
             audio, padded, static_cast<int32_t>(smallest));
   }
-  float total_length = 0.0f;
-  float total_time = 0.0f;
-  float total_recognizer_time = 0.0f;
+  Totals totals;
   OrderedOutput output;
+  if (decode_queue_size <= 0) decode_queue_size = decode_threads;
+  BatchQueue queue(decode_queue_size);
+  bool separate_search = decode_threads > 0;
+  std::vector<std::thread> search_threads;
+  for (int i = 0; i < decode_threads; i++) {
+    search_threads.emplace_back(
+        std::thread(SearchThread, &recognizer, &queue, &output, &totals));
+  }
   for (int i = 0; i < nj; i++) {
     threads.emplace_back(std::thread(
         AsrInference, std::cref(batch_wav_paths), warm_up, &recognizer, &output,
-        &total_length, &total_time, &total_recognizer_time));
+        separate_search ? &queue : nullptr, &totals));
   }
 
   for (auto &thread : threads) {
     thread.join();
   }
+  queue.Close();
+  for (auto &thread : search_threads) {
+    thread.join();
+  }
+  // With search threads no single thread's time covers the work: take the
+  // time from the end of the first warm-up to the last result.
+  float total_time =
+      separate_search ? SecondsSince(totals.start) : totals.thread_seconds;
+  float total_length = totals.audio_seconds;
 
   fprintf(stderr, "num threads: %d\n", config.model_config.num_threads);
   fprintf(stderr, "decoding method: %s\n", config.decoding_method.c_str());
@@ -540,7 +699,20 @@ for a list of pre-trained models to download.
   }
   fprintf(stderr, "Elapsed seconds: %.3f s\n", total_time);
   fprintf(stderr, "Seconds in the recognizer, summed over threads: %.3f s\n",
-          total_recognizer_time);
+          totals.model_thread_recognizer_seconds +
+              totals.search_thread_recognizer_seconds);
+  if (separate_search) {
+    fprintf(stderr,
+            "  by the %d --nj threads running the model: %.3f s, by the %d "
+            "--decode-threads searching: %.3f s\n",
+            nj, totals.model_thread_recognizer_seconds, decode_threads,
+            totals.search_thread_recognizer_seconds);
+    fprintf(stderr,
+            "  most batches waiting for a search thread: %d of "
+            "--decode-queue-size=%d; a --nj thread found it full %d times\n",
+            static_cast<int32_t>(queue.MostWaiting()), decode_queue_size,
+            queue.NumFull());
+  }
   float rtf = total_time / total_length;
   fprintf(stderr, "Real time factor (RTF): %.6f / %.6f = %.4f\n", total_time,
           total_length, rtf);
