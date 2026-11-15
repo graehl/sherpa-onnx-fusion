@@ -89,7 +89,9 @@ Still owed for closure:
   [GPU timing](gpu-decode-cost-outside-the-model.md) suggests tens to a
   couple of hundred seconds of audio per call for the zipformer CTC model
   on CUDA, depending on whether the input shape is new.
-- The program still sleeps ten seconds twice at startup.
+- Nothing more on the startup sleeps: `--pause-seconds=0` turns them off,
+  and `repro/check_parallel.py` now checks the program's modes against one
+  thread on a public model.
 
 ## Closure
 

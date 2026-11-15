@@ -42,3 +42,29 @@ Add its downloads under `[artifacts.<name>]` with a URL and SHA-256, then a
 `[claims.<name>]` table naming those artifacts, the recognizer's flags, the
 test set, and one `[[claims.<name>.arms]]` per configuration. A test set is
 a LibriSpeech-layout archive for now.
+
+## Checking the parallel program
+
+[check_parallel.py](check_parallel.py) checks `sherpa-onnx-offline-parallel`:
+threads, separate search threads and sorting by length must not change what
+it prints. It decodes the three recordings shipped inside the pinned English
+zipformer CTC archive, repeated, with one unreadable file among them, and
+compares each way of running the program with one thread: a row per input
+in list order, an error row for the unreadable file only, and the same text
+at one recording per batch. It does this for greedy search, the prefix
+search, and the prefix search with a small n-gram model the script writes.
+
+```bash
+mise run check                                # against ../build
+uv run check_parallel.py --build-dir DIR      # any build directory
+uv run check_parallel.py --offline            # skip unless the model is fetched
+uv run check_parallel.py --lstm-model FILE    # also an onnx-rnn token scorer
+```
+
+- A build without KenLM skips the n-gram configuration and says so.
+- No LSTM is downloaded: none small enough is pinned here, so that
+  configuration runs only with `--lstm-model`.
+- It takes under a minute on CPU and needs no GPU. The workflow
+  `.github/workflows/fusion-fork.yaml` runs it after the fork's unit tests.
+- A developer's checkout can go further than the workflow does: add
+  `--lstm-model`, or point `--build-dir` at a GPU build.

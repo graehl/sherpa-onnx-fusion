@@ -1,0 +1,73 @@
+name: fusion-fork
+
+# The fork's own checks: its unit tests, and sherpa-onnx-offline-parallel run
+# every way it can be on a small public model (repro/check_parallel.py).
+# CPU only, with KenLM. Upstream's workflows do not build KenLM or run these.
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - '.github/workflows/fusion-fork.yaml'
+      - 'cmake/**'
+      - 'sherpa-onnx/csrc/*'
+      - 'repro/**'
+  pull_request:
+    branches:
+      - master
+    paths:
+      - '.github/workflows/fusion-fork.yaml'
+      - 'cmake/**'
+      - 'sherpa-onnx/csrc/*'
+      - 'repro/**'
+  workflow_dispatch:
+
+concurrency:
+  group: fusion-fork-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: fusion-fork
+
+      - name: Build
+        shell: bash
+        run: |
+          export CMAKE_CXX_COMPILER_LAUNCHER=ccache
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_SHARED_LIBS=ON \
+            -DSHERPA_ONNX_ENABLE_KENLM=ON \
+            -DSHERPA_ONNX_ENABLE_TESTS=ON \
+            -DSHERPA_ONNX_ENABLE_TTS=OFF \
+            -DSHERPA_ONNX_ENABLE_SPEAKER_DIARIZATION=OFF \
+            -DSHERPA_ONNX_ENABLE_PORTAUDIO=OFF \
+            -DSHERPA_ONNX_ENABLE_WEBSOCKET=OFF \
+            -DSHERPA_ONNX_ENABLE_C_API=OFF
+          cmake --build build -j "$(nproc)"
+
+      - name: Unit tests of the search, the scorers and the options
+        shell: bash
+        run: |
+          cd build
+          ctest --output-on-failure --no-tests=error \
+            -R 'scorer|prefix|trie|inflight|option'
+
+      - name: Cache the pinned public model
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/sherpa-onnx-fusion-repro/zipformer-ctc-en
+          key: repro-zipformer-ctc-en-${{ hashFiles('repro/claims.toml') }}
+
+      - name: sherpa-onnx-offline-parallel, every mode
+        shell: bash
+        run: |
+          python3 repro/check_parallel.py --build-dir build
