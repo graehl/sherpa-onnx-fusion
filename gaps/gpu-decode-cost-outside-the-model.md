@@ -43,6 +43,16 @@ Three things stand out.
   identified. The cuDNN convolution search setting does not explain it:
   exhaustive and heuristic search timed alike and the fixed default was
   three times slower, in one run each while another job shared the GPU.
+- **The cost is paid on every change of shape, not once per shape.**
+  Decoding the 48-recording list one, two and four times over in one
+  process at batch 1 took 5.1, 10.0 and 19.9 s of recognizer time
+  (2026-11-15, another job on the GPU, so compare only among these). A
+  second pass over shapes already seen is no cheaper than the first.
+  So nothing is kept per shape inside the process, which rules out
+  compilation per input size with a cache (graehl's first guess, by
+  analogy with JAX) and leaves setup that is redone whenever the shape
+  differs from the previous call's. Whether anything persists across
+  processes was not tested and is unlikely to matter given this.
 - **Batching itself is worth 4.2 times** at batch 16 for one shape (0.64 s
   against 0.153 s). The 17 to 50 times in the tables is mostly the
   per-shape cost being paid on fewer calls.

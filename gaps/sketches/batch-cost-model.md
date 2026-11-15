@@ -31,7 +31,13 @@ search.
   against roughly 0.3 ms per second of padded audio
   ([GPU timing](../gpu-decode-cost-outside-the-model.md)). That puts the
   overhead between about 35 and 200 seconds of audio depending on whether
-  shapes repeat, so the per-shape cost has to be settled first.
+  shapes repeat, so the per-shape cost has to be settled first. Before
+  shape enters the model, learn what is cached and for how long (graehl,
+  2026-11-15). Within a process nothing is: the cost recurs on every
+  change of shape from the previous call, seen shape or not. So the term
+  to model is "this batch's shape differs from the last one's", which
+  depends on the order of batches and on rounding lengths up to shared
+  sizes, not on the set of shapes. Caching across processes is untested.
 - **Time that is not linear in width.** A GPU that is not saturated by a
   narrow batch makes extra width nearly free up to some point. The formula
   charges every recording the same.
