@@ -245,6 +245,17 @@ call, the 857-clip test set reads (2026-11-14): greedy 5.53, no scorer
 than no scorer (p = 0.05) and than greedy (p = 0.003), and not
 distinguishable from the character model (p = 0.26).
 
+An LSTM over the same 2000 tokens (three 1536-unit layers, not public,
+trained on the n-grams' text; class = token ID + 2, taken with
+`"id-offset": 2`) does better than both n-grams. In dynamic int8, 49 MB,
+at weight 0.5 and bonus 2 chosen on the 340 clean validation clips from
+five settings (2026-11-15): clean validation ER2 3.86, its noisy copy
+4.08, 1,654 media clips 4.49, and the test set 4.90 ER2, 4.89 WER,
+against 5.31 ER2 for the token 4-gram. fp32 and int8 agree at the one
+setting both were run (4.07 and 4.08). The gain is on read speech; media
+is no better than with the n-grams (4.39 to 4.44). No paired test was
+run, and the weight was chosen on a set the dev figures include.
+
 Three things this exercise turned up:
 
 - **A token model's words must be resolved the way it was built.** A
@@ -282,11 +293,15 @@ and word bonus 2:
 | greedy | 9.27 | 8.98 | 7.43 / 8.22 / 8.29 |
 | prefix search, no scorer | 9.09 | 8.81 | 7.29 / 8.07 / 8.17 |
 | prefix search + 8-gram | 6.61 | 6.62 | 5.23 / 5.96 / 7.11 |
+| prefix search + 8-gram, weight 0.5 | 6.30 | 6.34 | 4.95 / not run / not run |
 
 On the test set the 8-gram is −2.19 ER2 against the search without a
 scorer and greedy is +0.17 (paired bootstrap, p < 0.0001 each). The
 settings were chosen earlier on the dev sets with a private search and
-transferred unchanged. The 8-gram's text is Vietnamese Wikipedia,
+transferred unchanged; the last row raises the weight to 0.5, the better
+of the two tried on clean validation here. A floor on what one character
+can cost (`"floor"`) did not help at that weight (6.47 with −5), nor on
+the English model below. The 8-gram's text is Vietnamese Wikipedia,
 FineWeb-2, and transcripts or captions of GigaSpeech2, VietSpeech, VLSP
 2020 and YODAS2 with some private training transcripts, 29.5 million
 sentences, with sentences matching the test references removed. The
@@ -312,8 +327,22 @@ on the 349-clip validation split at beam 4; test is 743 clips
 
 On the TDT model most of the gain comes from the search itself, probably
 because it sums over the durations greedy commits to; the small LM adds
-little on top. A
-larger LM was not tried. These runs called the joiner and the prediction
+little on top.
+
+A matched LM changes that. A character 8-gram from 55 million Russian
+Wikipedia sentences, written as the recognizers write and with every
+sentence matching a FLEURS validation or test reference removed (907 MB;
+13 thousand distinct characters, not yet restricted to the recognizers'
+alphabet), at weight 0.2 and bonus 1 chosen on validation from four
+settings (2026-11-15), in WER on the same 743 test clips:
+
+| Model | Greedy | Prefix search, no scorer | + small 6-gram | + Wikipedia 8-gram |
+|---|---:|---:|---:|---:|
+| GigaAM v3 RNN-T | 4.63 | 4.52 | 4.45 | 4.21 |
+| Parakeet TDT v3 | 8.32 | 7.77 | 7.72 | 6.78 |
+
+The chosen weight was the lowest tried for both, and no paired test was
+run on these. These runs called the joiner and the prediction
 network once per hypothesis and took 3 to 4 times greedy's time under
 load. Both are now called once per round for the hypotheses that need
 them, where the model allows several per call (Parakeet's joiner does,
@@ -395,6 +424,8 @@ recordings, one per call, two threads, fp32 (2026-11-14):
 | prefix search | character 8-gram | 37 MB | 4.91 | 82 |
 | prefix search | character 6-gram, ten times the text | 12 MB | 5.04 | 119 |
 | prefix search | character 8-gram, ten times the text | 103 MB | 4.87 | 103 |
+| prefix search | 3-gram over the recognizer's 500 tokens | 9 MB | 5.13 | 84 |
+| prefix search | 5-gram over the recognizer's 500 tokens | 126 MB | 4.91 | 108 |
 | prefix search, sum, beam 4 | public LibriSpeech RNN LM (LSTM over the same 500 tokens) | 388 MB | 4.45 | 534 |
 
 Against the released graph, by paired bootstrap over recordings (10,000
@@ -404,6 +435,13 @@ p = 0.002), the 103 MB one −0.52 (p = 0.0006), and the LSTM −0.95
 The released graph's own gain over greedy, −0.23, is not significant on
 these recordings (p = 0.20).
 
+- **Token and character n-grams from the same text score the same**: the
+  token 5-gram and the character 8-gram both read 4.91 (paired p = 1.0),
+  and the token 3-gram and character 6-gram 5.13 and 5.06 (p = 0.45). The
+  token models are KenLM over the text encoded with the recognizer's BPE
+  model, fused with `--scorer.unit=token`; the 5-gram's weight, 0.7, was
+  the highest tried. The LSTM is −0.46 against the token 5-gram
+  (p < 0.0001).
 - **The character LMs** are modified Kneser-Ney models from KenLM on the
   public LibriSpeech LM text, a tenth of it or all of it, one LM word per
   character. Weights were chosen on 300 dev-other recordings (0.2 for the
