@@ -33,9 +33,11 @@ namespace sherpa_onnx {
 //
 // With unit=char and "words": true the model is over words: characters are
 // collected until the boundary and the word is then scored, so nothing is
-// charged inside a word. A word the model lacks is its <unk>. "floor": F
-// with it makes F, a natural-log score, the least any word can score, which
-// limits what one unknown word costs.
+// charged inside a word. A word the model lacks is its <unk>.
+//
+// "floor": F, with any unit, makes F, a natural-log score, the least one
+// unit (a character, token or word) or the end of the sentence can score,
+// which limits what one unknown or unlikely unit costs.
 //
 // The state is KenLM's own n-gram state, so hypotheses that reach the same
 // context, including by backing off, have equal state bytes.

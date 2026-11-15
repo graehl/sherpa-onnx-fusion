@@ -96,6 +96,12 @@ TEST_F(KenLmScorerTest, ScoresCharactersBoundariesAndEndOfSentence) {
   EXPECT_NEAR(scores[2], -0.4f * kLn10, 1e-5);
   EXPECT_NEAR(scores[3], (-0.1f - 0.6f) * kLn10, 1e-5);
 
+  // A floor bounds each unit from below: only the backed-off a is under it.
+  auto floored = Create(R"({"floor": -1.0})");
+  auto floored_scores = Scores(floored.get(), {'a', 'b', ' ', 'a'}, &state);
+  EXPECT_NEAR(floored_scores[0], -0.2f * kLn10, 1e-5);
+  EXPECT_FLOAT_EQ(floored_scores[3], -1.0f);
+
   // After "ab": b </s> is a bigram.
   Scores(scorer.get(), {'a', 'b'}, &state);
   ScorerStateRef end = {nullptr, state.data()};
