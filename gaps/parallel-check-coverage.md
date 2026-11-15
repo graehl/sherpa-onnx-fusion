@@ -32,7 +32,10 @@ out:
 
 ## What is wanted
 
-- Pin a small step-wise LSTM once one is public, and run it by default.
+- Pin a small step-wise LSTM and run it by default. A tiny English
+  character one (one layer of 256, about 2 MB) is being trained for this
+  (2026-11-15). It is to be hosted on Hugging Face and pinned by URL and
+  hash; no model is committed to this repository.
 - Add a transducer configuration; the small English zipformer archive is
   112 MB.
 - A deliberate fault (for example an environment variable in a test build
