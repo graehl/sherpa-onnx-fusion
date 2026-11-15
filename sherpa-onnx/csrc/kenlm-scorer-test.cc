@@ -105,6 +105,66 @@ TEST_F(KenLmScorerTest, ScoresCharactersBoundariesAndEndOfSentence) {
   EXPECT_NEAR(final_score.log_score, -0.3f * kLn10, 1e-5);
 }
 
+// "words": the model's words are words. Characters cost nothing until the
+// boundary, where the word is scored; an open word is scored at the end.
+TEST_F(KenLmScorerTest, WordModelScoresEachWordAtItsBoundary) {
+  auto scorer = Create(R"({"words": true})");
+  EXPECT_TRUE(scorer->Info().recombines);
+  auto utterance = scorer->NewUtterance();
+  ASSERT_NE(utterance, nullptr);
+  size_t size = scorer->Info().state_bytes;
+  std::vector<std::byte> current(size), next(size);
+  scorer->Start(utterance.get(), current.data());
+  std::vector<float> scores;
+  // "a b ba": <s> a and a b are bigrams; "ba" is unknown, after b.
+  for (UnitId unit : {'a', ' ', 'b', ' ', ' ', 'b', 'a'}) {
+    ScorerExtension extension = {
+        {utterance.get(), current.data()}, unit, next.data()};
+    ScorerAdvanceResult result;
+    scorer->Advance({&extension, 1}, &result);
+    scores.push_back(result.log_score);
+    current.swap(next);
+  }
+  EXPECT_EQ(scores[0], 0);
+  EXPECT_NEAR(scores[1], -0.2f * kLn10, 1e-5);
+  EXPECT_EQ(scores[2], 0);
+  EXPECT_NEAR(scores[3], -0.1f * kLn10, 1e-5);
+  EXPECT_EQ(scores[4], 0);  // A second boundary closes nothing.
+  EXPECT_EQ(scores[5], 0);
+  EXPECT_EQ(scores[6], 0);
+
+  ScorerStateRef end = {utterance.get(), current.data()};
+  ScorerFinalScore final_score;
+  scorer->Finish({&end, 1}, &final_score);
+  // b backs off to <unk>, then </s> after <unk>.
+  EXPECT_NEAR(final_score.log_score, (-0.2f - 1.0f - 0.7f) * kLn10, 1e-5);
+
+  // With a floor the unknown word costs no more than the floor.
+  auto floored = Create(R"({"words": true, "floor": -1.5})");
+  auto floored_utterance = floored->NewUtterance();
+  std::vector<std::byte> open(size), closed(size);
+  floored->Start(floored_utterance.get(), open.data());
+  for (UnitId unit : {'b', 'a', ' '}) {
+    ScorerExtension extension = {
+        {floored_utterance.get(), open.data()}, unit, closed.data()};
+    ScorerAdvanceResult result;
+    floored->Advance({&extension, 1}, &result);
+    if (unit == ' ') EXPECT_FLOAT_EQ(result.log_score, -1.5f);
+    open.swap(closed);
+  }
+
+  // The same partial word reached twice is the same state.
+  std::vector<std::byte> first(size), second(size), start(size);
+  scorer->Start(utterance.get(), start.data());
+  for (std::vector<std::byte> *out : {&first, &second}) {
+    ScorerExtension extension = {
+        {utterance.get(), start.data()}, 'b', out->data()};
+    ScorerAdvanceResult result;
+    scorer->Advance({&extension, 1}, &result);
+  }
+  EXPECT_EQ(first, second);
+}
+
 // A model over the recognizer's tokens: the table's symbols are its words.
 TEST_F(KenLmScorerTest, TokenUnitsUseTheTokenTablesSymbols) {
   std::string tokens = ::testing::TempDir() + "kenlm-scorer-test.tokens";

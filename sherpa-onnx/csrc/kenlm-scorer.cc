@@ -4,12 +4,16 @@
 
 #include "sherpa-onnx/csrc/kenlm-scorer.h"
 
+#include <algorithm>
+#include <cstdint>
 #include <cstring>
 #include <exception>
 #include <fstream>
+#include <limits>
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "lm/model.hh"
@@ -142,6 +146,135 @@ class KenLmScorer : public PerItemScorer {
   std::vector<lm::WordIndex> word_of_token_;  // By token ID, for token units.
 };
 
+// The partial words of one utterance: each distinct string of characters
+// since the last word boundary has one index, so equal partial words are
+// equal state bytes.
+class PartialWords : public ScorerUtterance {
+ public:
+  static constexpr uint32_t kEmpty = 0;
+
+  PartialWords() { nodes_.push_back({kEmpty, 0}); }
+
+  uint32_t Extend(uint32_t word, UnitId character) {
+    uint64_t key =
+        (static_cast<uint64_t>(word) << 32) | static_cast<uint32_t>(character);
+    auto inserted =
+        children_.emplace(key, static_cast<uint32_t>(nodes_.size()));
+    if (inserted.second) nodes_.push_back({word, character});
+    return inserted.first->second;
+  }
+
+  std::string Text(uint32_t word) const {
+    std::u32string reversed;
+    for (; word != kEmpty; word = nodes_[word].parent) {
+      reversed.push_back(static_cast<char32_t>(nodes_[word].character));
+    }
+    std::string text;
+    for (auto it = reversed.rbegin(); it != reversed.rend(); ++it) {
+      text += Utf32ToUtf8(*it);
+    }
+    return text;
+  }
+
+ private:
+  struct Node {
+    uint32_t parent;
+    UnitId character;
+  };
+  std::vector<Node> nodes_;
+  std::unordered_map<uint64_t, uint32_t> children_;
+};
+
+// A KenLM model over words, fed characters: a word is scored when the
+// boundary after it arrives, or at the end of the utterance. Until then its
+// characters cost nothing, so the search gets no guidance inside a word.
+class KenLmWordScorer : public PerItemScorer {
+ public:
+  // "floor": no word, nor the end of the sentence, scores below it.
+  KenLmWordScorer(const std::string &model, float floor) : floor_(floor) {
+    try {
+      model_.reset(lm::ngram::LoadVirtual(model.c_str()));
+    } catch (const std::exception &e) {
+      throw std::runtime_error("kenlm scorer: cannot load '" + model +
+                               "': " + e.what());
+    }
+    if (model_->StateSize() != sizeof(lm::ngram::State)) {
+      throw std::runtime_error("kenlm scorer: unsupported model state in '" +
+                               model + "'");
+    }
+    info_.unit = ScorerUnit::kCharacter;
+    info_.state_bytes = sizeof(State);
+    info_.recombines = true;
+  }
+
+  const ScorerInfo &Info() const override { return info_; }
+  std::unique_ptr<ScorerUtterance> NewUtterance() override {
+    return std::make_unique<PartialWords>();
+  }
+
+  void Start(ScorerUtterance * /*utterance*/, std::byte *state) override {
+    State begin;
+    std::memset(&begin, 0, sizeof(begin));
+    model_->BeginSentenceWrite(&begin.context);
+    begin.context.ZeroRemaining();
+    std::memcpy(state, &begin, sizeof(begin));
+  }
+
+ protected:
+  ScorerAdvanceResult AdvanceOne(const ScorerExtension &extension) override {
+    auto *words = static_cast<PartialWords *>(extension.parent.utterance);
+    State state;
+    std::memcpy(&state, extension.parent.bytes, sizeof(state));
+    ScorerAdvanceResult result;
+    if (extension.unit == ' ') {
+      result.log_score = EndWord(*words, &state);
+    } else {
+      state.word = words->Extend(state.word, extension.unit);
+    }
+    std::memcpy(extension.child, &state, sizeof(state));
+    return result;
+  }
+
+  ScorerFinalScore FinishOne(const ScorerStateRef &state_ref) override {
+    State state;
+    std::memcpy(&state, state_ref.bytes, sizeof(state));
+    ScorerFinalScore result;
+    result.log_score =
+        EndWord(*static_cast<PartialWords *>(state_ref.utterance), &state);
+    lm::ngram::State ignored;
+    result.log_score += std::max(
+        floor_, kLn10 * model_->BaseScore(
+                            &state.context,
+                            model_->BaseVocabulary().EndSentence(), &ignored));
+    return result;
+  }
+
+ private:
+  struct State {
+    lm::ngram::State context;
+    uint32_t word;  // PartialWords index of the characters since the boundary.
+    uint32_t zero;  // Keeps equal states equal bytes.
+  };
+
+  // Scores the open word, if any, and moves "state" past it.
+  float EndWord(const PartialWords &words, State *state) {
+    if (state->word == PartialWords::kEmpty) return 0;
+    lm::ngram::State next;
+    std::memset(&next, 0, sizeof(next));
+    float log10_prob = model_->BaseScore(
+        &state->context,
+        model_->BaseVocabulary().Index(words.Text(state->word)), &next);
+    next.ZeroRemaining();
+    state->context = next;
+    state->word = PartialWords::kEmpty;
+    return std::max(floor_, log10_prob * kLn10);
+  }
+
+  ScorerInfo info_;
+  std::unique_ptr<lm::base::Model> model_;
+  float floor_;
+};
+
 // The symbol of each token ID in a recognizer token table: lines of a
 // symbol and its ID.
 std::vector<std::string> ReadTokenSymbols(const std::string &filename) {
@@ -189,6 +322,18 @@ class KenLmScorerFactory : public ScorerFactory {
       throw std::runtime_error("kenlm scorer: extra must be a JSON object");
     }
     bool tokens = common.unit == "token";
+    if (!tokens && options.contains("words") && options["words"].is_boolean()) {
+      bool words = options["words"].get<bool>();
+      options.erase("words");
+      float floor = -std::numeric_limits<float>::infinity();
+      if (words && options.contains("floor") && options["floor"].is_number()) {
+        floor = options["floor"].get<float>();
+        options.erase("floor");
+      }
+      if (words && options.empty()) {
+        return std::make_unique<KenLmWordScorer>(common.model, floor);
+      }
+    }
     bool by_id = false;
     int32_t id_offset = 0;
     std::string id_prefix;
