@@ -61,6 +61,31 @@ the CPU batch-size question in that gap is waiting on.
   Separate file reading from decoding in what is reported when using it
   for a throughput comparison.
 
+## State (2026-11-15)
+
+Done in the program: each result is one JSON line naming its list index
+and file, printed in list order for any `--nj`; `--sort-by-length` decodes
+longest first; `--max-batch-seconds` bounds a batch by its longest file
+times its count, beside `--batch-size`; the cut into batches is an exact
+dynamic program for "a fixed overhead per batch plus the audio held after
+padding" (`--batch-overhead-seconds`, by default so large that the fewest
+batches are used), with ties going to equally full batches so no small
+remainder is left; recognizer time is reported apart from file reading and
+features. On 100 test-other recordings at 16 per batch, list order pads
+697 s of audio to about 1480 s and sorting to 801 s.
+
+Still owed for closure:
+
+- A timing on a GPU of list-order against sorted batches on a list of
+  mixed lengths. Only CPU was run, under contention: summed recognizer
+  time 46 s in list order and 27 s sorted.
+- A measured overhead for a model and provider, to set
+  `--batch-overhead-seconds` from something other than its default. The
+  [GPU timing](gpu-decode-cost-outside-the-model.md) suggests tens to a
+  couple of hundred seconds of audio per call for the zipformer CTC model
+  on CUDA, depending on whether the input shape is new.
+- The program still sleeps ten seconds twice at startup.
+
 ## Closure
 
 Given a list of mixed lengths, the program's batches have padding below a
