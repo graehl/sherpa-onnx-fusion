@@ -1,7 +1,8 @@
 # Reproducing the fork's claims
 
-Each claim in [FORK.md](../FORK.md) that rests only on public downloads has
-an entry in [claims.toml](claims.toml): the recognizer, the test set, and
+[claims.toml](claims.toml) has recipes for two comparisons in
+[FORK.md](../FORK.md): English CTC with the shipped graph, and English CTC
+with a character n-gram. Each entry names the recognizer, the test set, and
 the decoder configurations compared, with the exact command-line flags.
 [repro_claims.py](repro_claims.py) fetches the pinned inputs, decodes the
 test set once per configuration, and reports word error rate.
@@ -20,12 +21,16 @@ Without `mise`: `uv run repro_claims.py run <claim>`, or any Python 3.11
 or later with `soundfile` installed.
 
 - **Reading a claim without running it.** `claims.toml` gives the flags of
-  every configuration, and `results/<claim>.json` the numbers recorded for
-  it: test set and size, word errors, decode seconds, the fork commit, and
-  the hashes of the inputs.
+  every configuration. A full run writes `results/<claim>.json` with the
+  test set and size, word errors, decode seconds, input hashes, and command
+  arguments. It records the checkout revision and dirty state before the
+  run, plus the executable's path and SHA-256; the checkout revision does
+  not establish which source built that executable.
 - **Where files go.** Downloads and converted audio go to
   `$SHERPA_ONNX_REPRO_CACHE`, by default `~/.cache/sherpa-onnx-fusion-repro`.
-  Nothing is written into the checkout except `results/` after a full run.
+  Downloads are keyed by artifact name and SHA-256.
+  The claim runner writes into the checkout only under `results/`, after
+  a full run; `mise run build` writes separately to `../build`.
 - **One recording per call.** Decoding several recordings in one call
   changes some models' output
   ([gap](../gaps/offline-batch-changes-transcripts.md)), so every
@@ -33,8 +38,9 @@ or later with `soundfile` installed.
   run at once; decode seconds are the recognizer's own figure summed, and
   are comparable between configurations only at the same `--jobs` on an
   otherwise idle machine.
-- **What is not here.** A claim that needs a language model which is not
-  published cannot be reproduced and has no entry.
+- **What is not here.** The public token-LSTM CTC and transducer comparisons
+  have no recipes yet. Claims that need unpublished language models also
+  have no entries.
 
 ## Adding a claim
 
