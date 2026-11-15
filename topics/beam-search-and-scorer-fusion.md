@@ -216,7 +216,7 @@ scorer (measured under parallel load, so approximate).
 
 The same comparison with an LM the existing decoder can also use: the
 public English zipformer transducer (`sherpa-onnx-zipformer-en-2023-06-26`)
-and the public LibriSpeech RNN LM (three 2048-unit LSTM layers over the
+and the public LibriSpeech LSTM (icefall's `rnn_lm`; three 2048-unit layers over the
 recognizer's 500 tokens), 600 recordings spread over LibriSpeech
 test-other, settings chosen on 300 from dev-other (2026-11-14):
 
@@ -435,7 +435,7 @@ recordings, one per call, two threads, fp32 (2026-11-14):
 | prefix search | character 8-gram, ten times the text | 103 MB | 4.87 | 103 |
 | prefix search | 3-gram over the recognizer's 500 tokens | 9 MB | 5.13 | 84 |
 | prefix search | 5-gram over the recognizer's 500 tokens | 126 MB | 4.91 | 108 |
-| prefix search, sum, beam 4 | public LibriSpeech RNN LM (LSTM over the same 500 tokens) | 388 MB | 4.45 | 534 |
+| prefix search, sum, beam 4 | public LibriSpeech LSTM (icefall's `rnn_lm`, over the same 500 tokens) | 388 MB | 4.45 | 534 |
 
 Against the released graph, by paired bootstrap over recordings (10,000
 resamples): the 37 MB 8-gram is −0.49 WER (95% interval −0.79 to −0.18,
