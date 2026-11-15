@@ -121,6 +121,11 @@ of single items finished in 1.55 s elapsed.
   and hand finished streams to one batching caller.
 - Repeat with a transducer and with the prefix search and a scorer, where
   the search is a larger share and the encoder gain a smaller one.
+- Repeat on an idle GPU everything here dated 2026-11-15, and the
+  search-thread timings in
+  [the topic sketches](../topics/beam-search-and-scorer-fusion.sketches.md):
+  other jobs held the device at 100% for all of them, so their order is
+  probably right and their levels are not.
 
 ## Consequence for the other gaps
 
