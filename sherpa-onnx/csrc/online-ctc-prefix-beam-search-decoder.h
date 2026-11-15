@@ -6,6 +6,7 @@
 #define SHERPA_ONNX_CSRC_ONLINE_CTC_PREFIX_BEAM_SEARCH_DECODER_H_
 
 #include <memory>
+#include <mutex>  // NOLINT
 #include <vector>
 
 #include "sherpa-onnx/csrc/ctc-prefix-search.h"
@@ -41,6 +42,7 @@ class OnlineCtcPrefixBeamSearchDecoder : public OnlineCtcDecoder {
 
  private:
   CtcPrefixSearchOptions options_;
+  std::mutex vocabulary_mutex_;
   std::shared_ptr<CtcSearchVocabulary> vocabulary_;
   std::vector<std::unique_ptr<Scorer>> scorers_;
   std::vector<Scorer *> scorer_pointers_;
