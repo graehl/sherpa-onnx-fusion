@@ -361,6 +361,15 @@ jobs:
           .github/scripts/test-offline-ctc.sh
           du -h -d1 .
 
+      # Fork addition: threads, search threads and sorting must not change
+      # what sherpa-onnx-offline-parallel prints. This build has no KenLM,
+      # so the n-gram configuration is skipped here; fusion-fork.yaml runs it.
+      - name: Check sherpa-onnx-offline-parallel
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        shell: bash
+        run: |
+          python3 repro/check_parallel.py --build-dir build
+
       - name: Test offline speech denoiser
         if: ${{ !startsWith(github.ref, 'refs/tags/') }}
         shell: bash
