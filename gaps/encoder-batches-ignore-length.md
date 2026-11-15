@@ -63,8 +63,9 @@ searching afterwards makes the first result wait for the last encode.
   encoder does not disturb it.
 - Models that cannot take a padded batch at all (a w2v-BERT CTC export
   with no length or mask input) stay at one utterance per call. The
-  model class batches an export that takes `input_lengths`; no such
-  export has been run here yet.
+  model class batches an export that takes `input_lengths`. Real masked
+  w2v-BERT and omnilingual exports have matched single-item decoding in
+  the checks recorded in [batch changes transcripts](offline-batch-changes-transcripts.md).
 - Length bucketing makes padding small but not zero. Whether the remaining
   padding changes output is the other gap's question; a model whose export
   masks correctly makes the two independent.

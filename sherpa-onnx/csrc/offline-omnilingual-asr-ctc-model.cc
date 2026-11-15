@@ -5,6 +5,7 @@
 #include "sherpa-onnx/csrc/offline-omnilingual-asr-ctc-model.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <memory>
 #include <string>
@@ -53,7 +54,16 @@ class OfflineOmnilingualAsrCtcModel::Impl {
   }
 
   std::vector<Ort::Value> Forward(Ort::Value features,
-                                  Ort::Value /*/features_length*/) {
+                                  Ort::Value features_length) {
+    if (takes_lengths_) {
+      // The graph masks padding and returns each utterance's valid frames.
+      std::array<Ort::Value, 2> inputs = {std::move(features),
+                                          std::move(features_length)};
+      return sess_->Run({}, input_names_ptr_.data(), inputs.data(),
+                        inputs.size(), output_names_ptr_.data(),
+                        output_names_ptr_.size());
+    }
+
     auto out_vec =
         sess_->Run({}, input_names_ptr_.data(), &features, 1,
                    output_names_ptr_.data(), output_names_ptr_.size());
@@ -75,6 +85,8 @@ class OfflineOmnilingualAsrCtcModel::Impl {
   }
 
   int32_t VocabSize() const { return vocab_size_; }
+
+  bool TakesLengths() const { return takes_lengths_; }
 
   OrtAllocator *Allocator() { return allocator_; }
 
@@ -118,6 +130,11 @@ class OfflineOmnilingualAsrCtcModel::Impl {
 
     GetOutputNames(sess_.get(), &output_names_, &output_names_ptr_);
 
+    // An export with a second input, input_lengths (valid samples of each
+    // utterance), masks padding in the graph and has a second output, the
+    // valid frames of each utterance. Only such an export can be batched.
+    takes_lengths_ = input_names_.size() == 2 && output_names_.size() == 2;
+
     // get meta data
     Ort::ModelMetadata meta_data = sess_->GetModelMetadata();
     if (config_.debug) {
@@ -150,6 +167,7 @@ class OfflineOmnilingualAsrCtcModel::Impl {
   std::vector<const char *> output_names_ptr_;
 
   int32_t vocab_size_ = 0;
+  bool takes_lengths_ = false;
 };
 
 OfflineOmnilingualAsrCtcModel::OfflineOmnilingualAsrCtcModel(
@@ -170,6 +188,10 @@ std::vector<Ort::Value> OfflineOmnilingualAsrCtcModel::Forward(
 
 int32_t OfflineOmnilingualAsrCtcModel::VocabSize() const {
   return impl_->VocabSize();
+}
+
+bool OfflineOmnilingualAsrCtcModel::SupportBatchProcessing() const {
+  return impl_->TakesLengths();
 }
 
 OrtAllocator *OfflineOmnilingualAsrCtcModel::Allocator() const {
