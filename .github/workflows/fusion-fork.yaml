@@ -61,11 +61,14 @@ jobs:
           ctest --output-on-failure --no-tests=error \
             -R 'scorer|prefix|trie|inflight|option'
 
-      - name: Cache the pinned public model
+      - name: Cache the pinned public models
         uses: actions/cache@v4
         with:
-          path: ~/.cache/sherpa-onnx-fusion-repro/zipformer-ctc-en
-          key: repro-zipformer-ctc-en-${{ hashFiles('repro/claims.toml') }}
+          path: |
+            ~/.cache/sherpa-onnx-fusion-repro/zipformer-ctc-en
+            ~/.cache/sherpa-onnx-fusion-repro/test-char-lstm
+            ~/.cache/sherpa-onnx-fusion-repro/test-char-lstm-units
+          key: repro-check-models-${{ hashFiles('repro/claims.toml') }}
 
       - name: sherpa-onnx-offline-parallel, every mode
         shell: bash

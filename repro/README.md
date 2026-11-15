@@ -52,7 +52,8 @@ zipformer CTC archive, repeated, with one unreadable file among them, and
 compares each way of running the program with one thread: a row per input
 in list order, an error row for the unreadable file only, and the same text
 at one recording per batch. It does this for greedy search, the prefix
-search, and the prefix search with a small n-gram model the script writes.
+search, the prefix search with a small n-gram model the script writes, and
+the prefix search with a tiny character LSTM.
 
 ```bash
 mise run check                                # against ../build
@@ -62,9 +63,12 @@ uv run check_parallel.py --lstm-model FILE    # also an onnx-rnn token scorer
 ```
 
 - A build without KenLM skips the n-gram configuration and says so.
-- No LSTM is downloaded: none small enough is pinned here, so that
-  configuration runs only with `--lstm-model`.
-- It takes under a minute on CPU and needs no GPU. The workflow
+- The LSTM is a 1.6 MB test fixture
+  ([graehl/sherpa-onnx-fusion-test-lm](https://huggingface.co/graehl/sherpa-onnx-fusion-test-lm)),
+  trained for 15 minutes so the check has a recurrent scorer to run. No
+  claim may rest on its quality. `--lstm-model` adds a second, real one
+  over the recognizer's tokens if you have it.
+- It takes about a minute on CPU and needs no GPU. The workflow
   `.github/workflows/fusion-fork.yaml` runs it after the fork's unit tests.
 - A developer's checkout can go further than the workflow does: add
   `--lstm-model`, or point `--build-dir` at a GPU build.

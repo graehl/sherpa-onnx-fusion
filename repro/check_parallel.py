@@ -19,9 +19,10 @@ configuration compares every way of running the program against one thread:
 
 The search configurations are greedy search, the prefix search, the prefix
 search with a small n-gram model written by this script (when the build has
-KenLM), and with --lstm-model also an onnx-rnn scorer over the recognizer's
-tokens. Nothing but the pinned model archive is downloaded; --offline skips
-the check, successfully, when that archive has not been fetched.
+KenLM), the prefix search with a tiny pinned character LSTM made for this
+check, and with --lstm-model also an onnx-rnn scorer over the recognizer's
+tokens. Only the pinned model archive and that 1.6 MB LSTM are downloaded;
+--offline skips, successfully, whatever has not been fetched.
 """
 
 import argparse
@@ -36,6 +37,12 @@ import repro_claims
 
 MODEL = "zipformer-ctc-en"
 MODEL_DIR = "sherpa-onnx-zipformer-ctc-en-2023-10-02"
+# A tiny character LSTM made for this check; it is not a usable language
+# model. Two artifacts: its step graph and its unit list.
+LSTM = "test-char-lstm"
+LSTM_FILE = "en-char-lstm-256x1.onnx"
+LSTM_UNITS = "test-char-lstm-units"
+LSTM_UNITS_FILE = "en-char-lstm-256x1.units.hex"
 MISSING = "/nonexistent/check-parallel-missing.wav"
 MISSING_AT = 4  # position of the unreadable file in the list
 REPEATS = 4  # times each shipped recording appears
@@ -118,8 +125,12 @@ def texts(output: Output) -> list[str | None]:
 
 
 def search_configurations(
-    arpa: pathlib.Path, lstm_model: str | None
+    arpa: pathlib.Path,
+    char_lstm: tuple[pathlib.Path, pathlib.Path] | None,
+    lstm_model: str | None,
 ) -> dict[str, list[str]]:
+    """The decoder flags of each configuration. "char_lstm" is the pinned test
+    LSTM's step graph and its unit list, or None to leave it out."""
     kenlm = [
         "--decoding-method=prefix_beam_search",
         "--scorer-text-case=lower",
@@ -132,6 +143,18 @@ def search_configurations(
         "prefix search": ["--decoding-method=prefix_beam_search"],
         "prefix search + n-gram": kenlm,
     }
+    if char_lstm:
+        extra = json.dumps({"vocab": str(char_lstm[1]), "vocab-encoding": "hex"})
+        configurations["prefix search + character LSTM"] = [
+            "--decoding-method=prefix_beam_search",
+            "--scorer.0.type=onnx-rnn",
+            "--scorer.0.unit=char",
+            f"--scorer.0.model={char_lstm[0]}",
+            f"--scorer.0.extra={extra}",
+            # Large enough that this weak model changes some words of the
+            # shipped recordings; at 0.3 it changes none.
+            "--scorer.0.weight=1.0",
+        ]
     if lstm_model:
         configurations["prefix search + n-gram + LSTM"] = kenlm + [
             "--scorer.1.type=onnx-rnn",
@@ -142,7 +165,12 @@ def search_configurations(
     return configurations
 
 
-def check(binary: pathlib.Path, model: pathlib.Path, lstm_model: str | None) -> int:
+def check(
+    binary: pathlib.Path,
+    model: pathlib.Path,
+    char_lstm: tuple[pathlib.Path, pathlib.Path] | None,
+    lstm_model: str | None,
+) -> int:
     """Runs every configuration and mode; returns the number of failures."""
     wavs = sorted(str(p) for p in (model / "test_wavs").glob("*.wav"))
     paths = wavs * REPEATS
@@ -159,7 +187,8 @@ def check(binary: pathlib.Path, model: pathlib.Path, lstm_model: str | None) -> 
             "--num-threads=1",
             f"--wav-scp={wav_list}",
         ]
-        for name, search in search_configurations(arpa, lstm_model).items():
+        configurations = search_configurations(arpa, char_lstm, lstm_model)
+        for name, search in configurations.items():
             reference = run_program(binary, recognizer + search + ["--nj=1"])
             if "Unknown scorer type 'kenlm'" in reference.stderr:
                 print(f"[check] SKIP {name}: this build has no KenLM")
@@ -210,14 +239,29 @@ def main() -> None:
     binary = pathlib.Path(args.build_dir) / "bin" / "sherpa-onnx-offline-parallel"
     if not binary.exists():
         sys.exit(f"Not built: {binary}")
-    fetched = (repro_claims.artifact_dir(MODEL) / ".complete").exists()
-    if args.offline and not fetched:
+    artifacts = repro_claims.load_claims()["artifacts"]
+
+    def fetch(name: str) -> pathlib.Path | None:
+        """The artifact's directory, or None if --offline and not fetched."""
+        if (
+            args.offline
+            and not (repro_claims.artifact_dir(name) / ".complete").exists()
+        ):
+            return None
+        return repro_claims.fetch_artifact(name, artifacts[name])
+
+    model = fetch(MODEL)
+    if model is None:
         print(f"[check] SKIP all: --offline and artifact {MODEL} is not fetched")
         return
-    spec = repro_claims.load_claims()["artifacts"][MODEL]
-    model = repro_claims.fetch_artifact(MODEL, spec) / MODEL_DIR
+    char_lstm = None
+    lstm, units = fetch(LSTM), fetch(LSTM_UNITS)
+    if lstm is None or units is None:
+        print(f"[check] SKIP the character LSTM: --offline and {LSTM} is not fetched")
+    else:
+        char_lstm = (lstm / LSTM_FILE, units / LSTM_UNITS_FILE)
 
-    failures = check(binary, model, args.lstm_model)
+    failures = check(binary, model / MODEL_DIR, char_lstm, args.lstm_model)
     if failures:
         sys.exit(f"[check] {failures} failed")
     print("[check] all passed")

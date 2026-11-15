@@ -18,11 +18,12 @@ out:
   upstream's beam search, the prefix search, and the prefix search with
   KenLM; 8 threads, sorted order, and search threads all matched one
   thread). Nothing repeats that.
-- **An LSTM scorer by default.** It runs only with `--lstm-model`. The
-  one public recurrent LM in ONNX form that upstream's tests use is a
-  whole-sentence export (about 400 MB, 103 MB quantized) without the state
-  inputs the `onnx-rnn` scorer steps through, and no small step-wise one
-  was found to pin.
+- **A real LSTM.** The default run uses a 1.6 MB character LSTM trained
+  for 15 minutes as a test fixture
+  ([graehl/sherpa-onnx-fusion-test-lm](https://huggingface.co/graehl/sherpa-onnx-fusion-test-lm)).
+  It exercises the scorer; it says nothing about recognition with a
+  language model. A model over the recognizer's tokens runs only with
+  `--lstm-model`.
 - **A wrong transcript.** The check was seen to fail on a build that
   lacks its options, never on output that differs.
 - **The build without KenLM.** That it skips the n-gram configuration
@@ -32,10 +33,6 @@ out:
 
 ## What is wanted
 
-- Pin a small step-wise LSTM and run it by default. A tiny English
-  character one (one layer of 256, about 2 MB) is being trained for this
-  (2026-11-15). It is to be hosted on Hugging Face and pinned by URL and
-  hash; no model is committed to this repository.
 - Add a transducer configuration; the small English zipformer archive is
   112 MB.
 - A deliberate fault (for example an environment variable in a test build
@@ -43,7 +40,7 @@ out:
 
 ## Closure
 
-The default run covers a transducer and an LSTM scorer, and the check has
-been seen to fail on a wrong transcript.
+The default run covers a transducer, and the check has been seen to fail
+on a wrong transcript.
 
 Contributing-model: fable-5.2
