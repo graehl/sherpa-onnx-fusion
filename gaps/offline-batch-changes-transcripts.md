@@ -98,7 +98,16 @@ transcripts. Masking the encoder was not enough: that model's subsampling
 adapter after the encoder read the first padded frame, so the export zeroes
 padded positions there too. Its dynamically quantized copy still changes
 3 of 5 greedy outputs in a batch, which is the neighbour effect above and
-not padding. Still owed: the same for the other model families the fork
-cares about, and an error rate for a masked export.
+not padding.
+
+The omnilingual ASR CTC model is the second (2026-11-15). A fine-tuned 1B
+model re-exported the same way gave fp32 logits within 1.3e-05 of each
+recording alone for the same kind of batch, where its unmasked export
+differed by up to 7.8; its int8 copy changed all five greedy outputs. The
+model class now batches such an export, and five recordings gave the same
+transcripts one at a time, in one batch, and in batches of two.
+
+Still owed: the same for the transducer families, and an error rate for a
+masked export.
 
 Contributing-model: fable-5.2

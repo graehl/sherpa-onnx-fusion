@@ -253,7 +253,8 @@ class OfflineRecognizerCtcImpl : public OfflineRecognizerImpl {
     }
 
     if (!model_->SupportBatchProcessing() || todo.size() == 1 ||
-        !config_.model_config.omnilingual.model.empty()) {
+        AnyTooShortForOmnilingual(todo.data(),
+                                  static_cast<int32_t>(todo.size()))) {
       for (OfflineStream *s : todo) {
         auto t = ForwardStream(s);
         if (!t.empty()) {
@@ -279,11 +280,12 @@ class OfflineRecognizerCtcImpl : public OfflineRecognizerImpl {
     }
 
     if (!model_->SupportBatchProcessing() || (n == 1) ||
-        !config_.model_config.omnilingual.model.empty()) {
+        AnyTooShortForOmnilingual(ss, n)) {
       // If the model does not support batch processing,
       // we process each stream independently.
       //
-      // omnilingual asr is disabled for batch processing at present
+      // An omnilingual asr export batches only if it takes input_lengths;
+      // see OfflineOmnilingualAsrCtcModel::SupportBatchProcessing().
       for (int32_t i = 0; i != n; ++i) {
         DecodeStream(ss[i]);
       }
@@ -297,7 +299,7 @@ class OfflineRecognizerCtcImpl : public OfflineRecognizerImpl {
 
     auto results = decoder_->Decode(std::move(t[0]), std::move(t[1]));
 
-    int32_t frame_shift_ms = 10;
+    int32_t frame_shift_ms = FrameShiftMs();
     for (int32_t i = 0; i != n; ++i) {
       auto r = Convert(results[i], symbol_table_, frame_shift_ms,
                        model_->SubsamplingFactor());
@@ -312,8 +314,9 @@ class OfflineRecognizerCtcImpl : public OfflineRecognizerImpl {
  private:
   // Runs the model on a batch of streams; returns what Forward returns.
   std::vector<Ort::Value> ForwardStreams(OfflineStream **ss, int32_t n) const {
-    // Even if the omnilingual asr model can process batch input, the following
-    // code does not support batching raw audio samples.
+    if (!config_.model_config.omnilingual.model.empty()) {
+      return ForwardOmnilingualStreams(ss, n);
+    }
 
     auto memory_info =
         Ort::MemoryInfo::CreateCpu(OrtDeviceAllocator, OrtMemTypeDefault);
@@ -375,6 +378,53 @@ class OfflineRecognizerCtcImpl : public OfflineRecognizerImpl {
     return model_->Forward(std::move(x), std::move(x_length));
   }
 
+  // The omnilingual asr model's input is the waveform: each stream's
+  // "features" are its samples, as one frame. Pads the normalized samples
+  // with zeros, which the model masks given the lengths.
+  std::vector<Ort::Value> ForwardOmnilingualStreams(OfflineStream **ss,
+                                                    int32_t n) const {
+    std::vector<std::vector<float>> samples(n);
+    std::vector<int64_t> lengths(n);
+    int64_t max_samples = 0;
+    for (int32_t i = 0; i != n; ++i) {
+      samples[i] = ss[i]->GetFrames();
+      lengths[i] = samples[i].size();
+      model_->NormalizeFeatures(samples[i].data(), 1, lengths[i]);
+      max_samples = std::max(max_samples, lengths[i]);
+    }
+
+    std::array<int64_t, 2> shape = {n, max_samples};
+    Ort::Value x = Ort::Value::CreateTensor<float>(model_->Allocator(),
+                                                   shape.data(), shape.size());
+    float *p = x.GetTensorMutableData<float>();
+    std::fill(p, p + n * max_samples, 0.0f);
+    for (int32_t i = 0; i != n; ++i) {
+      std::copy(samples[i].begin(), samples[i].end(), p + i * max_samples);
+    }
+
+    std::array<int64_t, 1> length_shape = {n};
+    Ort::Value x_length = Ort::Value::CreateTensor<int64_t>(
+        model_->Allocator(), length_shape.data(), length_shape.size());
+    std::copy(lengths.begin(), lengths.end(),
+              x_length.GetTensorMutableData<int64_t>());
+    return model_->Forward(std::move(x), std::move(x_length));
+  }
+
+  // A batch cannot hold an omnilingual asr stream that is too short for the
+  // model; such a call falls back to one stream at a time, where it gets an
+  // empty result.
+  bool AnyTooShortForOmnilingual(OfflineStream **ss, int32_t n) const {
+    if (config_.model_config.omnilingual.model.empty()) {
+      return false;
+    }
+    for (int32_t i = 0; i != n; ++i) {
+      if (ss[i]->GetFrames().size() < kOmnilingualMinNumSamples) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   // Runs the model on one stream; returns what Forward returns, or nothing
   // when the input is too short, in which case the stream has an empty result.
   // Some models do not support batch size > 1, e.g., WeNet CTC models.
@@ -388,7 +438,6 @@ class OfflineRecognizerCtcImpl : public OfflineRecognizerImpl {
     // The convolutional feature extractor of omnilingual ASR models needs
     // at least 400 samples (25 ms at 16 kHz); onnxruntime throws for shorter
     // input. Empty input would also make feat_dim 0 below.
-    constexpr size_t kOmnilingualMinNumSamples = 400;
     if (!config_.model_config.omnilingual.model.empty() &&
         f.size() < kOmnilingualMinNumSamples) {
       SHERPA_ONNX_LOGE(
@@ -421,6 +470,10 @@ class OfflineRecognizerCtcImpl : public OfflineRecognizerImpl {
                                             shape.data(), shape.size());
 
     int64_t x_length_scalar = num_frames;
+    if (!config_.model_config.omnilingual.model.empty()) {
+      // Its input is the waveform, so its length is in samples.
+      x_length_scalar = feat_dim;
+    }
     std::array<int64_t, 1> x_length_shape = {1};
     Ort::Value x_length =
         Ort::Value::CreateTensor(memory_info, &x_length_scalar, 1,
@@ -456,6 +509,10 @@ class OfflineRecognizerCtcImpl : public OfflineRecognizerImpl {
     *feat_dim *= 2;
     f->resize(static_cast<size_t>(*num_frames) * *feat_dim);
   }
+
+  // The convolutional feature extractor of omnilingual ASR models needs at
+  // least this many samples (25 ms at 16 kHz).
+  static constexpr size_t kOmnilingualMinNumSamples = 400;
 
   int32_t FrameShiftMs() const {
     return config_.model_config.omnilingual.model.empty() ? 10 : 20;
