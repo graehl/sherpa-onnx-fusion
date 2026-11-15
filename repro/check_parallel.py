@@ -14,7 +14,8 @@ model, repeated, with one unreadable file among them. For three recognizers
 and each search configuration, it compares every way of running the program
 against one thread:
 
-- a row for every input, in list order, naming its file;
+- a row for every input naming its file, in list order when that is asked
+  for and each index once when rows are printed as they finish;
 - an error row for the unreadable file and for no other;
 - the same text as one thread, at one recording per batch, where batching
   cannot change a model's output.
@@ -104,15 +105,25 @@ MISSING_AT = 2  # position of the unreadable file in the list
 REPEATS = 2  # times each shipped recording appears; more only costs time
 
 # How to run the program, each compared with one thread. All use one
-# recording per batch; sorting then only changes the order of decoding.
+# recording per batch; sorting then only changes the order of decoding. The
+# program sorts and prints results as they finish unless told otherwise, so
+# every run names both choices; run_program asks for list order by default.
+UNSORTED = "--sort-by-length=false"
+AS_FINISHED = "--ordered-output=false"
 MODES: dict[str, list[str]] = {
-    "4 threads": ["--nj=4"],
+    "4 threads": ["--nj=4", UNSORTED],
     "2 model threads, 3 search threads": [
         "--nj=2",
+        UNSORTED,
         "--decode-threads=3",
         "--decode-queue-size=1",
     ],
     "sorted by length, 3 threads": ["--nj=3", "--sort-by-length=true"],
+    "sorted, 3 threads, printed as finished": [
+        "--nj=3",
+        "--sort-by-length=true",
+        AS_FINISHED,
+    ],
     "sorted, 1 model thread, 2 search threads": [
         "--nj=1",
         "--sort-by-length=true",
@@ -145,8 +156,13 @@ class Output:
 
 
 def run_program(binary: pathlib.Path, args: list[str]) -> Output:
+    """Runs the program asking for rows in list order, unless "args" asks
+    for them as they finish; those rows are returned sorted by index, so
+    that a missing or repeated index still shows as a misplaced row."""
+    as_finished = AS_FINISHED in args
+    order = [] if as_finished else ["--ordered-output=true"]
     done = subprocess.run(
-        [str(binary), "--print-args=false", "--pause-seconds=0", *args],
+        [str(binary), "--print-args=false", "--pause-seconds=0", *order, *args],
         capture_output=True,
         text=True,
         check=False,
@@ -156,6 +172,8 @@ def run_program(binary: pathlib.Path, args: list[str]) -> Output:
     for line in done.stdout.splitlines():
         if line.startswith("{"):
             rows.append(json.loads(line))
+    if as_finished:
+        rows.sort(key=lambda row: row.get("index", -1))
     return Output(rows, done.stderr, done.returncode)
 
 
@@ -235,7 +253,7 @@ def check(
     for name, search in configurations.items():
         configuration = name
         name = f"{label}, {name}"
-        reference = run_program(binary, recognizer + search + ["--nj=1"])
+        reference = run_program(binary, recognizer + search + ["--nj=1", UNSORTED])
         if "Unknown scorer type 'kenlm'" in reference.stderr:
             print(f"[check] SKIP {name}: this build has no KenLM")
             continue

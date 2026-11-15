@@ -64,7 +64,8 @@ the CPU batch-size question in that gap is waiting on.
 ## State (2026-11-15)
 
 Done in the program: each result is one JSON line naming its list index
-and file, printed in list order for any `--nj`; `--sort-by-length` decodes
+and file, printed as it finishes, or in list order for any `--nj` with
+`--ordered-output=true`; `--sort-by-length`, on unless turned off, decodes
 longest first; `--max-batch-seconds` bounds a batch by its longest file
 times its count, beside `--batch-size`; the cut into batches is an exact
 dynamic program for "a fixed overhead per batch plus the audio held after
@@ -96,7 +97,7 @@ Still owed for closure:
 ## Closure
 
 Given a list of mixed lengths, the program's batches have padding below a
-stated fraction of frames, results name their recording and come out in
+stated fraction of frames, results name their recording and can come out in
 list order for any `--nj`,
 and a timing on such a list shows the encoder time saved against list-order
 batches; or the recognizer does the bucketing and this program only
