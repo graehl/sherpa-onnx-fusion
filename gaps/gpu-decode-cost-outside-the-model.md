@@ -65,6 +65,15 @@ Three things stand out.
   padded length. Keeping the total constant does not help either:
   alternating width 2 at 8.44 s with width 4 at 4.22 s took 2.71–2.82 s
   against 2.04–2.11 s for either shape alone, about 31 ms a change.
+- **The CPU provider shows no such cost.** Measured by another session
+  (2026-11-15) with the same model through Python onnxruntime, 4 threads,
+  random features, 72 calls a condition, median per call: one shape
+  repeated 18.4 ms and length alternating between two values 18.3 ms at
+  width 1; one shape repeated 89.0 ms and width alternating 8 and 7
+  86.8 ms. Turning off the memory pattern or the arena moved the level
+  slightly and not the comparison. So the cost belongs to the CUDA
+  provider, not to onnxruntime's shape handling in general, and its
+  memory planning is not the cause on CPU.
 - **Batching itself is worth 4.2 times** at batch 16 for one shape (0.64 s
   against 0.153 s). The 17 to 50 times in the tables is mostly the
   per-shape cost being paid on fewer calls.
