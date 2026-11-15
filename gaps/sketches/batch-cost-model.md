@@ -47,7 +47,13 @@ search.
   differ by a fraction of a second, so rounding up to a coarse grid would
   cost little padding and save the change on most calls. The search then
   has to carry the previous batch's shape, which stays small if lengths
-  are on a grid. For a model that does not mask padding this also changes
+  are on a grid. A change of width alone costs as much as a change of
+  length (measured 2026-11-15), so rounding lengths up at chosen cut
+  points is not enough: the unit to choose is a run of consecutive
+  batches with one width and one padded length (graehl, 2026-11-15). A
+  run over a span of the sorted list costs one change plus its batches at
+  that shape, and its span must divide into that width, with the
+  leftover a narrower run of its own. For a model that does not mask padding this also changes
   more transcripts.
 - **Time that is not linear in width.** A GPU that is not saturated by a
   narrow batch makes extra width nearly free up to some point. The formula

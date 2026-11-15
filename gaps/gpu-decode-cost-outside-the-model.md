@@ -53,6 +53,16 @@ Three things stand out.
   analogy with JAX) and leaves setup that is redone whenever the shape
   differs from the previous call's. Whether anything persists across
   processes was not tested and is unlikely to matter given this.
+- **A change of width alone costs as much as a change of length.** 24
+  batches alternating between two shapes, against 24 of one shape
+  (2026-11-15, three runs each, another job holding the GPU at 100%, so
+  the calls themselves are slow and only the differences count): one
+  shape throughout 2.03–2.07 s, whether width 2 or 4 and either
+  recording; width alternating 4 and 2 at one length 2.50–2.62 s; length
+  alternating at width 4 2.50–2.61 s; both alternating 2.57–2.89 s. That
+  is about 22 ms a change in each case. Keeping one of the two constant
+  buys nothing; consecutive batches must have the same width and the same
+  padded length.
 - **Batching itself is worth 4.2 times** at batch 16 for one shape (0.64 s
   against 0.153 s). The 17 to 50 times in the tables is mostly the
   per-shape cost being paid on fewer calls.
