@@ -504,6 +504,23 @@ these recordings (p = 0.20).
   6-gram's graph did not finish within 24 GB and an hour. The recipe's
   final determinization of the whole graph was skipped: in the one attempt
   made, on an earlier build, it passed 100 GB.
+- **On a phone.** A Samsung Galaxy S22 (SM-S906U1, 8 GB), the int8 model,
+  the first 30 test-other recordings (217 s of audio), one per call
+  (2026-11-15). Decode seconds exclude loading; peak memory is the
+  process's highest resident size:
+
+  | Decoder | Decode s, 1 thread | Decode s, 2 threads | Peak memory |
+  |---|---:|---:|---:|
+  | greedy | 6.36 | 5.10 | 364 MB |
+  | prefix search, no LM | 6.38 | 5.13 | 364 MB |
+  | prefix search + character 6-gram (4 MB) | 6.48 | 5.22 | 368 MB |
+  | prefix search + character 8-gram (16 MB) | 6.47 | 5.31 | 380 MB |
+  | graph decoder, the released word 3-gram graph (334 MB) | 7.69 | 6.66 | 1,102 MB |
+
+  Fusing the 8-gram costs 2 to 4% more decode time than greedy and 16 MB
+  of memory; the graph costs 21 to 31% and 738 MB. The phone was otherwise
+  idle but nothing was pinned or repeated, and 30 recordings say nothing
+  about WER.
 - **Limits.** One recognizer and 600 of 2,939 recordings. Decode seconds
   are summed over calls on a loaded host. A word LM compiles far more
   compactly than a character LM under a subword recognizer, which is why
