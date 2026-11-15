@@ -89,9 +89,16 @@ An export can take `input_lengths` (int64, valid positions on the input's
 sequence axis) and mask padding inside the graph, so that a padded fp32
 batch equals each utterance alone. The w2v-BERT model class runs padded
 batches when the export has that input and keeps one utterance per call
-otherwise. Only its plumbing is checked so far, with a stand-in model
-whose output depends on the same frame alone (three recordings of
-different lengths, batched and single, identical); the evidence above is
-still owed for a real masked export.
+otherwise. A real masked export now exists (2026-11-15): a w2v-BERT CTC model
+re-exported with `input_lengths` and a `logits_lengths` output. Five
+recordings of 2 to 30 s as one zero-padded batch, 55% of it padding, gave
+fp32 logits within 7.6e-06 of each recording alone, and through
+`sherpa-onnx-offline-parallel` batches of five gave the five single
+transcripts. Masking the encoder was not enough: that model's subsampling
+adapter after the encoder read the first padded frame, so the export zeroes
+padded positions there too. Its dynamically quantized copy still changes
+3 of 5 greedy outputs in a batch, which is the neighbour effect above and
+not padding. Still owed: the same for the other model families the fork
+cares about, and an error rate for a masked export.
 
 Contributing-model: fable-5.2
