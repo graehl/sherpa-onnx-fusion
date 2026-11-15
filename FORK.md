@@ -17,13 +17,14 @@ Word error rate in percent. Every recognizer here can be downloaded.
 
 | Recognizer, test set | Language model | Greedy | Best k2-fsa sherpa-onnx decoder with the LM | Prefix search, no LM | Prefix search with the LM | RTF* greedy | RTF* prefix search, no LM | RTF* with the LM | RTF* k2-fsa decoder with the LM |
 |---|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| Vietnamese Parakeet CTC 0.6B (NVIDIA, int8), FLEURS test, 857 clips | character 8-gram | 9.27 | not supported (a graph only, and not for NeMo CTC models) | 9.09 | 6.61 | 0.030 | 0.028 | 0.030 | – |
+| Vietnamese Parakeet CTC 0.6B (NVIDIA, int8), FLEURS test, 857 clips | character 8-gram | 9.27 | not supported (a graph only, and not for NeMo CTC models) | 9.09 | 6.30 | 0.030 | 0.028 | 0.030 | – |
 | English zipformer CTC, 600 LibriSpeech test-other recordings | character 8-gram from the LibriSpeech LM text (37 MB) | 5.63 | 5.39 (k2-fsa's word-3-gram graph released with the model, 334 MB) | 5.63 | 4.91 | 0.021 | 0.019 | 0.020 | 0.024 |
 | the same | public LibriSpeech RNN LM (LSTM, 388 MB) | 5.63 | not supported (no RNN LM for CTC models) | 5.59 | 4.45 | 0.021 | 0.015 | 0.13 | – |
 | Vietnamese zipformer transducer (gipformer 1.5, 68M), FLEURS test, 857 clips | 4-gram over the recognizer's tokens | 5.59 | not supported (no n-gram LM for transducers) | 5.49 | 5.23 | – | 0.021 | 0.021 | – |
+| the same | LSTM over the recognizer's tokens (int8, 49 MB) | 5.59 | not run | 5.49 | 4.89 | – | 0.021 | 0.028 | – |
 | English zipformer transducer, 600 LibriSpeech test-other recordings | public LibriSpeech RNN LM (LSTM) | 4.65 | 4.38 (rescoring) | 4.60 (k2-fsa `modified_beam_search`, which it reproduces) | 4.20 | 0.059 | 0.063 | 0.51 | 0.13 |
-| GigaAM v3 RNN-T, FLEURS Russian test, 743 clips | small character 6-gram | 4.63 | not supported (no LM for NeMo models) | 4.52 | 4.45 | 0.067 | 0.25 | 0.34 † | – |
-| Parakeet TDT 0.6B v3, FLEURS Russian test, 743 clips | small character 6-gram | 8.32 | not supported (no LM for NeMo models) | 7.77 | 7.72 | 0.25 | 0.69 | 0.67 † | – |
+| GigaAM v3 RNN-T, FLEURS Russian test, 743 clips | character 8-gram from Russian Wikipedia | 4.63 | not supported (no LM for NeMo models) | 4.52 | 4.21 | 0.067 | 0.25 † | 0.22 | – |
+| Parakeet TDT 0.6B v3, FLEURS Russian test, 743 clips | character 8-gram from Russian Wikipedia | 8.32 | not supported (no LM for NeMo models) | 7.77 | 6.78 | 0.25 | 0.69 † | 0.22 | – |
 
 \* Rough: decode seconds over audio seconds, summed over runs in which
 several two-thread processes shared a loaded 16-core x86 host. To be
@@ -36,9 +37,15 @@ greedy's time.
   built from 29.5 million sentences: Vietnamese Wikipedia, FineWeb-2, and
   transcripts or captions of GigaSpeech2, VietSpeech, VLSP 2020 and YODAS2
   with some private training transcripts, after removing sentences that
-  match the test references. The Russian 6-gram is deliberately small, 49
-  thousand Common Voice and FLEURS training sentences, so those two rows
-  show that fusion works on RNN-T and TDT, not how much a real LM gives.
+  match the test references. The gipformer LSTM was trained on the same
+  sentences. The Russian 8-gram is from 55 million Wikipedia sentences with
+  FLEURS validation and test references removed (907 MB, not yet cut down
+  to the recognizers' alphabet); with only 49 thousand Common Voice and
+  FLEURS training sentences the same two recognizers read 4.45 and 7.72.
+- **Token or character.** On the English CTC model an n-gram over the
+  recognizer's own tokens and a character n-gram from the same text give
+  the same WER (4.91 each; 126 MB and 37 MB), and the LSTM is better than
+  either.
 - **A private recognizer.** On a Vietnamese CTC model that is not public
   (300 FLEURS test clips) an 8-gram of the same kind takes greedy's 12.05
   to 8.14, and a character LSTM to 8.28.
