@@ -1,0 +1,34 @@
+# What repro_claims.py can reproduce. An artifact is a pinned download; a
+# claim names the artifacts it needs, how the recognizer is loaded, and the
+# decoder configurations ("arms") to compare on one test set. In arguments,
+# {name} is the directory artifact "name" was unpacked into.
+
+[artifacts.zipformer-ctc-en]
+url = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-zipformer-ctc-en-2023-10-02.tar.bz2"
+sha256 = "8e695f9e6609f82d826742f71bbb6c4693950abdb5f06f6938a1dbaa0dcdb60e"
+
+[artifacts.librispeech-test-other]
+url = "https://www.openslr.org/resources/12/test-other.tar.gz"
+sha256 = "d09c181bba5cf717b3dee7d4d592af11a3ee3a09e08ae025c5506f6ebe961c29"
+
+[claims.ctc-shipped-graph]
+summary = "English zipformer CTC: greedy, upstream's shipped word 3-gram graph, and the prefix search without a language model"
+artifacts = ["zipformer-ctc-en", "librispeech-test-other"]
+test_set = "librispeech-test-other"
+recognizer = [
+  "--zipformer-ctc-model={zipformer-ctc-en}/sherpa-onnx-zipformer-ctc-en-2023-10-02/model.onnx",
+  "--tokens={zipformer-ctc-en}/sherpa-onnx-zipformer-ctc-en-2023-10-02/tokens.txt",
+  "--num-threads=2",
+]
+
+[[claims.ctc-shipped-graph.arms]]
+name = "greedy"
+args = ["--decoding-method=greedy_search"]
+
+[[claims.ctc-shipped-graph.arms]]
+name = "shipped word 3-gram graph"
+args = ["--ctc.graph={zipformer-ctc-en}/sherpa-onnx-zipformer-ctc-en-2023-10-02/HLG.fst"]
+
+[[claims.ctc-shipped-graph.arms]]
+name = "prefix search, best alignment, no LM"
+args = ["--decoding-method=prefix_beam_search", "--ctc-alignment=max", "--max-active-paths=8"]
