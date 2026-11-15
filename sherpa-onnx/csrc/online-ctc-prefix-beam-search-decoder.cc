@@ -38,20 +38,14 @@ void OnlineCtcPrefixBeamSearchDecoder::Decode(
     SHERPA_ONNX_EXIT(-1);
   }
 
-  // A model may score more token IDs than the table names.
-  if (static_cast<int32_t>(vocabulary_->tokens.size()) != vocab_size) {
-    auto padded = std::make_shared<CtcSearchVocabulary>(*vocabulary_);
-    CtcSearchToken absent;
-    absent.emit = false;
-    padded->tokens.resize(vocab_size, absent);
-    vocabulary_ = std::move(padded);
-  }
+  std::shared_ptr<CtcSearchVocabulary> vocabulary =
+      VocabularyOfSize(vocab_size, &vocabulary_mutex_, &vocabulary_);
 
   std::vector<CtcPrefixSearch *> searches;
   for (int32_t b = 0; b != batch_size; ++b) {
     if (ss[b]->GetCtcPrefixSearch() == nullptr) {
       ss[b]->SetCtcPrefixSearch(std::make_shared<CtcPrefixSearch>(
-          options_, vocabulary_, scorer_pointers_, weights_));
+          options_, vocabulary, scorer_pointers_, weights_));
     }
     searches.push_back(ss[b]->GetCtcPrefixSearch());
   }
