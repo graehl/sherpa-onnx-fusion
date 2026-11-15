@@ -53,3 +53,47 @@ args = ["--ctc.graph={zipformer-ctc-en}/sherpa-onnx-zipformer-ctc-en-2023-10-02/
 [[claims.ctc-shipped-graph.arms]]
 name = "prefix search, best alignment, no LM"
 args = ["--decoding-method=prefix_beam_search", "--ctc-alignment=max", "--max-active-paths=8"]
+
+# English character n-grams from a tenth of the LibriSpeech LM text (OpenSLR
+# resource 11), in KenLM binary form; the model card says how they were built.
+[artifacts.en-char-8gram]
+url = "https://huggingface.co/graehl/sherpa-onnx-fusion-lm/resolve/9e61c0627e6cfc9ef62c355bcd62f796d97c26b4/en-librispeech-char-8gram.bin"
+sha256 = "fd52ed7c9da2d8751e695990b429fe1e5768e30f72035c07eba1e77df5d192fe"
+
+[artifacts.en-char-6gram]
+url = "https://huggingface.co/graehl/sherpa-onnx-fusion-lm/resolve/9e61c0627e6cfc9ef62c355bcd62f796d97c26b4/en-librispeech-char-6gram.bin"
+sha256 = "df36f60359035d8ab5298f3d92f4b6a20a4c9d10298f723ccaa95cae1a7ba2f8"
+
+[claims.ctc-char-ngram]
+summary = "English zipformer CTC: greedy and upstream's shipped word 3-gram graph (334 MB) against the prefix search with a 4 MB or 16 MB character n-gram"
+artifacts = ["zipformer-ctc-en", "librispeech-test-other", "en-char-8gram", "en-char-6gram"]
+test_set = "librispeech-test-other"
+recognizer = [
+  "--zipformer-ctc-model={zipformer-ctc-en}/sherpa-onnx-zipformer-ctc-en-2023-10-02/model.onnx",
+  "--tokens={zipformer-ctc-en}/sherpa-onnx-zipformer-ctc-en-2023-10-02/tokens.txt",
+  "--num-threads=2",
+]
+
+[[claims.ctc-char-ngram.arms]]
+name = "greedy"
+args = ["--decoding-method=greedy_search"]
+
+[[claims.ctc-char-ngram.arms]]
+name = "shipped word 3-gram graph"
+args = ["--ctc.graph={zipformer-ctc-en}/sherpa-onnx-zipformer-ctc-en-2023-10-02/HLG.fst"]
+
+[[claims.ctc-char-ngram.arms]]
+name = "prefix search with the character 6-gram"
+args = [
+  "--decoding-method=prefix_beam_search", "--ctc-alignment=max", "--max-active-paths=8",
+  "--length-bonus-unit=word", "--scorer.type=kenlm",
+  "--scorer.model={en-char-6gram}/en-librispeech-char-6gram.bin", "--scorer.weight=0.35",
+]
+
+[[claims.ctc-char-ngram.arms]]
+name = "prefix search with the character 8-gram"
+args = [
+  "--decoding-method=prefix_beam_search", "--ctc-alignment=max", "--max-active-paths=8",
+  "--length-bonus-unit=word", "--scorer.type=kenlm",
+  "--scorer.model={en-char-8gram}/en-librispeech-char-8gram.bin", "--scorer.weight=0.35",
+]
