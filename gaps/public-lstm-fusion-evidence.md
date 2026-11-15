@@ -8,20 +8,16 @@ where: topics/beam-search-and-scorer-fusion.md § Evidence; onnx-rnn scorer on t
 
 ## Observation
 
-The fusion topic's LSTM results cannot be checked from outside:
-
-- **Transducer.** One run uses only public files: the English zipformer
-  transducer (`sherpa-onnx-zipformer-en-2023-06-26`) with the public
-  LibriSpeech RNN LM over its 500 tokens. It covers 600 recordings sampled
-  from LibriSpeech test-other, and its scores are ER2, from a scorer that
-  is not in this repository. The sample is not a standard set and the
-  metric is not one a reader can compute.
-- **CTC.** No LSTM result on a public CTC recognizer exists at all. The
-  CTC LSTM runs used recognizers and language models that are not public.
+The [fusion evidence](../topics/beam-search-and-scorer-fusion.md#evidence)
+includes plain WER for public English zipformer CTC and transducer models
+with the public LibriSpeech LSTM over their tokens. Each comparison covers
+600 recordings sampled from LibriSpeech test-other. The full standard
+test sets, pinned model revisions, and public reproduction recipes required
+below remain missing; `repro/claims.toml` has no LSTM claim entry.
 
 ## What is wanted
 
-User-directed (graehl, 2026-11-14; recorded, not yet to be run): one LSTM
+User-directed (graehl, 2026-11-14): one LSTM
 fusion result for a transducer and one for a CTC model, each on models
 anyone can download from Hugging Face, with a metric and test set anyone
 can reproduce.
@@ -48,15 +44,10 @@ For each:
 
 ## Design notes
 
-- The transducer case is mostly a rerun of what exists, on the full sets
-  and with WER.
-- The CTC case needs an LSTM whose units a public CTC recognizer can use.
-  Two routes, neither verified: a public CTC model trained with the same
-  500-token vocabulary as the LibriSpeech RNN LM, used with
-  `--scorer.unit=token`; or a character LSTM trained here from public text
-  and published, which works with any CTC token table. Check the token
-  tables for equality before assuming the first; a vocabulary of the same
-  size is not the same vocabulary
+- Both cases can extend the existing public token-LSTM comparisons to
+  full standard sets. Pin the models and preserve their ID mapping with
+  `--scorer.unit=token` and its `extra` options. Check token tables when
+  substituting a model; a vocabulary of the same size is not the same vocabulary
   ([vocabulary compatibility](sketches/scorer-vocabulary-compatibility.md)).
 - Decode one recording per call so that batching does not enter the
   comparison ([batch changes transcripts](offline-batch-changes-transcripts.md)),

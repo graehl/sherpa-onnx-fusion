@@ -1,0 +1,26 @@
+# Pinned tools and entry points for reproducing the fork's public claims.
+# `mise install` once, then `mise run <task>` from this directory.
+
+[tools]
+python = "3.12"
+uv = "0.12"
+
+[tasks.build]
+description = "Build sherpa-onnx-offline with KenLM into ../build"
+dir = "{{config_root}}/.."
+run = [
+  "cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=ON -DSHERPA_ONNX_ENABLE_KENLM=ON",
+  "cmake --build build --target sherpa-onnx-offline -j",
+]
+
+[tasks.list]
+description = "List the claims"
+run = "uv run repro_claims.py list"
+
+[tasks.claim]
+description = "Fetch, decode and score one claim: mise run claim <name> [--sample N]"
+run = "uv run repro_claims.py run"
+
+[tasks.table]
+description = "Print the recorded results as a table"
+run = "uv run repro_claims.py table"
