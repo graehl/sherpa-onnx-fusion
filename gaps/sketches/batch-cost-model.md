@@ -38,6 +38,17 @@ search.
   to model is "this batch's shape differs from the last one's", which
   depends on the order of batches and on rounding lengths up to shared
   sizes, not on the set of shapes. Caching across processes is untested.
+- **Deliberate extra padding.** If a change of shape costs more than the
+  padding that avoids it, the best cut pads batches up to a shared length
+  and keeps their widths equal, so that consecutive batches have one
+  shape. Rough break-even from the numbers above: a change costs about as
+  much as 150 s of padded audio at width 1 and perhaps 35 s at width 16,
+  the latter from two calls. In a large sorted list consecutive batches
+  differ by a fraction of a second, so rounding up to a coarse grid would
+  cost little padding and save the change on most calls. The search then
+  has to carry the previous batch's shape, which stays small if lengths
+  are on a grid. For a model that does not mask padding this also changes
+  more transcripts.
 - **Time that is not linear in width.** A GPU that is not saturated by a
   narrow batch makes extra width nearly free up to some point. The formula
   charges every recording the same.
