@@ -22,6 +22,26 @@ uint64_t ChildKey(uint32_t parent, int32_t token) {
 
 }  // namespace
 
+void PrepareScorers(const SearchVocabulary &vocabulary,
+                    const std::vector<Scorer *> &scorers,
+                    UnitId word_boundary_char /*= ' '*/) {
+  std::vector<UnitId> tokens;
+  std::vector<UnitId> chars = {word_boundary_char};
+  for (size_t id = 0; id != vocabulary.tokens.size(); ++id) {
+    const SearchToken &token = vocabulary.tokens[id];
+    if (!token.emit) continue;
+    tokens.push_back(static_cast<UnitId>(id));
+    chars.insert(chars.end(), token.chars.begin(), token.chars.end());
+  }
+  std::sort(chars.begin(), chars.end());
+  chars.erase(std::unique(chars.begin(), chars.end()), chars.end());
+  for (Scorer *scorer : scorers) {
+    const std::vector<UnitId> &units =
+        scorer->Info().unit == ScorerUnit::kAsrToken ? tokens : chars;
+    scorer->Prepare({units.data(), units.size()});
+  }
+}
+
 // Scoring of one new node by one scorer: the units still to advance
 // through, in units_[begin, begin + length).
 struct ScoredPrefixTrie::Pending {

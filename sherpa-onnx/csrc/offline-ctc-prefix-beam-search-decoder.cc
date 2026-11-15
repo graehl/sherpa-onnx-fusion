@@ -127,6 +127,23 @@ OfflineCtcPrefixBeamSearchDecoder::OfflineCtcPrefixBeamSearchDecoder(
                                           ScorersWantLowercase(config))),
       scorers_(CreateScorers(config.scorers)) {
   for (const auto &scorer : config.scorers) weights_.push_back(scorer.weight);
+  std::vector<Scorer *> scorers;
+  for (const auto &scorer : scorers_) scorers.push_back(scorer.get());
+  PrepareScorers(*vocabulary_, scorers, options_.word_boundary_char);
+}
+
+std::shared_ptr<CtcSearchVocabulary> VocabularyOfSize(
+    int32_t vocab_size, std::mutex *mutex,
+    std::shared_ptr<CtcSearchVocabulary> *vocabulary) {
+  std::lock_guard<std::mutex> lock(*mutex);
+  if (static_cast<int32_t>((*vocabulary)->tokens.size()) != vocab_size) {
+    auto padded = std::make_shared<CtcSearchVocabulary>(**vocabulary);
+    CtcSearchToken absent;
+    absent.emit = false;
+    padded->tokens.resize(vocab_size, absent);
+    *vocabulary = std::move(padded);
+  }
+  return *vocabulary;
 }
 
 std::vector<OfflineCtcDecoderResult> OfflineCtcPrefixBeamSearchDecoder::Decode(
@@ -138,21 +155,15 @@ std::vector<OfflineCtcDecoderResult> OfflineCtcPrefixBeamSearchDecoder::Decode(
   const float *p_log_probs = log_probs.GetTensorData<float>();
   const int64_t *p_length = log_probs_length.GetTensorData<int64_t>();
 
-  // A model may score more token IDs than the table names.
-  if (static_cast<int32_t>(vocabulary_->tokens.size()) != vocab_size) {
-    auto padded = std::make_shared<CtcSearchVocabulary>(*vocabulary_);
-    CtcSearchToken absent;
-    absent.emit = false;
-    padded->tokens.resize(vocab_size, absent);
-    vocabulary_ = std::move(padded);
-  }
+  std::shared_ptr<CtcSearchVocabulary> vocabulary =
+      VocabularyOfSize(vocab_size, &vocabulary_mutex_, &vocabulary_);
 
   std::vector<Scorer *> scorers;
   for (const auto &scorer : scorers_) scorers.push_back(scorer.get());
 
   std::vector<std::unique_ptr<CtcPrefixSearch>> searches;
   for (int32_t b = 0; b != batch_size; ++b) {
-    searches.push_back(std::make_unique<CtcPrefixSearch>(options_, vocabulary_,
+    searches.push_back(std::make_unique<CtcPrefixSearch>(options_, vocabulary,
                                                          scorers, weights_));
   }
 

@@ -23,6 +23,7 @@ OnlineCtcPrefixBeamSearchDecoder::OnlineCtcPrefixBeamSearchDecoder(
       scorers_(CreateScorers(config.scorers)) {
   for (const auto &scorer : scorers_) scorer_pointers_.push_back(scorer.get());
   for (const auto &scorer : config.scorers) weights_.push_back(scorer.weight);
+  PrepareScorers(*vocabulary_, scorer_pointers_, options_.word_boundary_char);
 }
 
 void OnlineCtcPrefixBeamSearchDecoder::Decode(

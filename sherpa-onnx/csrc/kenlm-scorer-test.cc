@@ -96,6 +96,12 @@ TEST_F(KenLmScorerTest, ScoresCharactersBoundariesAndEndOfSentence) {
   EXPECT_NEAR(scores[2], -0.4f * kLn10, 1e-5);
   EXPECT_NEAR(scores[3], (-0.1f - 0.6f) * kLn10, 1e-5);
 
+  // Units given ahead by a decoder, and one that was not, score the same.
+  auto prepared = Create();
+  std::vector<UnitId> units = {'a', ' '};
+  prepared->Prepare({units.data(), units.size()});
+  EXPECT_EQ(Scores(prepared.get(), {'a', 'b', ' ', 'a'}, &state), scores);
+
   // A floor bounds each unit from below: only the backed-off a is under it.
   auto floored = Create(R"({"floor": -1.0})");
   auto floored_scores = Scores(floored.get(), {'a', 'b', ' ', 'a'}, &state);

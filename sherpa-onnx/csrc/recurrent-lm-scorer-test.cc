@@ -5,7 +5,10 @@
 #include "sherpa-onnx/csrc/recurrent-lm-scorer.h"
 
 #include <cmath>
+#include <cstring>
 #include <memory>
+#include <mutex>   // NOLINT
+#include <thread>  // NOLINT
 #include <utility>
 #include <vector>
 
@@ -29,12 +32,18 @@ class FakeStep : public RecurrentLmStep {
     return shapes_;
   }
 
-  void Run(const std::vector<int64_t> &units,
-           const std::vector<std::vector<float>> &states_in,
-           const float **log_probs,
-           std::vector<const float *> *states_out) override {
+  std::unique_ptr<Outputs> Run(
+      const std::vector<int64_t> &units,
+      const std::vector<std::vector<float>> &states_in, const float **log_probs,
+      std::vector<const float *> *states_out) const override {
     size_t batch = units.size();
-    batch_sizes.push_back(static_cast<int32_t>(batch));
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      batch_sizes.push_back(static_cast<int32_t>(batch));
+    }
+    auto outputs = std::make_unique<Tensors>();
+    std::vector<std::vector<float>> &out_ = outputs->states;
+    std::vector<float> &log_probs_ = outputs->log_probs;
     out_.resize(shapes_.size());
     for (size_t k = 0; k != shapes_.size(); ++k) {
       int32_t layers = shapes_[k].layers, hidden = shapes_[k].hidden;
@@ -62,14 +71,19 @@ class FakeStep : public RecurrentLmStep {
     *log_probs = log_probs_.data();
     states_out->clear();
     for (const auto &state : out_) states_out->push_back(state.data());
+    return outputs;
   }
 
-  std::vector<int32_t> batch_sizes;
+  mutable std::vector<int32_t> batch_sizes;  // One entry per Run.
 
  private:
+  struct Tensors : public Outputs {
+    std::vector<std::vector<float>> states;
+    std::vector<float> log_probs;
+  };
+
   std::vector<StateShape> shapes_ = {{2, 3}, {1, 2}};
-  std::vector<std::vector<float>> out_;
-  std::vector<float> log_probs_;
+  mutable std::mutex mutex_;  // For batch_sizes.
 };
 
 // The same model stepped one history at a time: the log probability of each
@@ -84,7 +98,7 @@ std::vector<float> ReferenceLogProbs(const std::vector<int32_t> &units) {
   for (int32_t unit : history) {
     const float *log_probs;
     std::vector<const float *> out;
-    step.Run({unit}, state, &log_probs, &out);
+    auto outputs = step.Run({unit}, state, &log_probs, &out);
     result.assign(log_probs, log_probs + kVocab);
     state[0].assign(out[0], out[0] + 6);
     state[1].assign(out[1], out[1] + 2);
@@ -111,6 +125,49 @@ struct Fixture {
   std::unique_ptr<Scorer> scorer;
   std::unique_ptr<ScorerUtterance> utterance;
 };
+
+// One scorer serves several threads at once, each with its own utterance:
+// every thread gets the scores of stepping its history alone.
+TEST(RecurrentLmScorer, ThreadsShareOneScorer) {
+  Fixture f;
+  Scorer *scorer = f.scorer.get();
+  const int32_t kThreads = 8, kRounds = 200;
+  std::vector<int32_t> mismatches(kThreads, 0);
+  std::vector<std::thread> threads;
+  for (int32_t t = 0; t != kThreads; ++t) {
+    threads.emplace_back([scorer, t, &mismatches]() {
+      // Thread t spells a different history: t % 3 'a's, then 'b', then 'a'.
+      std::vector<UnitId> spelling(t % 3, 'a');
+      spelling.push_back('b');
+      spelling.push_back('a');
+      std::vector<float> expected;
+      std::vector<int32_t> ids;
+      for (UnitId unit : spelling) {
+        int32_t id = unit == 'a' ? 2 : 3;
+        expected.push_back(ReferenceLogProbs(ids)[id]);
+        ids.push_back(id);
+      }
+      for (int32_t round = 0; round != kRounds; ++round) {
+        auto utterance = scorer->NewUtterance();
+        alignas(8) std::byte current[8], next[8];
+        scorer->Start(utterance.get(), current);
+        for (size_t i = 0; i != spelling.size(); ++i) {
+          ScorerExtension extension = {
+              {utterance.get(), current}, spelling[i], next};
+          ScorerAdvanceResult result;
+          scorer->Advance({&extension, 1}, &result);
+          if (result.log_score != expected[i]) ++mismatches[t];
+          scorer->Info().destroy_state(current);
+          std::memcpy(current, next, sizeof(current));
+        }
+        scorer->Info().destroy_state(current);
+      }
+    });
+  }
+  for (auto &thread : threads) thread.join();
+  for (int32_t t = 0; t != kThreads; ++t) EXPECT_EQ(mismatches[t], 0) << t;
+  EXPECT_EQ(RecurrentLmLiveNodes(), 0);
+}
 
 TEST(RecurrentLmScorer, ScoresMatchSteppingOneHistoryAtATime) {
   ASSERT_EQ(RecurrentLmLiveNodes(), 0);

@@ -6,6 +6,7 @@
 #define SHERPA_ONNX_CSRC_OFFLINE_CTC_PREFIX_BEAM_SEARCH_DECODER_H_
 
 #include <memory>
+#include <mutex>  // NOLINT
 #include <string>
 #include <vector>
 
@@ -49,6 +50,14 @@ std::shared_ptr<const std::vector<float>> LoadCtcPriorOffsets(
 CtcPrefixSearchOptions MakeCtcPrefixSearchOptions(const FusionConfig &config,
                                                   int32_t max_active);
 
+// Returns *vocabulary, first replacing it by a copy padded to "vocab_size"
+// tokens with ones the search never emits if its size differs: a model may
+// score more token IDs than the table names, which is known only from its
+// output. Holds "mutex", so decode calls on several threads may use it.
+std::shared_ptr<CtcSearchVocabulary> VocabularyOfSize(
+    int32_t vocab_size, std::mutex *mutex,
+    std::shared_ptr<CtcSearchVocabulary> *vocabulary);
+
 // --decoding-method=prefix_beam_search for offline CTC models: CTC prefix
 // beam search fused with the configured scorers. The utterances of a batch
 // share each scorer call.
@@ -65,6 +74,7 @@ class OfflineCtcPrefixBeamSearchDecoder : public OfflineCtcDecoder {
 
  private:
   CtcPrefixSearchOptions options_;
+  std::mutex vocabulary_mutex_;
   std::shared_ptr<CtcSearchVocabulary> vocabulary_;
   std::vector<std::unique_ptr<Scorer>> scorers_;
   std::vector<float> weights_;

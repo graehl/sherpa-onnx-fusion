@@ -5,6 +5,7 @@
 #include "sherpa-onnx/csrc/rescoring-scorer.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cstdint>
 #include <cstring>
 #include <memory>
@@ -15,7 +16,7 @@ namespace sherpa_onnx {
 
 namespace {
 
-int32_t g_live_histories = 0;
+std::atomic<int32_t> g_live_histories(0);
 
 // A hypothesis's units as a chain shared with the hypotheses it grew from.
 struct Link {
@@ -69,6 +70,8 @@ class RescoringScorer : public Scorer {
   }
 
   const ScorerInfo &Info() const override { return info_; }
+
+  void Prepare(Span<const UnitId> units) override { scorer_->Prepare(units); }
 
   std::unique_ptr<ScorerUtterance> NewUtterance() override {
     auto utterance = std::make_unique<Utterance>();

@@ -56,6 +56,7 @@ TransducerFusion::TransducerFusion(const FusionConfig &config,
   vocabulary_->tokens.resize(vocab_size, absent);
   for (const auto &scorer : scorers_) scorer_pointers_.push_back(scorer.get());
   for (const auto &scorer : config.scorers) weights_.push_back(scorer.weight);
+  PrepareScorers(*vocabulary_, scorer_pointers_);
 }
 
 std::unique_ptr<TransducerPrefixSearch> TransducerFusion::NewSearch(

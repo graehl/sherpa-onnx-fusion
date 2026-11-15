@@ -36,6 +36,8 @@ CtcInflightDecoder::CtcInflightDecoder(
         "CtcInflightDecoder: need one default weight per scorer");
   }
   for (const auto &scorer : scorers_) scorer_pointers_.push_back(scorer.get());
+  PrepareScorers(*vocabulary_, scorer_pointers_,
+                 options_.search.word_boundary_char);
 }
 
 CtcInflightDecoder::~CtcInflightDecoder() = default;
