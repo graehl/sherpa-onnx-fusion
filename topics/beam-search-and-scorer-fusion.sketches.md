@@ -52,6 +52,17 @@ What to settle first:
 - A combined step moves at the pace of the last request to arrive, and
   the first to arrive bears the delay.
 
+How many search threads a GPU scorer wants is a related open question. A
+search thread alternates CPU work for its batch (time c per round) with
+one scorer step on the device (time g), and steps from different threads
+queue there. One thread keeps the device busy g/(c+g) of the time, so
+about 1 + c/g threads saturate it, capped by free cores: more than one
+whenever the CPU share of a round is comparable to the step, more with
+wide batches or an n-gram scorer fused alongside, and unrelated to how
+many threads run the recognizer's model (one, on a GPU).
+`sherpa-onnx-offline-parallel --decode-threads` sets it apart from
+`--nj` so it can be measured; it has not been, with a scorer on a GPU.
+
 Measure, in this order: the time of one recurrent step on a GPU against
 batch width; then one thread with a wide batch against several threads
 with narrow ones, on the same recordings. Build the collector only if the

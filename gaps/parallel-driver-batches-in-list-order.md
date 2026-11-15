@@ -74,6 +74,11 @@ remainder is left; recognizer time is reported apart from file reading and
 features. On 100 test-other recordings at 16 per batch, list order pads
 697 s of audio to about 1480 s and sorting to 801 s.
 
+Since then the program also runs the prefix search and scorers from
+several threads, and `--decode-threads` gives it threads that only search,
+fed through a bounded queue by the threads that run the model
+([what a scorer holds](../topics/beam-search-and-scorer-fusion.md#scorer-interface)).
+
 Still owed for closure:
 
 - A timing on a GPU of list-order against sorted batches on a list of
