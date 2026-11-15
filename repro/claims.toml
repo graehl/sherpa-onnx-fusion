@@ -11,6 +11,17 @@ sha256 = "8e695f9e6609f82d826742f71bbb6c4693950abdb5f06f6938a1dbaa0dcdb60e"
 url = "https://www.openslr.org/resources/12/test-other.tar.gz"
 sha256 = "d09c181bba5cf717b3dee7d4d592af11a3ee3a09e08ae025c5506f6ebe961c29"
 
+# A tiny English character LSTM (one layer of 256, 1.6 MB) trained for 15
+# minutes so that check_parallel.py has a recurrent scorer to run. It is a
+# test fixture: no claim may rest on its quality.
+[artifacts.test-char-lstm]
+url = "https://huggingface.co/graehl/sherpa-onnx-fusion-test-lm/resolve/1fb385230c7e25058fd6b406e5a88d2de81cc350/en-char-lstm-256x1.onnx"
+sha256 = "dda776a29cfbb1378d3749be0a918250f5bd5e19d6afcf958ed0b6b9fed5d548"
+
+[artifacts.test-char-lstm-units]
+url = "https://huggingface.co/graehl/sherpa-onnx-fusion-test-lm/resolve/1fb385230c7e25058fd6b406e5a88d2de81cc350/en-char-lstm-256x1.units.hex"
+sha256 = "3dac32f9a969fa0bb6af2965323b8a6d77912b1e36cd639ac5a2b1f9b7180d2c"
+
 [claims.ctc-shipped-graph]
 summary = "English zipformer CTC: greedy, upstream's shipped word 3-gram graph, and the prefix search without a language model"
 artifacts = ["zipformer-ctc-en", "librispeech-test-other"]
