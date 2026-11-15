@@ -315,7 +315,12 @@ FineWeb-2, and transcripts or captions of GigaSpeech2, VietSpeech, VLSP
 2020 and YODAS2 with some private training transcripts, 29.5 million
 sentences, with sentences matching the test references removed. The
 recognizer trained on FLEURS, so its absolute scores there are flattered;
-the comparison between decodings is not affected. Upstream's graph
+the comparison between decodings is not affected. A 4-gram over this
+recognizer's own tokens (107 MB, the same text encoded with its BPE model)
+reached only 7.07 on the test set: the recognizer writes capitals and
+punctuation as tokens and the LM text has neither, so every such token
+scores as unknown. A token LM for a recognizer that writes case needs
+cased text. Upstream's graph
 decoder cannot run this model at all: it assumes blank is token 0, and
 NeMo models put it last.
 
@@ -451,6 +456,38 @@ these recordings (p = 0.20).
   model, fused with `--scorer.unit=token`; the 5-gram's weight, 0.7, was
   the highest tried. The LSTM is −0.46 against the token 5-gram
   (p < 0.0001).
+- **Size against WER, pruned.** The same tenth of the text at several
+  count-pruning levels, weight chosen per model on dev-other:
+
+  | Unit | Order | LM on disk | WER |
+  |---|---:|---:|---:|
+  | character | 8 | 39 MB | 4.91 |
+  | character | 8 | 30 MB | 4.88 |
+  | character | 8 | 16 MB | 4.93 |
+  | character | 6 | 6 MB | 5.06 |
+  | character | 6 | 4 MB | 5.04 |
+  | character | 5 | 1.6 MB | 5.07 |
+  | token | 5 | 126 MB | 4.91 |
+  | token | 5 | 49 MB | 4.88 |
+  | token | 5 | 27 MB | 5.02 |
+  | token | 4 | 49 MB | 4.92 |
+  | token | 4 | 27 MB | 4.99 |
+  | token | 3 | 9 MB | 5.12 |
+  | token | 3 | 5 MB | 5.14 |
+
+  At a given size the character models are ahead on this 500-token
+  recognizer: 16 MB of character 8-gram matches 49 MB of token 5-gram, and
+  1.6 MB of character 5-gram beats 9 MB of token 3-gram. Differences of
+  0.05 between rows are within noise on 600 recordings. The 16 MB and 4 MB
+  character models are published
+  ([graehl/sherpa-onnx-fusion-lm](https://huggingface.co/graehl/sherpa-onnx-fusion-lm))
+  and pinned in `repro/claims.toml` as the claim `ctc-char-ngram`.
+- **A character LSTM trained here did not beat the n-gram.** Three layers
+  of 1,536 units trained for three hours on one GPU on the full text
+  (1.39 bits per character held out), quantized to 46 MB, scored 5.02
+  with weight 0.35, against 4.93 for the 16 MB 8-gram, at about 18 times
+  the n-gram's decode time because a character scorer under a subword
+  recognizer steps once per character. It is not published.
 - **The character LMs** are modified Kneser-Ney models from KenLM on the
   public LibriSpeech LM text, a tenth of it or all of it, one LM word per
   character. Weights were chosen on 300 dev-other recordings (0.2 for the
