@@ -61,7 +61,28 @@ whenever the CPU share of a round is comparable to the step, more with
 wide batches or an n-gram scorer fused alongside, and unrelated to how
 many threads run the recognizer's model (one, on a GPU).
 `sherpa-onnx-offline-parallel --decode-threads` sets it apart from
-`--nj` so it can be measured; it has not been, with a scorer on a GPU.
+`--nj` so it can be measured.
+
+A first measurement (2026-11-15; 100 test-other recordings in list-order
+batches of 8, zipformer CTC model and a token LSTM both on one GPU, a
+character KenLM on CPU, one thread running the model, two runs each,
+other jobs holding the GPU at 100% throughout, so the level is not to be
+trusted and the order probably is):
+
+| Search threads | Elapsed s |
+|---|---|
+| none (the model's thread searches) | 14.2, 14.7 |
+| 1 | 12.7, 12.7 |
+| 2 | 11.3, 11.4 |
+| 4 | 8.6, 8.9 |
+| 8 | 8.9, 8.7 |
+
+Every run gave the same 100 transcripts. Four search threads were 1.65
+times faster than none and eight no better than four, so here the
+answer was neither one nor the number of model threads. Four threads
+each running the model and searching took 9.0 s in the one run that
+finished; its repeat failed allocating GPU memory, which the other jobs
+had nearly exhausted.
 
 Measure, in this order: the time of one recurrent step on a GPU against
 batch width; then one thread with a wide batch against several threads
