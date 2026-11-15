@@ -740,7 +740,12 @@ model, or anything with the same contract. The interface is
 
 - **`kenlm`** (`kenlm-scorer.h`): a character n-gram model in ARPA or
   KenLM binary form. Scores are KenLM's log10 times ln 10; an unknown
-  character scores as `<unk>`; the end of input scores `</s>`.
+  character scores as `<unk>`; the end of input scores `</s>`. With
+  `"words": true` in `extra` the model is over words instead: characters
+  are collected to the word boundary and the word is scored there, an
+  unknown word as `<unk>`, with an optional `"floor"` on what one word can
+  cost. Nothing is charged inside a word, so pruning within a word is by
+  the recognizer's score alone.
 - **`onnx-rnn`** (`recurrent-lm-scorer.h`): a character LSTM or GRU
   exported as one step. The first model input is the previous unit IDs,
   `[batch, 1]`; every further input is a recurrent state tensor

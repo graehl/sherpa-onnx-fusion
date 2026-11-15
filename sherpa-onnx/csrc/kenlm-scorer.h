@@ -31,6 +31,12 @@ namespace sherpa_onnx {
 //     builder must have verified that numbering.
 // A token the model lacks is its <unk>.
 //
+// With unit=char and "words": true the model is over words: characters are
+// collected until the boundary and the word is then scored, so nothing is
+// charged inside a word. A word the model lacks is its <unk>. "floor": F
+// with it makes F, a natural-log score, the least any word can score, which
+// limits what one unknown word costs.
+//
 // The state is KenLM's own n-gram state, so hypotheses that reach the same
 // context, including by backing off, have equal state bytes.
 std::unique_ptr<ScorerFactory> MakeKenLmScorerFactory();
