@@ -14,6 +14,12 @@
 
 namespace sherpa_onnx {
 
+// Normalizes each of the feat_dim bins of features (num_frames rows) to zero
+// mean and unit variance over the utterance, as SeamlessM4TFeatureExtractor
+// does.
+void NormalizeW2vBertFeatures(float *features, int32_t num_frames,
+                              int32_t feat_dim);
+
 // A w2v-BERT 2.0 encoder with a CTC head, exported from Hugging Face
 // transformers (Wav2Vec2BertForCTC) with the input "input_features" of
 // shape (N, T, 160) and an output of logits (N, T, vocab_size).

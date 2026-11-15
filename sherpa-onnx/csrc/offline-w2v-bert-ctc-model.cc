@@ -199,6 +199,11 @@ OrtAllocator *OfflineW2vBertCtcModel::Allocator() const {
 void OfflineW2vBertCtcModel::NormalizeFeatures(float *features,
                                                int32_t num_frames,
                                                int32_t feat_dim) const {
+  NormalizeW2vBertFeatures(features, num_frames, feat_dim);
+}
+
+void NormalizeW2vBertFeatures(float *features, int32_t num_frames,
+                              int32_t feat_dim) {
   if (num_frames < 2) return;
   for (int32_t d = 0; d != feat_dim; ++d) {
     double sum = 0;

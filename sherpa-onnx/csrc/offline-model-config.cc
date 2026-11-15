@@ -36,6 +36,9 @@ void OfflineModelConfig::Register(ParseOptions *po) {
   po->Register("w2v-bert-ctc", &w2v_bert_ctc,
                "Path to model.onnx of a w2v-BERT 2.0 CTC model exported from "
                "transformers, with the single input input_features");
+  po->Register("litert-dispatch-dir", &litert_dispatch_dir,
+               "Directory of LiteRT's accelerator library, for a .tflite "
+               "model run with --provider=npu");
 
   po->Register("tokens", &tokens, "Path to tokens.txt");
 
@@ -256,6 +259,7 @@ std::string OfflineModelConfig::ToString() const {
   os << "qwen3_asr=" << qwen3_asr.ToString() << ", ";
   os << "telespeech_ctc=\"" << telespeech_ctc << "\", ";
   os << "w2v_bert_ctc=\"" << w2v_bert_ctc << "\", ";
+  os << "litert_dispatch_dir=\"" << litert_dispatch_dir << "\", ";
   os << "tokens=\"" << tokens << "\", ";
   os << "num_threads=" << num_threads << ", ";
   os << "debug=" << (debug ? "True" : "False") << ", ";
