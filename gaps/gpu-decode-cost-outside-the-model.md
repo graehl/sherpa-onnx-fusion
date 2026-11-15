@@ -104,7 +104,13 @@ of single items finished in 1.55 s elapsed.
 
 ## What is wanted
 
-- Find what the per-shape cost is and remove it or avoid it. Candidates:
+- Find what the per-shape cost is and remove it or avoid it. One lead: a
+  run that exhausted GPU memory failed in `cublasCreate`, called from the
+  provider's `cuda_stream_handle.cc` while executing an `If` node of the
+  encoder (`/encoder/0/encoder_pos/If`). So the provider creates a cuBLAS
+  handle while a call is running, at least for that subgraph; whether it
+  does so on every call or only when a shape changes was not checked, and
+  creating one is slow enough to matter. Other candidates:
   memory arena growth or reallocation per shape, per-shape kernel setup in
   the provider, shape-dependent work run on the CPU. Padding batch lengths
   up to a few fixed sizes would avoid it at the price of padded frames and
