@@ -49,6 +49,10 @@ struct OfflineModelConfig {
   OfflineQwen3ASRModelConfig qwen3_asr;
   OfflineW2vBertCtcModelConfig w2v_bert_ctc;
   std::string telespeech_ctc;
+  // Where LiteRT finds its accelerator library (for a Pixel,
+  // libLiteRtDispatch_GoogleTensor.so); used with a .tflite model and
+  // --provider=npu. See offline-w2v-bert-ctc-litert-model.h.
+  std::string litert_dispatch_dir;
 
   std::string tokens;
   int32_t num_threads = 2;

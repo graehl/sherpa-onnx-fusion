@@ -28,6 +28,9 @@
 #include "sherpa-onnx/csrc/offline-tdnn-ctc-model.h"
 #include "sherpa-onnx/csrc/offline-telespeech-ctc-model.h"
 #include "sherpa-onnx/csrc/offline-w2v-bert-ctc-model.h"
+#if SHERPA_ONNX_ENABLE_LITERT
+#include "sherpa-onnx/csrc/offline-w2v-bert-ctc-litert-model.h"
+#endif
 #include "sherpa-onnx/csrc/offline-wenet-ctc-model.h"
 #include "sherpa-onnx/csrc/offline-zipformer-ctc-model.h"
 #include "sherpa-onnx/csrc/onnx-utils.h"
@@ -180,7 +183,17 @@ static ModelType GetModelType(char *model_data, size_t model_data_length,
 
 std::unique_ptr<OfflineCtcModel> OfflineCtcModel::Create(
     const OfflineModelConfig &config) {
-  if (!config.dolphin.model.empty()) {
+  if (EndsWith(config.w2v_bert_ctc.model, ".tflite")) {
+#if SHERPA_ONNX_ENABLE_LITERT
+    return std::make_unique<OfflineW2vBertCtcLiteRtModel>(config);
+#else
+    SHERPA_ONNX_LOGE(
+        "%s is a LiteRT graph. Rebuild with -DSHERPA_ONNX_ENABLE_LITERT=ON "
+        "to run it.",
+        config.w2v_bert_ctc.model.c_str());
+    SHERPA_ONNX_EXIT(-1);
+#endif
+  } else if (!config.dolphin.model.empty()) {
     return std::make_unique<OfflineDolphinModel>(config);
   } else if (!config.nemo_ctc.model.empty()) {
     return std::make_unique<OfflineNemoEncDecCtcModel>(config);

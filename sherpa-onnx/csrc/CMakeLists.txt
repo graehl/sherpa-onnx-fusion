@@ -386,6 +386,10 @@ if(SHERPA_ONNX_ENABLE_KENLM)
   list(APPEND sources kenlm-scorer.cc)
 endif()
 
+if(SHERPA_ONNX_ENABLE_LITERT)
+  list(APPEND sources offline-w2v-bert-ctc-litert-model.cc)
+endif()
+
 # Always static build
 add_library(sherpa-onnx-core STATIC ${sources})
 
@@ -509,6 +513,10 @@ target_link_libraries(sherpa-onnx-core fstfar fst)
 
 if(SHERPA_ONNX_ENABLE_KENLM)
   target_link_libraries(sherpa-onnx-core kenlm)
+endif()
+
+if(SHERPA_ONNX_ENABLE_LITERT)
+  target_link_libraries(sherpa-onnx-core litert)
 endif()
 
 if(SHERPA_ONNX_ENABLE_CHECK)
