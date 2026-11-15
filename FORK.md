@@ -111,6 +111,7 @@ present and prints a warning describing the correct result.
 - [Prefix search against the FST decoder on a graph with an LM](gaps/sketches/fst-decoder-lm-graph-comparison.md) (run for a character LM; what remains is in the sketch).
 - [Checking that a token scorer and a recognizer share a vocabulary](gaps/sketches/scorer-vocabulary-compatibility.md).
 - [Running models through LiteRT](gaps/sketches/litert-model-backend.md).
+- [A remaining-cost estimate for partly spelled words](gaps/sketches/word-lm-remaining-cost.md).
 
 ## Relationship to upstream
 

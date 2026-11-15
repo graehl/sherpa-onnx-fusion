@@ -29,6 +29,29 @@ one over the recognizer's own tokens, which is scored token by token and
 needs none of this. Wanted only if word-level LMs are to be used at small
 beams.
 
+## Two forms of the estimate
+
+User-directed (graehl, 2026-11-15): keep the word mode, and sketch the
+estimate in both forms.
+
+- **Subword-wise, precomputed.** Spell every vocabulary word with the
+  recognizer's tokenizer when the scorer is created and build a prefix tree
+  over token sequences, each node holding the best score of any word
+  below it. A token then moves one step in the tree. This matches what the
+  recognizer can actually emit and costs one lookup per token, but it ties
+  the scorer to one recognizer's token table, needs the tokenizer or a
+  pronunciation-style list of each word's token spellings, and a word with
+  several tokenizations needs all of them.
+- **Character-wise.** Build the prefix tree over the words' characters.
+  The scorer already receives characters, so it needs nothing from the
+  recognizer and works with any token table, at the cost of one step per
+  character and a tree with more nodes.
+
+The character form fits the scorer interface as it is and is the one to try
+first. Either way it is a niche need: KenLM, which is built for searches
+whose unit is the word, has no such estimate, and a search over subword
+tokens does better to use an LM over those tokens.
+
 ## Design notes
 
 - The estimate can ignore context (best unigram under the prefix, from a
