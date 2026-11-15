@@ -529,6 +529,7 @@ for a list of pre-trained models to download.
   float batch_overhead_seconds = 1e6;
   int32_t decode_threads = 0;     // 0: a --nj thread also searches its batch
   int32_t decode_queue_size = 0;  // 0: as many as decode_threads
+  int32_t pause_seconds = 10;     // slept before and after loading the model
   sherpa_onnx::ParseOptions po(kUsageMessage);
   sherpa_onnx::OfflineRecognizerConfig config;
   config.Register(&po);
@@ -560,6 +561,10 @@ for a list of pre-trained models to download.
               "threads wait while that many are waiting, which bounds the "
               "memory held by model outputs. 0 means the value of "
               "--decode-threads. default=0");
+  po.Register("pause-seconds", &pause_seconds,
+              "Seconds to sleep before loading the model and again after "
+              "it, which leaves time to attach a monitor. Not counted in any "
+              "reported time. default=10");
   po.Register("sort-by-length", &sort_by_length,
               "If true, decode the wave files from the longest to the "
               "shortest so that a batch holds files of similar length and "
@@ -596,7 +601,7 @@ for a list of pre-trained models to download.
     fprintf(stderr, "Errors in config!\n");
     return -1;
   }
-  std::this_thread::sleep_for(std::chrono::seconds(10));  // sleep 10s
+  std::this_thread::sleep_for(std::chrono::seconds(pause_seconds));
   fprintf(stderr, "Creating recognizer ...\n");
   const auto begin = std::chrono::steady_clock::now();
   sherpa_onnx::OfflineRecognizer recognizer(config);
@@ -609,7 +614,7 @@ for a list of pre-trained models to download.
           "Started nj: %d, batch_size: %d, wav_path: %s. recognizer init time: "
           "%.6f\n",
           nj, batch_size, wav_scp.c_str(), elapsed_seconds);
-  std::this_thread::sleep_for(std::chrono::seconds(10));  // sleep 10s
+  std::this_thread::sleep_for(std::chrono::seconds(pause_seconds));
   std::vector<std::string> wav_paths;
   if (!wav_scp.empty()) {
     wav_paths = LoadScpFile(wav_scp);

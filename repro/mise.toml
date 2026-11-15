@@ -6,12 +6,16 @@ python = "3.12"
 uv = "0.12"
 
 [tasks.build]
-description = "Build sherpa-onnx-offline with KenLM into ../build"
+description = "Build sherpa-onnx-offline and sherpa-onnx-offline-parallel with KenLM into ../build"
 dir = "{{config_root}}/.."
 run = [
   "cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=ON -DSHERPA_ONNX_ENABLE_KENLM=ON",
-  "cmake --build build --target sherpa-onnx-offline -j",
+  "cmake --build build --target sherpa-onnx-offline sherpa-onnx-offline-parallel -j",
 ]
+
+[tasks.check]
+description = "Check that threads, search threads and sorting do not change sherpa-onnx-offline-parallel's output: mise run check [--build-dir DIR] [--lstm-model FILE] [--offline]"
+run = "uv run check_parallel.py"
 
 [tasks.list]
 description = "List the claims"
