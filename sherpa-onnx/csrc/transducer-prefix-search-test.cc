@@ -253,6 +253,53 @@ TEST(TransducerPrefixSearch, ScorerFusionMatchesEnumeration) {
   }
 }
 
+// A second scorer with a negative weight subtracts its score (LODR), so
+// its contribution raises scores; the search must not assume scorers only
+// lower them.
+TEST(TransducerPrefixSearch, NegativeWeightScorerMatchesEnumeration) {
+  BigramTableScorer added(ScorerUnit::kAsrToken, -1.0f);
+  added.Set(BigramTableScorer::kStart, 2, -0.1f);
+  added.Set(2, 1, -0.2f);
+  added.SetFinal(1, -0.4f);
+  BigramTableScorer removed(ScorerUnit::kAsrToken, -1.5f);
+  removed.Set(BigramTableScorer::kStart, 1, -0.3f);
+  removed.Set(1, 1, -0.2f);
+  removed.SetFinal(2, -0.1f);
+  const float added_weight = 0.8f, removed_weight = -0.4f;
+  auto score_of = [&](const Tokens &tokens) {
+    double score = 0;
+    UnitId previous = BigramTableScorer::kStart;
+    for (int32_t token : tokens) {
+      score += added_weight * added.LogScore(previous, token) +
+               removed_weight * removed.LogScore(previous, token);
+      previous = token;
+    }
+    return score + added_weight * added.FinalLogScore(previous) +
+           removed_weight * removed.FinalLogScore(previous);
+  };
+
+  for (const Case &c : kCases) {
+    Enumerator enumerator = {
+        c.topology, c.num_frames, c.max_symbols_per_frame, {}};
+    Tokens tokens;
+    enumerator.Visit(0, 0, &tokens, 0);
+    std::pair<Tokens, double> expected = {{}, kLogZero};
+    for (const auto &entry : enumerator.outputs) {
+      double score = entry.second + score_of(entry.first);
+      if (score > expected.second) expected = {entry.first, score};
+    }
+
+    TransducerPrefixSearch search(Exhaustive(c), Vocabulary(),
+                                  {&added, &removed},
+                                  {added_weight, removed_weight});
+    Decode(&search, {&added, &removed}, c.topology, c.num_frames);
+    auto best = search.Finish(1);
+    ASSERT_EQ(best.size(), 1u);
+    EXPECT_EQ(best[0].tokens, expected.first);
+    EXPECT_NEAR(best[0].score, expected.second, 2e-4);
+  }
+}
+
 // modified_beam_search as the existing decoders run it: each frame keeps the
 // best steps before equal outputs are combined, one token counts as blank,
 // and the result is the best score over length with the context counted.

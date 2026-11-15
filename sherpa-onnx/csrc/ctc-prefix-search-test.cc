@@ -187,6 +187,56 @@ TEST(CtcPrefixSearch, PrunedMaxModeWithoutScorersIsGreedy) {
   }
 }
 
+// A second scorer with a negative weight subtracts its score, which is how
+// an estimate of the recognizer's own language model is removed (LODR).
+// Its contribution raises scores, so nothing in the search may assume that
+// scorers only lower them.
+TEST(CtcPrefixSearch, NegativeWeightScorerMatchesEnumeration) {
+  const int32_t num_frames = 6, vocab_size = 4;
+  BigramTableScorer added(ScorerUnit::kAsrToken, -2.0f);
+  added.Set(BigramTableScorer::kStart, 2, -0.2f);
+  added.Set(2, 3, -0.1f);
+  added.Set(3, 1, -0.4f);
+  added.SetFinal(1, -0.3f);
+  BigramTableScorer removed(ScorerUnit::kAsrToken, -1.5f);
+  removed.Set(BigramTableScorer::kStart, 1, -0.3f);
+  removed.Set(1, 1, -0.2f);
+  removed.Set(2, 3, -0.6f);
+  removed.SetFinal(3, -0.1f);
+  const float added_weight = 0.7f, removed_weight = -0.4f;
+  auto score_of = [&](const Tokens &tokens) {
+    double score = 0;
+    UnitId previous = BigramTableScorer::kStart;
+    for (int32_t token : tokens) {
+      score += added_weight * added.LogScore(previous, token) +
+               removed_weight * removed.LogScore(previous, token);
+      previous = token;
+    }
+    return score + added_weight * added.FinalLogScore(previous) +
+           removed_weight * removed.FinalLogScore(previous);
+  };
+
+  for (uint32_t seed = 900; seed != 920; ++seed) {
+    auto log_probs = RandomLogProbs(num_frames, vocab_size, seed);
+    for (bool sum : {true, false}) {
+      auto outputs = EnumerateOutputs(log_probs, num_frames, vocab_size, sum);
+      auto expected = BestOf(outputs, score_of);
+      CtcPrefixSearchOptions options = Exhaustive(vocab_size);
+      options.alignment = sum ? CtcAlignmentMode::kSum : CtcAlignmentMode::kMax;
+      CtcPrefixSearch search(options, PlainVocabulary(vocab_size),
+                             {&added, &removed},
+                             {added_weight, removed_weight});
+      search.Decode(log_probs.data(), num_frames);
+      auto nbest = search.Finish(1);
+      ASSERT_EQ(nbest.size(), 1u);
+      EXPECT_EQ(nbest[0].tokens, expected.first)
+          << "seed " << seed << " sum " << sum;
+      EXPECT_NEAR(nbest[0].score, expected.second, 1e-4)
+          << "seed " << seed << " sum " << sum;
+    }
+  }
+}
+
 TEST(CtcPrefixSearch, MaxModeRecombinesOnEqualScorerStatesExactly) {
   const int32_t num_frames = 6, vocab_size = 4;
   // A bigram scorer's state is the last token, so hypotheses ending in the

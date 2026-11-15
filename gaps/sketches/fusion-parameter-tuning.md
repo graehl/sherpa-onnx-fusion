@@ -95,10 +95,14 @@ transcript-LM component helps and wants it measured in case it does.
 
 Here it would be a second scorer over tokens with a negative weight, fit
 together with the external LM's weight. The option parser accepts any
-weight today; nothing has been run with a negative one, and a negative
-weight makes a prefix's score rise as it is extended, which the beams and
-the survival trace were not designed around. Check that first on a few
-recordings. It applies to transducers; a CTC model has no such component.
+weight today. With nothing pruned, both searches return the best output
+under one added and one subtracted scorer (the unit tests
+`NegativeWeightScorerMatchesEnumeration`, CTC in both alignment modes and
+the transducer topologies). No recording has been decoded with a negative
+weight: it makes a prefix's score rise as it is extended, which the beams
+and the survival trace were not designed around, so check pruned decoding
+on a few recordings first. It applies to transducers; a CTC model has no
+such component.
 
 Where a score-raising scorer meets an assumption (graehl, 2026-11-14):
 
