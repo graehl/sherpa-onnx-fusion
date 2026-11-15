@@ -62,7 +62,9 @@ Three things stand out.
   alternating at width 4 2.50–2.61 s; both alternating 2.57–2.89 s. That
   is about 22 ms a change in each case. Keeping one of the two constant
   buys nothing; consecutive batches must have the same width and the same
-  padded length.
+  padded length. Keeping the total constant does not help either:
+  alternating width 2 at 8.44 s with width 4 at 4.22 s took 2.71–2.82 s
+  against 2.04–2.11 s for either shape alone, about 31 ms a change.
 - **Batching itself is worth 4.2 times** at batch 16 for one shape (0.64 s
   against 0.153 s). The 17 to 50 times in the tables is mostly the
   per-shape cost being paid on fewer calls.

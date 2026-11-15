@@ -50,6 +50,38 @@ block their caller, and nothing schedules them. Other model families ignore
 - Integrate capture and UI behavior in the appropriate drivers, reusing
   infrastructure tracked in [the driver gap](../executable-driver-infrastructure.md).
 
+## Where encoder batch scheduling is headed
+
+User-directed (graehl, 2026-11-15). This sketch is the plan's home; the
+gaps hold measurements and defects.
+
+The ambitions, beyond batching the encoder separately from the search:
+
+- Keep encoder output on the device where the search can use it: no
+  needless transfer to the host, and no copy out of the larger allocation
+  a batch was encoded in.
+- Search recently encoded utterances promptly, not after all encoding.
+- Eventually a search that runs mostly on the GPU, which depending on the
+  decoding type may be ambitious
+  ([same-GPU sketch](../../topics/beam-search-and-scorer-fusion.sketches.md)).
+
+The scheduling done so far answers one question only: how fast the
+encoder result can be had when it is stored, printed or copied at once.
+`sherpa-onnx-offline-parallel` sorts by length and cuts batches for
+throughput, and [the batch cost model](batch-cost-model.md) refines that
+with the cost of a change of shape
+([measurements](../gpu-decode-cost-outside-the-model.md)).
+
+Open: how the size of an encoder work unit interacts with those
+ambitions. Known pulls, none measured:
+
+- Serving at low latency cannot sort a whole corpus by length; it can
+  only group what has arrived, within a waiting bound.
+- A search that consumes encoder output on the device may prefer units
+  sized for its own batch and memory, not the encoder's best shape.
+- The shape-change cost favours long runs of one width and length, which
+  is the opposite of taking utterances as they come.
+
 ## Completion evidence
 
 Demonstrate consecutive utterances with uninterrupted capture while earlier
