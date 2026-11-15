@@ -3,7 +3,9 @@
 // Copyright (c)  2022-2023  cuidc
 
 #include <stdio.h>
+#include <string.h>
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <fstream>
@@ -14,6 +16,7 @@
 #include <sstream>
 #include <string>
 #include <thread>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -27,21 +30,109 @@
 std::atomic<int> wav_index(0);
 std::mutex mtx;
 
-std::vector<std::vector<std::string>> SplitToBatches(
-    const std::vector<std::string> &input, int32_t batch_size) {
-  std::vector<std::vector<std::string>> outputs;
-  auto itr = input.cbegin();
-  int32_t process_num = 0;
+// A wave file to decode
+struct Utterance {
+  int32_t index;  // position in the input list
+  std::string wav_filename;
+  float seconds;  // estimated duration; 0 if unknown
+};
 
-  while (process_num + batch_size <= static_cast<int32_t>(input.size())) {
-    auto chunk_end = itr + batch_size;
-    outputs.emplace_back(itr, chunk_end);
-    itr = chunk_end;
-    process_num += batch_size;
+// Estimates the duration of a wave file in seconds from its size and the byte
+// rate in its header, without reading its samples. Returns 0 if the file
+// cannot be read or has no usable byte rate.
+float EstimateSeconds(const std::string &filename) {
+  auto in = sherpa_onnx::OpenInputFile(filename, std::ios::binary);
+  char header[44];  // the size of a wave header without extra chunks
+  if (!in.is_open() || !in.read(header, sizeof(header))) {
+    return 0;
   }
-  if (itr != input.cend()) {
-    outputs.emplace_back(itr, input.cend());
+  int32_t byte_rate = 0;
+  memcpy(&byte_rate, header + 28, sizeof(byte_rate));
+  in.seekg(0, std::ios::end);
+  int64_t num_bytes = static_cast<int64_t>(in.tellg()) - sizeof(header);
+  return byte_rate > 0 ? num_bytes / static_cast<float>(byte_rate) : 0;
+}
+
+// Cuts the input into consecutive batches of batch_size wave files. The last
+// batch has the remaining ones.
+std::vector<std::vector<Utterance>> SplitToBatches(
+    const std::vector<Utterance> &input, int32_t batch_size) {
+  std::vector<std::vector<Utterance>> outputs;
+  for (const auto &u : input) {
+    if (outputs.empty() ||
+        static_cast<int32_t>(outputs.back().size()) >= batch_size) {
+      outputs.emplace_back();
+    }
+    outputs.back().push_back(u);
   }
+  return outputs;
+}
+
+// What a way of cutting some wave files into batches costs. The smaller the
+// better, comparing the fields in the order they are declared.
+struct BatchingCost {
+  // Modelled time of the batches, in milliseconds of audio. A batch takes a
+  // fixed overhead plus the audio it holds after every wave file is padded
+  // to the longest of the batch, that is, its longest duration times its
+  // number of wave files.
+  int64_t milliseconds = 0;
+  // Sum of the squared numbers of wave files of the batches. For a given
+  // number of batches it is smallest when the batches are equally full.
+  int64_t sum_squared_counts = 0;
+
+  bool operator<(const BatchingCost &other) const {
+    return std::tie(milliseconds, sum_squared_counts) <
+           std::tie(other.milliseconds, other.sum_squared_counts);
+  }
+};
+
+// Cuts the input into consecutive batches of the least BatchingCost. An
+// extra batch is worth its overhead only if it saves more padding than that,
+// and among equally good ways the wave files are spread evenly, which
+// leaves no nearly empty batch.
+//
+// @param batch_size The maximum number of wave files in a batch.
+// @param max_batch_seconds If positive, the longest estimated duration in a
+//        batch times its number of wave files is at most this. A wave file
+//        that exceeds it alone is a batch by itself.
+// @param batch_overhead_seconds The fixed time of one call to the recognizer,
+//        as the seconds of audio the model processes in that time.
+std::vector<std::vector<Utterance>> SplitToSimilarBatches(
+    const std::vector<Utterance> &input, int32_t batch_size,
+    float max_batch_seconds, float batch_overhead_seconds) {
+  int32_t n = input.size();
+  int64_t max_milliseconds = max_batch_seconds * 1000;
+  int64_t overhead_milliseconds = batch_overhead_seconds * 1000;
+  // best[i] is the least cost of cutting the first i wave files, and its
+  // last batch starts at input[start[i]]
+  std::vector<BatchingCost> best(n + 1);
+  std::vector<int32_t> start(n + 1, 0);
+  for (int32_t i = 1; i <= n; ++i) {
+    int64_t longest = 0;  // milliseconds, in input[j] to input[i - 1]
+    for (int32_t j = i - 1; j >= 0 && (i - j <= batch_size || j == i - 1);
+         --j) {
+      longest =
+          std::max(longest, static_cast<int64_t>(input[j].seconds * 1000));
+      int64_t count = i - j;
+      if (max_milliseconds > 0 && count > 1 &&
+          longest * count > max_milliseconds) {
+        break;  // an even earlier start holds no less
+      }
+      BatchingCost cost = best[j];
+      cost.milliseconds += overhead_milliseconds + longest * count;
+      cost.sum_squared_counts += count * count;
+      if (j == i - 1 || cost < best[i]) {
+        best[i] = cost;
+        start[i] = j;
+      }
+    }
+  }
+
+  std::vector<std::vector<Utterance>> outputs;
+  for (int32_t i = n; i > 0; i = start[i]) {
+    outputs.emplace_back(input.begin() + start[i], input.begin() + i);
+  }
+  std::reverse(outputs.begin(), outputs.end());
   return outputs;
 }
 
@@ -70,52 +161,54 @@ std::vector<std::string> LoadScpFile(const std::string &wav_scp_path) {
 
 // The result of one wave file
 struct Record {
+  int32_t index;  // position in the input list
   std::string wav_filename;
   std::string json;
 };
 
-// Prints the results of each batch in the order of the input list, no matter
-// which thread finishes first.
+// Prints the results in the order of the input list, no matter in which
+// order they are decoded.
 class OrderedOutput {
  public:
-  void Put(int32_t chunk, std::vector<Record> records) {
+  void Put(std::vector<Record> records) {
     std::lock_guard<std::mutex> lock(mutex_);
-    pending_.emplace(chunk, std::move(records));
+    for (auto &r : records) {
+      int32_t index = r.index;
+      pending_.emplace(index, std::move(r));
+    }
     for (auto it = pending_.begin();
-         it != pending_.end() && it->first == next_chunk_;
-         it = pending_.erase(it), ++next_chunk_) {
-      for (const auto &r : it->second) {
-        fprintf(stderr, "%s\n", r.wav_filename.c_str());
-        fprintf(stdout, "%s\n", r.json.c_str());
-        fprintf(stderr, "----\n");
-      }
+         it != pending_.end() && it->first == next_index_;
+         it = pending_.erase(it), ++next_index_) {
+      const Record &r = it->second;
+      fprintf(stderr, "%s\n", r.wav_filename.c_str());
+      fprintf(stdout, "%s\n", r.json.c_str());
+      fprintf(stderr, "----\n");
     }
     fflush(stdout);
   }
 
  private:
   std::mutex mutex_;
-  std::map<int32_t, std::vector<Record>> pending_;  // finished, not printed
-  int32_t next_chunk_ = 0;
+  std::map<int32_t, Record> pending_;  // finished, not printed
+  int32_t next_index_ = 0;
 };
 
 // Decodes the given wave files as one batch.
 //
-// @param first_index Position of wav_paths[0] in the input list.
 // @param duration On return, increased by the seconds of audio decoded.
 // @param recognizer_seconds On return, increased by the seconds spent in the
 //        recognizer, which excludes reading files and computing features.
-// @return One record for each wave file, in the order of wav_paths. Each
+// @return One record for each wave file, in the order of utterances. Each
 //         json is a single line that starts with the position of the file
 //         in the input list and its filename.
 std::vector<Record> DecodeBatch(sherpa_onnx::OfflineRecognizer *recognizer,
-                                const std::vector<std::string> &wav_paths,
-                                int32_t first_index, float *duration,
-                                float *recognizer_seconds) {
-  // ss[i] is nullptr if wav_paths[i] cannot be read
+                                const std::vector<Utterance> &utterances,
+                                float *duration, float *recognizer_seconds) {
+  // ss[i] is nullptr if utterances[i] cannot be read
   std::vector<std::unique_ptr<sherpa_onnx::OfflineStream>> ss;
   std::vector<sherpa_onnx::OfflineStream *> ss_pointers;
-  for (const auto &wav_filename : wav_paths) {
+  for (const auto &utterance : utterances) {
+    const std::string &wav_filename = utterance.wav_filename;
     int32_t sampling_rate = -1;
     bool is_ok = false;
     const std::vector<float> samples =
@@ -141,10 +234,11 @@ std::vector<Record> DecodeBatch(sherpa_onnx::OfflineRecognizer *recognizer,
   }
 
   std::vector<Record> records;
-  for (size_t i = 0; i != wav_paths.size(); ++i) {
+  for (size_t i = 0; i != utterances.size(); ++i) {
+    const Utterance &u = utterances[i];
     std::string json =
-        "{\"index\": " + std::to_string(first_index + i) +
-        ", \"wav_filename\": " + sherpa_onnx::QuoteJsonString(wav_paths[i]) +
+        "{\"index\": " + std::to_string(u.index) +
+        ", \"wav_filename\": " + sherpa_onnx::QuoteJsonString(u.wav_filename) +
         ", ";
     if (ss[i]) {
       // skip the leading '{' of the result
@@ -152,14 +246,13 @@ std::vector<Record> DecodeBatch(sherpa_onnx::OfflineRecognizer *recognizer,
     } else {
       json += "\"error\": \"failed to read the wave file\"}";
     }
-    records.push_back({wav_paths[i], std::move(json)});
+    records.push_back({u.index, u.wav_filename, std::move(json)});
   }
   return records;
 }
 
-void AsrInference(const std::vector<std::vector<std::string>> &chunk_wav_paths,
-                  int32_t batch_size, int32_t warm_up,
-                  sherpa_onnx::OfflineRecognizer *recognizer,
+void AsrInference(const std::vector<std::vector<Utterance>> &chunk_wav_paths,
+                  int32_t warm_up, sherpa_onnx::OfflineRecognizer *recognizer,
                   OrderedOutput *output, float *total_length, float *total_time,
                   float *total_recognizer_time) {
   float duration = 0.0f;
@@ -168,7 +261,7 @@ void AsrInference(const std::vector<std::vector<std::string>> &chunk_wav_paths,
 
   for (int32_t i = 0; i < warm_up; ++i) {
     float unused = 0.0f;
-    DecodeBatch(recognizer, chunk_wav_paths[0], 0, &unused, &unused);
+    DecodeBatch(recognizer, chunk_wav_paths[0], &unused, &unused);
   }
 
   while (true) {
@@ -178,17 +271,15 @@ void AsrInference(const std::vector<std::vector<std::string>> &chunk_wav_paths,
     }
     const auto &wav_paths = chunk_wav_paths[chunk];
     const auto begin = std::chrono::steady_clock::now();
-    // every chunk before the last one has batch_size wave files
     std::vector<Record> records =
-        DecodeBatch(recognizer, wav_paths, chunk * batch_size, &duration,
-                    &recognizer_seconds);
+        DecodeBatch(recognizer, wav_paths, &duration, &recognizer_seconds);
     const auto end = std::chrono::steady_clock::now();
     float elapsed_seconds =
         std::chrono::duration_cast<std::chrono::milliseconds>(end - begin)
             .count() /
         1000.;
     elapsed_seconds_batch += elapsed_seconds;
-    output->Put(chunk, std::move(records));
+    output->Put(std::move(records));
   }
 
   {
@@ -288,6 +379,10 @@ position of the wave file in the input list counting from 0, and
 "wav_filename". Results are printed in the order of the input list for any
 --nj. A wave file that cannot be read has "error" in place of the result.
 
+With --sort-by-length=true a batch holds wave files of similar length, which
+avoids computing on padding. --max-batch-seconds limits a batch by its
+longest wave file times its number of wave files.
+
 foo.wav should be of single channel, 16-bit PCM encoded wave file; its
 sampling rate can be arbitrary and does not need to be 16kHz.
 
@@ -299,6 +394,11 @@ for a list of pre-trained models to download.
   int32_t nj = 1;            // thread number
   int32_t batch_size = 1;    // number of wav files processed at once.
   int32_t warm_up = 1;       // untimed decodes of the first batch per thread
+  bool sort_by_length = false;  // batch wave files of similar length
+  float max_batch_seconds = 0;  // limit on a padded batch; 0 means none
+  // fixed time of a recognizer call in seconds of audio; the default is so
+  // large that the fewest possible batches are used
+  float batch_overhead_seconds = 1e6;
   sherpa_onnx::ParseOptions po(kUsageMessage);
   sherpa_onnx::OfflineRecognizerConfig config;
   config.Register(&po);
@@ -316,6 +416,28 @@ for a list of pre-trained models to download.
   po.Register("batch-size", &batch_size,
               "number of wav files processed at once during the decoding"
               "process. default=1");
+  po.Register("sort-by-length", &sort_by_length,
+              "If true, decode the wave files from the longest to the "
+              "shortest so that a batch holds files of similar length and "
+              "needs little padding. Results are still printed in the order "
+              "of the input list. The length is estimated from the file "
+              "size and the wave header. Note that for some models the "
+              "result of a wave file depends on the others in its batch. "
+              "default=false");
+  po.Register("batch-overhead-seconds", &batch_overhead_seconds,
+              "Used with --sort-by-length or --max-batch-seconds. The fixed "
+              "time of one call to the recognizer, given as the seconds of "
+              "audio the model processes in that time. Batches are chosen "
+              "to minimize this overhead for every batch plus the audio "
+              "the batches hold after padding, so a smaller value gives "
+              "more batches with less padding. The default is so large "
+              "that the fewest possible batches are used. default=1e6");
+  po.Register("max-batch-seconds", &max_batch_seconds,
+              "If positive, a batch is also limited so that the duration of "
+              "its longest wave file times its number of wave files is at "
+              "most this many seconds. A longer wave file is decoded alone. "
+              "--batch-size still limits the number of wave files. "
+              "default=0");
 
   po.Read(argc, argv);
   if (po.NumArgs() < 1 && wav_scp.empty()) {
@@ -356,18 +478,55 @@ for a list of pre-trained models to download.
     fprintf(stderr, "wav files is empty.\n");
     return -1;
   }
+  std::vector<Utterance> utterances;
+  for (size_t i = 0; i != wav_paths.size(); ++i) {
+    float seconds = (sort_by_length || max_batch_seconds > 0)
+                        ? EstimateSeconds(wav_paths[i])
+                        : 0;
+    utterances.push_back({static_cast<int32_t>(i), wav_paths[i], seconds});
+  }
+  if (sort_by_length) {
+    // Longest first, so that the largest batch is decoded first
+    std::stable_sort(utterances.begin(), utterances.end(),
+                     [](const Utterance &a, const Utterance &b) {
+                       return a.seconds > b.seconds;
+                     });
+  }
   std::vector<std::thread> threads;
-  std::vector<std::vector<std::string>> batch_wav_paths =
-      SplitToBatches(wav_paths, batch_size);
+  std::vector<std::vector<Utterance>> batch_wav_paths =
+      (sort_by_length || max_batch_seconds > 0)
+          ? SplitToSimilarBatches(utterances, batch_size, max_batch_seconds,
+                                  batch_overhead_seconds)
+          : SplitToBatches(utterances, batch_size);
+  fprintf(stderr, "Number of wave files: %d, number of batches: %d\n",
+          static_cast<int32_t>(utterances.size()),
+          static_cast<int32_t>(batch_wav_paths.size()));
+  if (sort_by_length || max_batch_seconds > 0) {
+    float audio = 0;   // estimated seconds of all wave files
+    float padded = 0;  // the same after padding to the longest of each batch
+    size_t smallest = utterances.size();
+    for (const auto &batch : batch_wav_paths) {
+      float longest = 0;
+      for (const auto &u : batch) {
+        audio += u.seconds;
+        longest = std::max(longest, u.seconds);
+      }
+      padded += longest * batch.size();
+      smallest = std::min(smallest, batch.size());
+    }
+    fprintf(stderr,
+            "Estimated audio: %.1f s, with padding: %.1f s, smallest batch: "
+            "%d wave files\n",
+            audio, padded, static_cast<int32_t>(smallest));
+  }
   float total_length = 0.0f;
   float total_time = 0.0f;
   float total_recognizer_time = 0.0f;
   OrderedOutput output;
   for (int i = 0; i < nj; i++) {
-    threads.emplace_back(std::thread(AsrInference, std::cref(batch_wav_paths),
-                                     batch_size, warm_up, &recognizer, &output,
-                                     &total_length, &total_time,
-                                     &total_recognizer_time));
+    threads.emplace_back(std::thread(
+        AsrInference, std::cref(batch_wav_paths), warm_up, &recognizer, &output,
+        &total_length, &total_time, &total_recognizer_time));
   }
 
   for (auto &thread : threads) {
