@@ -67,6 +67,9 @@ class KenLmScorer : public PerItemScorer {
     index_offset_ = offset;
   }
 
+  // No unit, nor the end of the sentence, scores below "floor".
+  void SetFloor(float floor) { floor_ = floor; }
+
   const ScorerInfo &Info() const override { return info_; }
   std::unique_ptr<ScorerUtterance> NewUtterance() override { return nullptr; }
 
@@ -103,7 +106,7 @@ class KenLmScorer : public PerItemScorer {
       next.ZeroRemaining();
       std::memcpy(out, &next, sizeof(next));
     }
-    return log10_prob * kLn10;
+    return std::max(floor_, log10_prob * kLn10);
   }
 
   // The LM word for a unit; one the LM lacks is its <unk>.
@@ -137,6 +140,7 @@ class KenLmScorer : public PerItemScorer {
   std::unique_ptr<lm::base::Model> model_;
   std::string space_;
   lm::WordIndex end_sentence_ = 0;
+  float floor_ = -std::numeric_limits<float>::infinity();
   bool ids_are_words_ = false;
   int32_t id_offset_ = 0;
   std::string id_prefix_;
@@ -322,14 +326,14 @@ class KenLmScorerFactory : public ScorerFactory {
       throw std::runtime_error("kenlm scorer: extra must be a JSON object");
     }
     bool tokens = common.unit == "token";
+    float floor = -std::numeric_limits<float>::infinity();
+    if (options.contains("floor") && options["floor"].is_number()) {
+      floor = options["floor"].get<float>();
+      options.erase("floor");
+    }
     if (!tokens && options.contains("words") && options["words"].is_boolean()) {
       bool words = options["words"].get<bool>();
       options.erase("words");
-      float floor = -std::numeric_limits<float>::infinity();
-      if (words && options.contains("floor") && options["floor"].is_number()) {
-        floor = options["floor"].get<float>();
-        options.erase("floor");
-      }
       if (words && options.empty()) {
         return std::make_unique<KenLmWordScorer>(common.model, floor);
       }
@@ -374,6 +378,7 @@ class KenLmScorerFactory : public ScorerFactory {
     auto scorer = std::make_unique<KenLmScorer>(
         common.model, common.space, tokens, token_words, id_offset, id_prefix);
     if (by_index) scorer->UseWordIndices(index_offset);
+    scorer->SetFloor(floor);
     return scorer;
   }
 };
