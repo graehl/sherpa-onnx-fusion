@@ -21,7 +21,7 @@ Word error rate in percent. Every recognizer here can be downloaded.
 | English zipformer CTC, 600 LibriSpeech test-other recordings | character 8-gram from the LibriSpeech LM text (37 MB) | 5.63 | 5.39 (k2-fsa's word-3-gram graph released with the model, 334 MB) | 5.63 | 4.91 | 0.021 | 0.019 | 0.020 | 0.024 |
 | the same | public LibriSpeech RNN LM (LSTM, 388 MB) | 5.63 | not supported (no RNN LM for CTC models) | 5.59 | 4.45 | 0.021 | 0.015 | 0.13 | – |
 | Vietnamese zipformer transducer (gipformer 1.5, 68M), FLEURS test, 857 clips | 4-gram over the recognizer's tokens | 5.59 | not supported (no n-gram LM for transducers) | 5.49 | 5.23 | – | 0.021 | 0.021 | – |
-| the same | LSTM over the recognizer's tokens (int8, 49 MB) | 5.59 | not run | 5.49 | 4.89 | – | 0.021 | 0.028 | – |
+| the same | LSTM over the recognizer's tokens (int8, 49 MB) | 5.59 | 5.21 (rescoring, with the fp32 model) | 5.49 | 4.89 | – | 0.021 | 0.028 | 0.049 |
 | English zipformer transducer, 600 LibriSpeech test-other recordings | public LibriSpeech RNN LM (LSTM) | 4.65 | 4.38 (rescoring) | 4.60 (k2-fsa `modified_beam_search`, which it reproduces) | 4.20 | 0.059 | 0.063 | 0.51 | 0.13 |
 | GigaAM v3 RNN-T, FLEURS Russian test, 743 clips | character 8-gram from Russian Wikipedia | 4.63 | not supported (no LM for NeMo models) | 4.52 | 4.21 | 0.067 | 0.25 † | 0.22 | – |
 | Parakeet TDT 0.6B v3, FLEURS Russian test, 743 clips | character 8-gram from Russian Wikipedia | 8.32 | not supported (no LM for NeMo models) | 7.77 | 6.78 | 0.25 | 0.69 † | 0.22 | – |

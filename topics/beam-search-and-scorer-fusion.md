@@ -256,6 +256,15 @@ setting both were run (4.07 and 4.08). The gain is on read speech; media
 is no better than with the n-grams (4.39 to 4.44). No paired test was
 run, and the weight was chosen on a set the dev figures include.
 
+The existing decoder can use the same LSTM, as a rescoring model for
+`modified_beam_search` (`--lm`, the fp32 weights exported in the
+whole-sequence form it loads). With its scale chosen on the same
+validation clips from 0.1, 0.3, 0.5 and 1.0 (best 1.0, ER2 4.28 against
+4.37 without the LM), it reads 5.21 WER and 5.16 ER2 on the test set,
+against 5.47 WER without the LM and 4.89 WER for fusion during the
+search. Its real-time factor was 0.049 with the LM and fusion's 0.028,
+both under load and from single runs.
+
 Three things this exercise turned up:
 
 - **A token model's words must be resolved the way it was built.** A
