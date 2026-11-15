@@ -27,6 +27,40 @@ Choosing GPU providers for both models alone does not move search onto the
 GPU or eliminate those transfers. Revisit a device-resident result contract
 only with a concrete accelerated search design and measured benefit.
 
+## Scorer batches across decode threads
+
+Several threads may call one scorer at once
+([Scorer interface](beam-search-and-scorer-fusion.md#scorer-interface)),
+and each call is its own batch. Combining the calls of several threads
+into one batch could pay if a neural scorer's step on a GPU costs little
+more for a wide batch than for a narrow one, which is likely and not
+measured (graehl, 2026-11-15). The price is latency: a step is held until
+others join it, most visibly under a backlog, where decode threads would
+be delayed on purpose.
+
+What to settle first:
+
+- One decode call already puts all its utterances in each scorer step, so
+  one thread with a wide batch gets a wide scorer batch with no new code.
+  Combining across threads only adds something when one thread's own work
+  (trie updates, n-gram lookups, pruning) saturates before the scorer's
+  device does.
+- The trigger need not be a timer. When every decode thread is blocked
+  waiting for the scorer, dispatching then gives a batch as wide as the
+  thread count with no added wait. A timed window matters only when the
+  threads are out of phase, or under a backlog.
+- A combined step moves at the pace of the last request to arrive, and
+  the first to arrive bears the delay.
+
+Measure, in this order: the time of one recurrent step on a GPU against
+batch width; then one thread with a wide batch against several threads
+with narrow ones, on the same recordings. Build the collector only if the
+second comparison leaves a gain that one wide batch cannot reach. On CPU,
+41 recordings with a KenLM and an LSTM scorer took 39.6 s on one thread
+and 7.5 s on six at two recordings a batch, and batches of eight on four
+threads cut the summed time in the recognizer from about 40 s to 25.6 s
+(2026-11-15, one run each).
+
 ## Recovery by iterative widening
 
 Graehl's intended initial scorers will not fail through hard exclusions.
