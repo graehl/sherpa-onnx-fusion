@@ -22,6 +22,16 @@ sha256 = "dda776a29cfbb1378d3749be0a918250f5bd5e19d6afcf958ed0b6b9fed5d548"
 url = "https://huggingface.co/graehl/sherpa-onnx-fusion-test-lm/resolve/1fb385230c7e25058fd6b406e5a88d2de81cc350/en-char-lstm-256x1.units.hex"
 sha256 = "3dac32f9a969fa0bb6af2965323b8a6d77912b1e36cd639ac5a2b1f9b7180d2c"
 
+# Two small transducers for check_parallel.py: a zipformer and a NeMo
+# Parakeet TDT, so the check covers both transducer implementations.
+[artifacts.zipformer-small-en]
+url = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-zipformer-small-en-2023-06-26.tar.bz2"
+sha256 = "c8bff1091c26c49731cddbcd60ef18061142ea11523df1b73bf1b14451b9c15e"
+
+[artifacts.parakeet-tdt-110m-en]
+url = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-nemo-parakeet_tdt_transducer_110m-en-36000-int8.tar.bz2"
+sha256 = "f628312e9fdf8686374cb01a69425c41732529d540860311f16f37cbc32cfe9b"
+
 [claims.ctc-shipped-graph]
 summary = "English zipformer CTC: greedy, upstream's shipped word 3-gram graph, and the prefix search without a language model"
 artifacts = ["zipformer-ctc-en", "librispeech-test-other"]

@@ -9,20 +9,23 @@ must not change what it prints.
     check_parallel.py [--build-dir DIR] [--offline] [--lstm-model FILE]
 
 It decodes the three recordings shipped with the pinned English zipformer CTC
-model, repeated, with one unreadable file among them, and for each search
-configuration compares every way of running the program against one thread:
+model, repeated, with one unreadable file among them. For three recognizers
+(that CTC model, a zipformer transducer, and a NeMo Parakeet TDT transducer)
+and each search configuration, it compares every way of running the program
+against one thread:
 
 - a row for every input, in list order, naming its file;
 - an error row for the unreadable file and for no other;
 - the same text as one thread, at one recording per batch, where batching
   cannot change a model's output.
 
-The search configurations are greedy search, the prefix search, the prefix
-search with a small n-gram model written by this script (when the build has
-KenLM), the prefix search with a tiny pinned character LSTM made for this
-check, and with --lstm-model also an onnx-rnn scorer over the recognizer's
-tokens. Only the pinned model archive and that 1.6 MB LSTM are downloaded;
---offline skips, successfully, whatever has not been fetched.
+The search configurations are greedy search, upstream's beam search for the
+transducers, the prefix search, the prefix search with a small n-gram model
+written by this script (when the build has KenLM), the prefix search with a
+tiny pinned character LSTM made for this check, and with --lstm-model also an
+onnx-rnn scorer over the CTC recognizer's tokens. Only pinned public archives
+are downloaded, about 600 MB in all; --offline skips, successfully, whatever
+has not been fetched.
 """
 
 import argparse
@@ -35,8 +38,61 @@ import tempfile
 
 import repro_claims
 
-MODEL = "zipformer-ctc-en"
-MODEL_DIR = "sherpa-onnx-zipformer-ctc-en-2023-10-02"
+# The recordings every recognizer decodes: the three shipped with the CTC model.
+RECORDINGS = "zipformer-ctc-en"
+RECORDINGS_DIR = "sherpa-onnx-zipformer-ctc-en-2023-10-02/test_wavs"
+
+
+@dataclasses.dataclass(frozen=True)
+class Recognizer:
+    name: str
+    artifact: str
+    flags: tuple[str, ...]  # {dir} is the artifact's directory
+    searches: tuple[str, ...]  # names from search_configurations
+
+
+_ZIPFORMER = "{dir}/sherpa-onnx-zipformer-small-en-2023-06-26"
+_TDT = "{dir}/sherpa-onnx-nemo-parakeet_tdt_transducer_110m-en-36000-int8"
+RECOGNIZERS = (
+    Recognizer(
+        "zipformer CTC",
+        "zipformer-ctc-en",
+        (
+            "--zipformer-ctc-model={dir}/sherpa-onnx-zipformer-ctc-en-2023-10-02/model.int8.onnx",
+            "--tokens={dir}/sherpa-onnx-zipformer-ctc-en-2023-10-02/tokens.txt",
+        ),
+        (
+            "greedy",
+            "prefix search",
+            "prefix search + n-gram",
+            "prefix search + character LSTM",
+            "prefix search + n-gram + token LSTM",
+        ),
+    ),
+    Recognizer(
+        "zipformer transducer",
+        "zipformer-small-en",
+        (
+            f"--encoder={_ZIPFORMER}/encoder-epoch-99-avg-1.int8.onnx",
+            f"--decoder={_ZIPFORMER}/decoder-epoch-99-avg-1.int8.onnx",
+            f"--joiner={_ZIPFORMER}/joiner-epoch-99-avg-1.int8.onnx",
+            f"--tokens={_ZIPFORMER}/tokens.txt",
+        ),
+        ("greedy", "upstream beam search", "prefix search", "prefix search + n-gram"),
+    ),
+    Recognizer(
+        "Parakeet TDT",
+        "parakeet-tdt-110m-en",
+        (
+            f"--encoder={_TDT}/encoder.int8.onnx",
+            f"--decoder={_TDT}/decoder.int8.onnx",
+            f"--joiner={_TDT}/joiner.int8.onnx",
+            f"--tokens={_TDT}/tokens.txt",
+            "--model-type=nemo_transducer",
+        ),
+        ("greedy", "upstream beam search", "prefix search"),
+    ),
+)
 # A tiny character LSTM made for this check; it is not a usable language
 # model. Two artifacts: its step graph and its unit list.
 LSTM = "test-char-lstm"
@@ -44,8 +100,8 @@ LSTM_FILE = "en-char-lstm-256x1.onnx"
 LSTM_UNITS = "test-char-lstm-units"
 LSTM_UNITS_FILE = "en-char-lstm-256x1.units.hex"
 MISSING = "/nonexistent/check-parallel-missing.wav"
-MISSING_AT = 4  # position of the unreadable file in the list
-REPEATS = 4  # times each shipped recording appears
+MISSING_AT = 2  # position of the unreadable file in the list
+REPEATS = 2  # times each shipped recording appears; more only costs time
 
 # How to run the program, each compared with one thread. All use one
 # recording per batch; sorting then only changes the order of decoding.
@@ -140,6 +196,7 @@ def search_configurations(
     ]
     configurations = {
         "greedy": ["--decoding-method=greedy_search"],
+        "upstream beam search": ["--decoding-method=modified_beam_search"],
         "prefix search": ["--decoding-method=prefix_beam_search"],
         "prefix search + n-gram": kenlm,
     }
@@ -151,12 +208,11 @@ def search_configurations(
             "--scorer.0.unit=char",
             f"--scorer.0.model={char_lstm[0]}",
             f"--scorer.0.extra={extra}",
-            # Large enough that this weak model changes some words of the
-            # shipped recordings; at 0.3 it changes none.
+            # The pinned fixture must change some words of the shipped recordings.
             "--scorer.0.weight=1.0",
         ]
     if lstm_model:
-        configurations["prefix search + n-gram + LSTM"] = kenlm + [
+        configurations["prefix search + n-gram + token LSTM"] = kenlm + [
             "--scorer.1.type=onnx-rnn",
             f"--scorer.1.model={lstm_model}",
             "--scorer.1.unit=token",
@@ -167,52 +223,47 @@ def search_configurations(
 
 def check(
     binary: pathlib.Path,
-    model: pathlib.Path,
-    char_lstm: tuple[pathlib.Path, pathlib.Path] | None,
-    lstm_model: str | None,
+    label: str,
+    recognizer: list[str],
+    paths: list[str],
+    configurations: dict[str, list[str]],
 ) -> int:
-    """Runs every configuration and mode; returns the number of failures."""
-    wavs = sorted(str(p) for p in (model / "test_wavs").glob("*.wav"))
-    paths = wavs * REPEATS
-    paths.insert(MISSING_AT, MISSING)
+    """Runs one recognizer through every configuration and mode; returns the
+    number of failures."""
     failures = 0
-    with tempfile.TemporaryDirectory(prefix="check-parallel-") as scratch:
-        wav_list = pathlib.Path(scratch) / "wavs.list"
-        wav_list.write_text("\n".join(paths) + "\n", encoding="utf-8")
-        arpa = pathlib.Path(scratch) / "characters.arpa"
-        write_arpa(arpa)
-        recognizer = [
-            f"--zipformer-ctc-model={model / 'model.int8.onnx'}",
-            f"--tokens={model / 'tokens.txt'}",
-            "--num-threads=1",
-            f"--wav-scp={wav_list}",
-        ]
-        configurations = search_configurations(arpa, char_lstm, lstm_model)
-        for name, search in configurations.items():
-            reference = run_program(binary, recognizer + search + ["--nj=1"])
-            if "Unknown scorer type 'kenlm'" in reference.stderr:
-                print(f"[check] SKIP {name}: this build has no KenLM")
-                continue
-            problems = row_problems(reference, paths)
+    baseline = None
+    for name, search in configurations.items():
+        configuration = name
+        name = f"{label}, {name}"
+        reference = run_program(binary, recognizer + search + ["--nj=1"])
+        if "Unknown scorer type 'kenlm'" in reference.stderr:
+            print(f"[check] SKIP {name}: this build has no KenLM")
+            continue
+        problems = row_problems(reference, paths)
+        if problems:
+            print(f"[check] FAIL {name}, 1 thread: {problems[0]}")
+            failures += 1
+            continue
+        if configuration == "prefix search":
+            baseline = texts(reference)
+        elif configuration == "prefix search + character LSTM" and (
+            baseline is None or texts(reference) == baseline
+        ):
+            print(f"[check] FAIL {name}: pinned LSTM has no verified output effect")
+            failures += 1
+        runs = [(mode, args, True) for mode, args in MODES.items()]
+        runs.append(("batches of 4 (rows only)", BATCHED, False))
+        for mode, args, compare_text in runs:
+            output = run_program(binary, recognizer + search + args)
+            problems = row_problems(output, paths)
+            if not problems and compare_text and texts(output) != texts(reference):
+                differing = sum(a != b for a, b in zip(texts(output), texts(reference)))
+                problems = [f"{differing} texts differ from 1 thread"]
             if problems:
-                print(f"[check] FAIL {name}, 1 thread: {problems[0]}")
+                print(f"[check] FAIL {name}, {mode}: {problems[0]}")
                 failures += 1
-                continue
-            runs = [(mode, args, True) for mode, args in MODES.items()]
-            runs.append(("batches of 4 (rows only)", BATCHED, False))
-            for mode, args, compare_text in runs:
-                output = run_program(binary, recognizer + search + args)
-                problems = row_problems(output, paths)
-                if not problems and compare_text and texts(output) != texts(reference):
-                    differing = sum(
-                        a != b for a, b in zip(texts(output), texts(reference))
-                    )
-                    problems = [f"{differing} texts differ from 1 thread"]
-                if problems:
-                    print(f"[check] FAIL {name}, {mode}: {problems[0]}")
-                    failures += 1
-                else:
-                    print(f"[check] ok   {name}, {mode}")
+            else:
+                print(f"[check] ok   {name}, {mode}")
     return failures
 
 
@@ -228,11 +279,11 @@ def main() -> None:
     parser.add_argument(
         "--offline",
         action="store_true",
-        help="do not download: skip, successfully, if the model is not fetched",
+        help="do not download: skip, successfully, whatever is not fetched",
     )
     parser.add_argument(
         "--lstm-model",
-        help="an onnx-rnn model over this recognizer's tokens, to check too",
+        help="an onnx-rnn model over the CTC recognizer's tokens, to check too",
     )
     args = parser.parse_args()
 
@@ -243,17 +294,19 @@ def main() -> None:
 
     def fetch(name: str) -> pathlib.Path | None:
         """The artifact's directory, or None if --offline and not fetched."""
-        if (
-            args.offline
-            and not (repro_claims.artifact_dir(name) / ".complete").exists()
-        ):
+        complete = repro_claims.artifact_dir(name, artifacts[name]) / ".complete"
+        if args.offline and not complete.exists():
             return None
         return repro_claims.fetch_artifact(name, artifacts[name])
 
-    model = fetch(MODEL)
-    if model is None:
-        print(f"[check] SKIP all: --offline and artifact {MODEL} is not fetched")
+    # Every recognizer decodes the recordings shipped with the CTC model.
+    recordings = fetch(RECORDINGS)
+    if recordings is None:
+        print(f"[check] SKIP all: --offline and artifact {RECORDINGS} is not fetched")
         return
+    wavs = sorted(str(p) for p in (recordings / RECORDINGS_DIR).glob("*.wav"))
+    paths = wavs * REPEATS
+    paths.insert(MISSING_AT, MISSING)
     char_lstm = None
     lstm, units = fetch(LSTM), fetch(LSTM_UNITS)
     if lstm is None or units is None:
@@ -261,7 +314,26 @@ def main() -> None:
     else:
         char_lstm = (lstm / LSTM_FILE, units / LSTM_UNITS_FILE)
 
-    failures = check(binary, model / MODEL_DIR, char_lstm, args.lstm_model)
+    failures = 0
+    with tempfile.TemporaryDirectory(prefix="check-parallel-") as scratch:
+        wav_list = pathlib.Path(scratch) / "wavs.list"
+        wav_list.write_text("\n".join(paths) + "\n", encoding="utf-8")
+        arpa = pathlib.Path(scratch) / "characters.arpa"
+        write_arpa(arpa)
+        available = search_configurations(arpa, char_lstm, args.lstm_model)
+        for recognizer in RECOGNIZERS:
+            directory = fetch(recognizer.artifact)
+            if directory is None:
+                print(f"[check] SKIP {recognizer.name}: --offline and not fetched")
+                continue
+            flags = [flag.format(dir=directory) for flag in recognizer.flags]
+            flags += ["--num-threads=1", f"--wav-scp={wav_list}"]
+            configurations = {
+                name: available[name]
+                for name in recognizer.searches
+                if name in available
+            }
+            failures += check(binary, recognizer.name, flags, paths, configurations)
     if failures:
         sys.exit(f"[check] {failures} failed")
     print("[check] all passed")

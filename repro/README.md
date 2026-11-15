@@ -51,9 +51,14 @@ it prints. It decodes the three recordings shipped inside the pinned English
 zipformer CTC archive, repeated, with one unreadable file among them, and
 compares each way of running the program with one thread: a row per input
 in list order, an error row for the unreadable file only, and the same text
-at one recording per batch. It does this for greedy search, the prefix
-search, the prefix search with a small n-gram model the script writes, and
-the prefix search with a tiny character LSTM.
+at one recording per batch. It does this for three recognizers, so both
+transducer implementations are covered as well as CTC:
+
+| Recognizer | Search configurations |
+|---|---|
+| zipformer CTC | greedy; prefix search; with a small n-gram model the script writes; with a tiny character LSTM |
+| zipformer transducer (small English) | greedy; upstream's beam search; prefix search; with the n-gram model |
+| NeMo Parakeet TDT (110M English) | greedy; upstream's beam search; prefix search |
 
 ```bash
 mise run check                                # against ../build
@@ -68,7 +73,8 @@ uv run check_parallel.py --lstm-model FILE    # also an onnx-rnn token scorer
   trained for 15 minutes so the check has a recurrent scorer to run. No
   claim may rest on its quality. `--lstm-model` adds a second, real one
   over the recognizer's tokens if you have it.
-- It takes about a minute on CPU and needs no GPU. The workflow
+- It downloads about 600 MB of pinned public archives the first time, then
+  takes a few minutes on an idle CPU, and needs no GPU. The workflow
   `.github/workflows/fusion-fork.yaml` runs it after the fork's unit tests.
 - A developer's checkout can go further than the workflow does: add
   `--lstm-model`, or point `--build-dir` at a GPU build.

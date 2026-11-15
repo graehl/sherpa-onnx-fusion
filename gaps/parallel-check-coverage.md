@@ -13,11 +13,12 @@ where: repro/check_parallel.py, .github/workflows/fusion-fork.yaml, .github/work
 check of running the search and scorers from several threads. It leaves
 out:
 
-- **Model families other than CTC.** A transducer was checked by hand
-  (2026-11-15: the small public English zipformer, 61 recordings; greedy,
-  upstream's beam search, the prefix search, and the prefix search with
-  KenLM; 8 threads, sorted order, and search threads all matched one
-  thread). Nothing repeats that.
+- **Model families beyond three.** It runs a zipformer CTC model, a
+  zipformer transducer and a NeMo Parakeet TDT, all small English ones.
+  w2v-BERT CTC, Whisper and the rest are not in it.
+- **Scorers on the transducers.** The zipformer transducer runs with the
+  n-gram model; neither transducer runs with an LSTM, and the TDT runs with
+  no scorer.
 - **A real LSTM.** The default run uses a 1.6 MB character LSTM trained
   for 15 minutes as a test fixture
   ([graehl/sherpa-onnx-fusion-test-lm](https://huggingface.co/graehl/sherpa-onnx-fusion-test-lm)).
@@ -33,14 +34,11 @@ out:
 
 ## What is wanted
 
-- Add a transducer configuration; the small English zipformer archive is
-  112 MB.
 - A deliberate fault (for example an environment variable in a test build
   that swaps two results) to see the check fail on wrong output.
 
 ## Closure
 
-The default run covers a transducer, and the check has been seen to fail
-on a wrong transcript.
+The check has been seen to fail on a wrong transcript.
 
 Contributing-model: fable-5.2
