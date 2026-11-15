@@ -88,6 +88,20 @@ tokens, § Fusion on RNN-T and TDT, § Matching the existing decoders).
   JSON file ([option collections](topics/json-option-collections.md)).
 - A multi-utterance CTC decoder that admits, feeds, finishes, and cancels
   utterances individually while batching scorer calls across them.
+- Bulk decoding in `sherpa-onnx-offline-parallel`: one JSON line per
+  recording naming its position in the list, with an error line for a file
+  that cannot be read, printed as each finishes or in list order
+  (`--ordered-output`); batches of similar length by default
+  (`--sort-by-length`) under a padded-audio limit (`--max-batch-seconds`);
+  and, for CTC models, search threads sized
+  apart from the threads that run the model (`--decode-threads`). Scorers
+  are shared across threads. `sherpa-onnx-offline` itself still pads every
+  file on its command line into one batch.
+- Batched decoding for w2v-BERT and omnilingual CTC exports that take
+  `input_lengths`, whose fp32 results then do not depend on the batch.
+- [repro/](repro/README.md): pinned public downloads and a script that
+  reruns the English CTC comparisons above, and a check that threads,
+  search threads and sorting do not change the bulk program's output.
 
 The options exist in the C++ configuration and command-line programs only;
 the language bindings do not expose them yet.
@@ -112,7 +126,15 @@ present and prints a warning describing the correct result.
 - [Static build aborts when a model loads (GCC 15)](gaps/static-onnxruntime-abort.md).
 - [Decoding several recordings in one call changes some transcripts](gaps/offline-batch-changes-transcripts.md).
 - [Encoder batches are formed without regard to length](gaps/encoder-batches-ignore-length.md).
-- [The parallel batch program batches in list order](gaps/parallel-driver-batches-in-list-order.md).
+- [Length-sorted batches in the parallel batch program](gaps/parallel-driver-batches-in-list-order.md):
+  built; a GPU timing against list-order batches and a measured per-call
+  overhead are still owed.
+- [What the parallel program check does not cover](gaps/parallel-check-coverage.md).
+- [On a GPU most decode time is not model computation](gaps/gpu-decode-cost-outside-the-model.md).
+- [Separate model run and search for families other than CTC](gaps/sketches/separate-encode-for-other-model-families.md).
+- [A measured cost model for a batch](gaps/sketches/batch-cost-model.md).
+- [A table of the best demonstrated throughput per kind of model](gaps/sketches/throughput-table.md)
+  (no rows yet: no timing has been taken on an idle machine).
 - [LSTM fusion lacks a result anyone can reproduce](gaps/public-lstm-fusion-evidence.md).
 - [Encoder-inclusive inflight scheduling](gaps/sketches/encoder-decoder-inflight-scheduling.md),
   deferred beyond the decoder's own inflight batching.
