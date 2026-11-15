@@ -233,6 +233,23 @@ in one call. With `--scorer.rescore=true` the prefix search does the
 existing rescoring instead, at its cost (§ Matching the existing
 decoders).
 
+The published 16 MB character 8-gram (§ CTC with an LM) gives two public
+English transducers no reliable gain. Settings were chosen on 300
+dev-other recordings at beam 4 with a word bonus unit, then run on 600
+test-other recordings, one per call (2026-11-15; WER; paired sign test
+over recordings against the prefix search with no LM):
+
+| Recognizer | Greedy | `modified_beam_search` | Prefix search, no LM | With the 8-gram | Setting | Change |
+|---|---:|---:|---:|---:|---|---|
+| small zipformer (`sherpa-onnx-zipformer-small-en-2023-06-26`, int8) | 6.05 | 6.01 | 5.95 | 5.80 | weight 0.2, no bonus | −16 words; 40 recordings better, 27 worse (p = 0.14) |
+| Parakeet TDT 110M (int8) | 5.85 | 5.59 | 5.60 | 5.67 | weight 0.1, bonus 0.5 | +8 words; 29 better, 29 worse (p = 1.0) |
+
+Weights from 0.1 to 0.5 were tried; on dev-other neither recognizer did
+better above 0.2, where the CTC model's best weight was 0.35.
+Parakeet writes capitals, so it needs `--scorer-text-case=lower`; without
+it the first grid scored the lowercase LM on unknown words. No `repro/`
+claim was added for either.
+
 ### Scorers over the recognizer's tokens
 
 A scorer may be trained on the recognizer's own tokens instead of
@@ -481,7 +498,11 @@ these recordings (p = 0.20).
   0.05 between rows are within noise on 600 recordings. The 16 MB and 4 MB
   character models are published
   ([graehl/sherpa-onnx-fusion-lm](https://huggingface.co/graehl/sherpa-onnx-fusion-lm))
-  and pinned in `repro/claims.toml` as the claim `ctc-char-ngram`.
+  and pinned in `repro/claims.toml` as the claim `ctc-char-ngram`. On
+  all 2,939 test-other recordings (2026-11-15, `repro/results/`) the two
+  claims read greedy 5.65, prefix search with no LM 5.65, the released
+  graph 5.39, the 4 MB 6-gram 5.12 and the 16 MB 8-gram 5.11. The
+  results files hold totals only, so no paired test was run on them.
 - **A character LSTM trained here did not beat the n-gram.** Three layers
   of 1,536 units trained for three hours on one GPU on the full text
   (1.39 bits per character held out), quantized to 46 MB, scored 5.02

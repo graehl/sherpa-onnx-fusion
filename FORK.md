@@ -18,8 +18,8 @@ Word error rate in percent. Every recognizer here can be downloaded.
 | Recognizer, test set | Language model | Greedy | Best k2-fsa sherpa-onnx decoder with the LM | Prefix search, no LM | Prefix search with the LM | RTF* greedy | RTF* prefix search, no LM | RTF* with the LM | RTF* k2-fsa decoder with the LM |
 |---|---|---:|---:|---:|---:|---:|---:|---:|---:|
 | Vietnamese Parakeet CTC 0.6B (NVIDIA, int8), FLEURS test, 857 clips | character 8-gram | 9.27 | not supported (a graph only, and not for NeMo CTC models) | 9.09 | 6.30 | 0.030 | 0.028 | 0.030 | – |
-| English zipformer CTC, 600 LibriSpeech test-other recordings | character 8-gram from the LibriSpeech LM text (37 MB) | 5.63 | 5.39 (k2-fsa's word-3-gram graph released with the model, 334 MB) | 5.63 | 4.91 | 0.021 | 0.019 | 0.020 | 0.024 |
-| the same | public LibriSpeech LSTM over its tokens (icefall's `rnn_lm`, 388 MB) | 5.63 | not supported (no RNN LM for CTC models) | 5.59 | 4.45 | 0.021 | 0.015 | 0.13 | – |
+| English zipformer CTC, all 2,939 LibriSpeech test-other recordings ([recipe](repro/)) | published character 8-gram from the LibriSpeech LM text (16 MB) | 5.65 | 5.39 (k2-fsa's word-3-gram graph released with the model, 334 MB) | 5.65 | 5.11 | 0.025 | 0.024 § | 0.028 | 0.056 |
+| the same, 600 of those recordings | public LibriSpeech LSTM over its tokens (icefall's `rnn_lm`, 388 MB) | 5.63 | not supported (no RNN LM for CTC models) | 5.59 | 4.45 | 0.021 | 0.015 | 0.13 | – |
 | Vietnamese zipformer transducer (gipformer 1.5, 68M), FLEURS test, 857 clips | 4-gram over the recognizer's tokens | 5.59 | not supported (no n-gram LM for transducers) | 5.49 | 5.23 | – | 0.021 | 0.021 | – |
 | the same | LSTM over the recognizer's tokens (int8, 49 MB) | 5.59 | 5.21 (rescoring, with the fp32 model) | 5.49 | 4.89 | – | 0.021 | 0.028 | 0.049 |
 | English zipformer transducer, 600 LibriSpeech test-other recordings | public LibriSpeech LSTM over its tokens (icefall's `rnn_lm`, 388 MB) | 4.65 | 4.38 (rescoring) | 4.60 (k2-fsa `modified_beam_search`, which it reproduces) | 4.20 | 0.059 ‡ | 0.063 ‡ | 0.51 ‡ | 0.13 ‡ |
@@ -33,7 +33,9 @@ measured yet. † Taken before the search batched its prediction-network and
 joiner calls; on four recordings afterwards it ran at 2.4 and 1.8 times
 greedy's time. ‡ This row was timed under about three times the load of
 the others (compare its greedy figure with the CTC row's); the same LSTM
-fused on the CTC model reads 0.13.
+fused on the CTC model reads 0.13. § From a second whole-set run at the
+same load, in which greedy read 0.061; the row's other timings share one
+run.
 
 - **Language models.** The two Vietnamese models are not public. Both were
   built from 29.5 million sentences: Vietnamese Wikipedia, FineWeb-2, and
