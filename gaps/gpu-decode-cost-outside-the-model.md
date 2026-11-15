@@ -52,9 +52,17 @@ Three things stand out.
   6 ms a recording. Four threads cut elapsed to 0.26 s by spreading that
   work, not by overlapping model calls.
 
-Overlapping calls from several threads do not help the model: at batch 1,
-four threads spend 3.6 times the summed recognizer time for 15% less
-elapsed time. The first call each thread makes is also slow on this
+Single items on several threads, all calling the one shared session, gain
+little while shapes vary and something when they do not. With recordings
+of different lengths, four threads at batch 1 spend 3.6 times the summed
+recognizer time, so the model gets through its work about 1.1 times
+faster than on one thread. Decoding one file 48 times, four threads spend
+1.42 s summed against 0.64 s, about 1.8 times faster (one run). So the
+per-shape cost appears to be serialized across threads, and with it
+removed threaded single items still reach under half of what a batch of
+16 does. Nothing in this repository takes a lock around the call; the
+serialization is inside onnxruntime or the provider and was not traced.
+The first call each thread makes is also slow on this
 provider: warming up one thread of eight, not all eight, raised elapsed
 from 1.81–1.93 s to 2.19–2.28 s on the short list (batch 2, three
 alternating pairs).
