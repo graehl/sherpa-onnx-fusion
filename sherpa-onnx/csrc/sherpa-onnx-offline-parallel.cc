@@ -12,7 +12,6 @@
 #include <deque>
 #include <fstream>
 #include <functional>
-#include <map>
 #include <memory>
 #include <mutex>
 #include <sstream>
@@ -168,30 +167,47 @@ struct Record {
   std::string json;
 };
 
-// Prints the results in the order of the input list, no matter in which
-// order they are decoded.
-class OrderedOutput {
+// Prints the results: as they finish, or in the order of the input list no
+// matter in which order they are decoded.
+class ResultOutput {
  public:
+  // num_inputs is the length of the input list
+  ResultOutput(bool in_list_order, int32_t num_inputs)
+      : in_list_order_(in_list_order),
+        pending_(in_list_order ? num_inputs : 0),
+        finished_(in_list_order ? num_inputs : 0, false) {}
+
   void Put(std::vector<Record> records) {
     std::lock_guard<std::mutex> lock(mutex_);
-    for (auto &r : records) {
-      int32_t index = r.index;
-      pending_.emplace(index, std::move(r));
-    }
-    for (auto it = pending_.begin();
-         it != pending_.end() && it->first == next_index_;
-         it = pending_.erase(it), ++next_index_) {
-      const Record &r = it->second;
-      fprintf(stderr, "%s\n", r.wav_filename.c_str());
-      fprintf(stdout, "%s\n", r.json.c_str());
-      fprintf(stderr, "----\n");
+    if (!in_list_order_) {
+      for (const auto &r : records) Print(r);
+    } else {
+      for (auto &r : records) {
+        int32_t index = r.index;
+        pending_[index] = std::move(r);
+        finished_[index] = true;
+      }
+      int32_t num_inputs = static_cast<int32_t>(pending_.size());
+      for (; next_index_ != num_inputs && finished_[next_index_];
+           ++next_index_) {
+        Print(pending_[next_index_]);
+        pending_[next_index_] = {};
+      }
     }
     fflush(stdout);
   }
 
  private:
+  static void Print(const Record &r) {
+    fprintf(stderr, "%s\n", r.wav_filename.c_str());
+    fprintf(stdout, "%s\n", r.json.c_str());
+    fprintf(stderr, "----\n");
+  }
+
+  bool in_list_order_;
   std::mutex mutex_;
-  std::map<int32_t, Record> pending_;  // finished, not printed
+  std::vector<Record> pending_;  // by index: finished, not printed
+  std::vector<bool> finished_;   // by index
   int32_t next_index_ = 0;
 };
 
@@ -357,7 +373,7 @@ std::vector<Record> MakeRecords(const Batch &batch) {
 // search to the SearchThreads that serve the queue.
 void AsrInference(const std::vector<std::vector<Utterance>> &chunk_wav_paths,
                   int32_t warm_up, sherpa_onnx::OfflineRecognizer *recognizer,
-                  OrderedOutput *output, BatchQueue *queue, Totals *totals) {
+                  ResultOutput *output, BatchQueue *queue, Totals *totals) {
   float duration = 0.0f;
   float elapsed_seconds_batch = 0.0f;
   float recognizer_seconds = 0.0f;
@@ -404,7 +420,7 @@ void AsrInference(const std::vector<std::vector<Utterance>> &chunk_wav_paths,
 
 // A thread of --decode-threads: searches the batches the model has run on.
 void SearchThread(sherpa_onnx::OfflineRecognizer *recognizer, BatchQueue *queue,
-                  OrderedOutput *output, Totals *totals) {
+                  ResultOutput *output, Totals *totals) {
   float recognizer_seconds = 0.0f;
   Batch batch;
   while (queue->Pop(&batch)) {
@@ -500,10 +516,12 @@ Note: It supports decoding multiple files in batches
 
 Each result is one line of JSON on stdout. It starts with "index", the
 position of the wave file in the input list counting from 0, and
-"wav_filename". Results are printed in the order of the input list for any
---nj. A wave file that cannot be read has "error" in place of the result.
+"wav_filename". Results are printed as they finish, or in the order of the
+input list with --ordered-output=true. A wave file that cannot be read has
+"error" in place of the result.
 
-With --sort-by-length=true a batch holds wave files of similar length, which
+Wave files are decoded from the longest to the shortest unless
+--sort-by-length=false, so a batch holds wave files of similar length, which
 avoids computing on padding. --max-batch-seconds limits a batch by its
 longest wave file times its number of wave files.
 
@@ -522,7 +540,8 @@ for a list of pre-trained models to download.
   int32_t nj = 1;            // thread number
   int32_t batch_size = 1;    // number of wav files processed at once.
   int32_t warm_up = 1;       // untimed decodes of the first batch per thread
-  bool sort_by_length = false;  // batch wave files of similar length
+  bool sort_by_length = true;   // batch wave files of similar length
+  bool ordered_output = false;  // print results in the order of the list
   float max_batch_seconds = 0;  // limit on a padded batch; 0 means none
   // fixed time of a recognizer call in seconds of audio; the default is so
   // large that the fewest possible batches are used
@@ -568,10 +587,15 @@ for a list of pre-trained models to download.
   po.Register("sort-by-length", &sort_by_length,
               "If true, decode the wave files from the longest to the "
               "shortest so that a batch holds files of similar length and "
-              "needs little padding. Results are still printed in the order "
-              "of the input list. The length is estimated from the file "
+              "needs little padding. The length is estimated from the file "
               "size and the wave header. Note that for some models the "
               "result of a wave file depends on the others in its batch. "
+              "default=true");
+  po.Register("ordered-output", &ordered_output,
+              "If true, print the results in the order of the input list, "
+              "holding a finished result until those before it are printed. "
+              "If false, print each result when it is finished; its "
+              "\"index\" gives its position in the input list. "
               "default=false");
   po.Register("batch-overhead-seconds", &batch_overhead_seconds,
               "Used with --sort-by-length or --max-batch-seconds. The fixed "
@@ -669,7 +693,7 @@ for a list of pre-trained models to download.
             audio, padded, static_cast<int32_t>(smallest));
   }
   Totals totals;
-  OrderedOutput output;
+  ResultOutput output(ordered_output, static_cast<int32_t>(wav_paths.size()));
   if (decode_queue_size <= 0) decode_queue_size = decode_threads;
   BatchQueue queue(decode_queue_size);
   bool separate_search = decode_threads > 0;

@@ -56,7 +56,9 @@ threads, separate search threads and sorting by length must not change what
 it prints. It decodes the three recordings shipped inside the pinned English
 zipformer CTC archive, repeated, with one unreadable file among them, and
 compares each way of running the program with one thread: a row per input
-in list order, an error row for the unreadable file only, and the same text
+(in list order when `--ordered-output=true` asks for it, each index once
+when rows are printed as they finish), an error row for the unreadable file
+only, and the same text
 at one recording per batch. It does this for three recognizers, so both
 transducer implementations are covered as well as CTC:
 
