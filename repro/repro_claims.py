@@ -28,9 +28,11 @@ import os
 import pathlib
 import platform
 import re
+import shutil
 import subprocess
 import sys
 import tarfile
+import tempfile
 import tomllib
 import urllib.request
 
@@ -42,6 +44,20 @@ CACHE = pathlib.Path(
     or pathlib.Path(os.environ.get("XDG_CACHE_HOME") or pathlib.Path.home() / ".cache")
     / "sherpa-onnx-fusion-repro"
 )
+CACHE_NAME = "$SHERPA_ONNX_REPRO_CACHE/"
+
+
+def portable(text: str) -> str:
+    """A recorded path, or an argument holding one, that means the same in
+    another checkout: under the cache as $SHERPA_ONNX_REPRO_CACHE/..., inside
+    this checkout relative to its root, anything else unchanged."""
+    text = text.replace(str(CACHE) + "/", CACHE_NAME)
+    return text.replace(str(HERE.parent) + "/", "")
+
+
+def local(text: str) -> str:
+    """The inverse of portable() for this checkout and cache."""
+    return text.replace(CACHE_NAME, str(CACHE) + "/")
 
 
 def load_claims() -> dict:
@@ -49,33 +65,45 @@ def load_claims() -> dict:
         return tomllib.load(f)
 
 
-def artifact_dir(name: str) -> pathlib.Path:
-    return CACHE / name
+def artifact_dir(name: str, spec: dict) -> pathlib.Path:
+    return CACHE / name / spec["sha256"]
+
+
+def file_sha256(path: pathlib.Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as f:
+        for block in iter(lambda: f.read(1 << 20), b""):
+            digest.update(block)
+    return digest.hexdigest()
 
 
 def fetch_artifact(name: str, spec: dict) -> pathlib.Path:
     """Download and unpack one pinned artifact; returns its directory."""
-    target = artifact_dir(name)
+    target = artifact_dir(name, spec)
     if (target / ".complete").exists():
         return target
     if not spec.get("url"):
         sys.exit(f"Artifact not published: {name}: {spec.get('note', 'no URL')}")
-    target.mkdir(parents=True, exist_ok=True)
-    archive = target / spec["url"].rsplit("/", 1)[1]
-    if not archive.exists():
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix=".download-", dir=target.parent) as tmp:
+        staged = pathlib.Path(tmp)
+        archive = staged / spec["url"].rsplit("/", 1)[1]
         print(f"[fetch] {name} {spec['url']}", file=sys.stderr)
         urllib.request.urlretrieve(spec["url"], archive)
-    digest = hashlib.sha256()
-    with open(archive, "rb") as f:
-        for block in iter(lambda: f.read(1 << 20), b""):
-            digest.update(block)
-    if digest.hexdigest() != spec["sha256"]:
-        sys.exit(f"Artifact hash mismatch: {name}: got {digest.hexdigest()}")
-    if tarfile.is_tarfile(archive):
-        with tarfile.open(archive) as tar:
-            tar.extractall(target, filter="data")
-        archive.unlink()
-    (target / ".complete").touch()
+        digest = file_sha256(archive)
+        if digest != spec["sha256"]:
+            sys.exit(f"Artifact hash mismatch: {name}: got {digest}")
+        if tarfile.is_tarfile(archive):
+            with tarfile.open(archive) as tar:
+                tar.extractall(staged, filter="data")
+            archive.unlink()
+        (staged / ".complete").touch()
+        try:
+            staged.rename(target)
+        except OSError:
+            # Another fetch may have published this same verified digest.
+            if not (target / ".complete").exists():
+                raise
     return target
 
 
@@ -143,6 +171,27 @@ def fetch_claim(config: dict, claim: dict) -> dict[str, pathlib.Path]:
 
 
 def run_claim(config: dict, name: str, sample: int, jobs: int, binary: str) -> None:
+    executable = pathlib.Path(shutil.which(binary) or binary).resolve(strict=True)
+    binary = str(executable)
+    commit = subprocess.run(
+        ["git", "-C", str(HERE), "rev-parse", "HEAD"],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    dirty = subprocess.run(
+        ["git", "-C", str(HERE), "status", "--porcelain", "--untracked-files=no"],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    provenance = {
+        "fork_commit": commit,
+        "fork_commit_kind": "checkout-at-start; executable-build-unverified",
+        "checkout_dirty": bool(dirty),
+        "executable": {"path": portable(binary), "sha256": file_sha256(executable)},
+        "started_at": datetime.datetime.now(datetime.UTC).isoformat(),
+    }
     claim = config["claims"][name]
     dirs = fetch_claim(config, claim)
     recordings = librispeech_recordings(dirs[claim["test_set"]])
@@ -166,6 +215,7 @@ def run_claim(config: dict, name: str, sample: int, jobs: int, binary: str) -> N
         arms.append(
             {
                 "name": arm["name"],
+                "argv": [portable(a) for a in [binary, "--print-args=false", *args]],
                 "wer": round(100 * errors / total_words, 2),
                 "errors": errors,
                 "decode_seconds": round(sum(s for _, s in decoded), 1),
@@ -179,16 +229,10 @@ def run_claim(config: dict, name: str, sample: int, jobs: int, binary: str) -> N
     if sample:
         print(f"[sample] {len(recordings)} recordings; results/{name}.json not written")
         return
-    commit = subprocess.run(
-        ["git", "-C", str(HERE), "rev-parse", "--short", "HEAD"],
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout.strip()
     RESULTS.mkdir(exist_ok=True)
     result = {
         "claim": name,
-        "fork_commit": commit,
+        **provenance,
         "date": datetime.date.today().isoformat(),
         "host": f"{platform.machine()}, {jobs} decodes at a time",
         "test_set": {
@@ -196,6 +240,9 @@ def run_claim(config: dict, name: str, sample: int, jobs: int, binary: str) -> N
             "recordings": len(recordings),
             "words": total_words,
         },
+        "inputs": [
+            {"id": key, "wav": portable(str(wav))} for key, wav, _ in recordings
+        ],
         "arms": arms,
         "pins": {a: config["artifacts"][a]["sha256"] for a in claim["artifacts"]},
     }

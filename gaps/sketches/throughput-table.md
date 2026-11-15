@@ -63,9 +63,9 @@ is needed for the fused rows; the pinned test LSTM is not.
 
 ## What it waits on
 
-- Transducer and TDT configurations in `repro/check_parallel.py`, so the
-  rows' correctness is checked routinely and not only when the table is
-  made ([check coverage](../parallel-check-coverage.md)).
+`repro/check_parallel.py` covers CTC, transducer, and TDT configurations
+([check coverage](../parallel-check-coverage.md)). Remaining prerequisites:
+
 - Separate model and search calls for transducers, without which
   `--decode-threads` cannot help them
   ([sketch](separate-encode-for-other-model-families.md)).
