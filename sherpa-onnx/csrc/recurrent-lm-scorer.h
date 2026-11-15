@@ -28,14 +28,19 @@ class RecurrentLmStep {
   virtual int32_t VocabSize() const = 0;
   virtual const std::vector<StateShape> &StateShapes() const = 0;
 
+  // Owns the outputs of one Run.
+  struct Outputs {
+    virtual ~Outputs() = default;
+  };
+
   // units[b] is each item's previous unit ID. states_in[k] holds state tensor
   // k as [layers, batch, hidden]. On return *log_probs is [batch, vocab] and
-  // states_out[k] is [layers, batch, hidden]; both stay valid until the next
-  // Run.
-  virtual void Run(const std::vector<int64_t> &units,
-                   const std::vector<std::vector<float>> &states_in,
-                   const float **log_probs,
-                   std::vector<const float *> *states_out) = 0;
+  // states_out[k] is [layers, batch, hidden]; both stay valid while the
+  // returned object lives. May be called from several threads at once.
+  virtual std::unique_ptr<Outputs> Run(
+      const std::vector<int64_t> &units,
+      const std::vector<std::vector<float>> &states_in, const float **log_probs,
+      std::vector<const float *> *states_out) const = 0;
 };
 
 struct RecurrentLmVocabulary {

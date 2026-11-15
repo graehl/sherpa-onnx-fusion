@@ -112,12 +112,24 @@ struct ScorerFinalScore {
   bool accepted = true;
 };
 
-// One coordinator calls a scorer serially; each call may mix utterances.
+// A scorer holds a model and what follows from its options and from the
+// decoder it is bound to (Prepare). None of that changes while decoding:
+// whatever depends on the input lives in a ScorerUtterance or in the call
+// that needs it. So after Prepare several coordinators may call one scorer
+// at the same time, each call mixing utterances; an utterance and its states
+// belong to one coordinator.
 class Scorer {
  public:
   virtual ~Scorer() = default;
 
   virtual const ScorerInfo &Info() const = 0;
+
+  // Called by a decoder when it is bound to this scorer, before any other
+  // call and not during one, with every unit that decoder can send. A scorer
+  // computes here what it would otherwise look up per unit while decoding.
+  // A unit that was not listed is still scored correctly, only slower.
+  // Decoders bound to the same scorer each call it; the units accumulate.
+  virtual void Prepare(Span<const UnitId> units) { (void)units; }
 
   // Per-utterance data, or null when the scorer needs none.
   virtual std::unique_ptr<ScorerUtterance> NewUtterance() = 0;

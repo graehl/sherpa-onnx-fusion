@@ -36,6 +36,13 @@ struct SearchVocabulary {
   std::vector<SearchToken> tokens;  // Indexed by token ID.
 };
 
+// Binds a decoder to its scorers: gives each scorer every unit a search over
+// "vocabulary" can send it (Scorer::Prepare). Call it once the vocabulary is
+// built and before any search uses the scorers.
+void PrepareScorers(const SearchVocabulary &vocabulary,
+                    const std::vector<Scorer *> &scorers,
+                    UnitId word_boundary_char = ' ');
+
 enum class LengthBonusUnit { kToken, kWord };
 
 class ScoredPrefixTrie {

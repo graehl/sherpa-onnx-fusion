@@ -5,6 +5,7 @@
 #include "sherpa-onnx/csrc/recurrent-lm-scorer.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cstring>
 #include <deque>
 #include <memory>
@@ -15,7 +16,7 @@ namespace sherpa_onnx {
 
 namespace {
 
-int32_t g_live_nodes = 0;
+std::atomic<int32_t> g_live_nodes(0);
 
 struct NodePool;
 
@@ -106,8 +107,9 @@ class RecurrentLmScorer : public Scorer {
     NodePool pool;
     Node *root = pool.New();
     root->unit = vocabulary_.boundary_id;
-    Request(root);
-    Compute();
+    std::vector<Node *> batch;
+    Request(root, &batch);
+    Compute(batch);
     root_states_ = root->states;
     root_log_probs_ = root->log_probs;
     Unreference(root);
@@ -130,10 +132,11 @@ class RecurrentLmScorer : public Scorer {
 
   void Advance(Span<const ScorerExtension> extensions,
                ScorerAdvanceResult *results) override {
+    std::vector<Node *> batch;
     for (const ScorerExtension &extension : extensions) {
-      Request(NodeOf(extension.parent.bytes));
+      Request(NodeOf(extension.parent.bytes), &batch);
     }
-    Compute();
+    Compute(batch);
     for (size_t i = 0; i != extensions.size; ++i) {
       Node *parent = NodeOf(extensions[i].parent.bytes);
       int32_t unit = IdOf(extensions[i].unit);
@@ -154,8 +157,11 @@ class RecurrentLmScorer : public Scorer {
       for (size_t i = 0; i != states.size; ++i) results[i] = {0.0f, true};
       return;
     }
-    for (const ScorerStateRef &state : states) Request(NodeOf(state.bytes));
-    Compute();
+    std::vector<Node *> batch;
+    for (const ScorerStateRef &state : states) {
+      Request(NodeOf(state.bytes), &batch);
+    }
+    Compute(batch);
     for (size_t i = 0; i != states.size; ++i) {
       results[i].log_score =
           NodeOf(states[i].bytes)->log_probs[vocabulary_.boundary_id];
@@ -175,41 +181,44 @@ class RecurrentLmScorer : public Scorer {
     return id < 0 ? vocabulary_.unknown_id : id;
   }
 
-  void Request(Node *node) {
+  // Adds a node that still needs its model step to one call's batch.
+  static void Request(Node *node, std::vector<Node *> *nodes) {
     if (node->computed || node->queued) return;
     node->queued = true;
-    batch_.push_back(node);
+    nodes->push_back(node);
   }
 
-  // One model step for every requested node.
-  void Compute() {
-    if (batch_.empty()) return;
+  // One model step for every requested node. Everything it allocates
+  // belongs to this call, so calls for different utterances can overlap.
+  void Compute(const std::vector<Node *> &nodes) const {
+    if (nodes.empty()) return;
     const auto &shapes = step_->StateShapes();
-    size_t batch = batch_.size();
-    units_.resize(batch);
-    states_in_.resize(shapes.size());
+    size_t batch = nodes.size();
+    std::vector<int64_t> units(batch);
+    std::vector<std::vector<float>> states_in(shapes.size());
     for (size_t k = 0; k != shapes.size(); ++k) {
-      states_in_[k].assign(shapes[k].layers * batch * shapes[k].hidden, 0.0f);
+      states_in[k].assign(shapes[k].layers * batch * shapes[k].hidden, 0.0f);
     }
     for (size_t i = 0; i != batch; ++i) {
-      const Node *node = batch_[i];
-      units_[i] = node->unit;
+      const Node *node = nodes[i];
+      units[i] = node->unit;
       if (node->parent == nullptr) continue;  // Steps from the zero state.
       for (size_t k = 0; k != shapes.size(); ++k) {
         size_t hidden = shapes[k].hidden;
         for (int32_t layer = 0; layer != shapes[k].layers; ++layer) {
           std::copy_n(node->parent->states[k].begin() + layer * hidden, hidden,
-                      states_in_[k].begin() + (layer * batch + i) * hidden);
+                      states_in[k].begin() + (layer * batch + i) * hidden);
         }
       }
     }
 
     const float *log_probs = nullptr;
-    step_->Run(units_, states_in_, &log_probs, &states_out_);
+    std::vector<const float *> states_out;
+    auto outputs = step_->Run(units, states_in, &log_probs, &states_out);
 
     size_t vocab_size = step_->VocabSize();
     for (size_t i = 0; i != batch; ++i) {
-      Node *node = batch_[i];
+      Node *node = nodes[i];
       node->log_probs.assign(log_probs + i * vocab_size,
                              log_probs + (i + 1) * vocab_size);
       node->states.resize(shapes.size());
@@ -217,7 +226,7 @@ class RecurrentLmScorer : public Scorer {
         size_t hidden = shapes[k].hidden;
         node->states[k].resize(shapes[k].layers * hidden);
         for (int32_t layer = 0; layer != shapes[k].layers; ++layer) {
-          std::copy_n(states_out_[k] + (layer * batch + i) * hidden, hidden,
+          std::copy_n(states_out[k] + (layer * batch + i) * hidden, hidden,
                       node->states[k].begin() + layer * hidden);
         }
       }
@@ -225,12 +234,11 @@ class RecurrentLmScorer : public Scorer {
       node->queued = false;
     }
     // A computed node no longer needs its parent's state.
-    for (Node *node : batch_) {
+    for (Node *node : nodes) {
       Node *parent = node->parent;
       node->parent = nullptr;
       Unreference(parent);
     }
-    batch_.clear();
   }
 
   ScorerInfo info_;
@@ -238,11 +246,6 @@ class RecurrentLmScorer : public Scorer {
   RecurrentLmVocabulary vocabulary_;
   std::vector<std::vector<float>> root_states_;
   std::vector<float> root_log_probs_;
-
-  std::vector<Node *> batch_;
-  std::vector<int64_t> units_;
-  std::vector<std::vector<float>> states_in_;
-  std::vector<const float *> states_out_;
 };
 
 }  // namespace

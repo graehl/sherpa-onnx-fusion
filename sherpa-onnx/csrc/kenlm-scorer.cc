@@ -73,6 +73,13 @@ class KenLmScorer : public PerItemScorer {
   const ScorerInfo &Info() const override { return info_; }
   std::unique_ptr<ScorerUtterance> NewUtterance() override { return nullptr; }
 
+  void Prepare(Span<const UnitId> units) override {
+    if (!LooksUpSpelling()) return;
+    for (UnitId unit : units) {
+      if (unit >= 0) word_of_.Set(unit, static_cast<int32_t>(LookUp(unit)));
+    }
+  }
+
   void Start(ScorerUtterance * /*utterance*/, std::byte *state) override {
     lm::ngram::State begin;
     std::memset(&begin, 0, sizeof(begin));
@@ -98,7 +105,8 @@ class KenLmScorer : public PerItemScorer {
  private:
   // Natural-log score of "word" after "state". Writes the next state, with
   // unused bytes zeroed so equal contexts are equal bytes, unless out is null.
-  float Score(const std::byte *state, lm::WordIndex word, std::byte *out) {
+  float Score(const std::byte *state, lm::WordIndex word,
+              std::byte *out) const {
     lm::ngram::State next;
     std::memset(&next, 0, sizeof(next));
     float log10_prob = model_->BaseScore(state, word, &next);
@@ -110,7 +118,7 @@ class KenLmScorer : public PerItemScorer {
   }
 
   // The LM word for a unit; one the LM lacks is its <unk>.
-  lm::WordIndex WordOf(UnitId unit) {
+  lm::WordIndex WordOf(UnitId unit) const {
     if (indices_are_ids_) {
       int64_t index = static_cast<int64_t>(unit) + index_offset_;
       // KenLM does not expose its vocabulary size here; the builder's
@@ -124,16 +132,25 @@ class KenLmScorer : public PerItemScorer {
                  : model_->BaseVocabulary().NotFound();
     }
     int32_t known = word_of_.Lookup(unit);
-    if (known >= 0) return static_cast<lm::WordIndex>(known);
+    return known >= 0 ? static_cast<lm::WordIndex>(known) : LookUp(unit);
+  }
+
+  // True if a unit's LM word is found by its spelling, which Prepare does
+  // ahead of decoding.
+  bool LooksUpSpelling() const {
+    return !indices_are_ids_ &&
+           (info_.unit != ScorerUnit::kAsrToken || ids_are_words_);
+  }
+
+  // The LM word for a unit, by its spelling.
+  lm::WordIndex LookUp(UnitId unit) const {
     std::string text;
     if (ids_are_words_) {
       text = id_prefix_ + std::to_string(unit + id_offset_);
     } else {
       text = unit == ' ' ? space_ : Utf32ToUtf8(static_cast<char32_t>(unit));
     }
-    lm::WordIndex word = model_->BaseVocabulary().Index(text);
-    word_of_.Set(unit, static_cast<int32_t>(word));
-    return word;
+    return model_->BaseVocabulary().Index(text);
   }
 
   ScorerInfo info_;
@@ -146,7 +163,7 @@ class KenLmScorer : public PerItemScorer {
   std::string id_prefix_;
   bool indices_are_ids_ = false;
   int32_t index_offset_ = 0;
-  CharacterIndex word_of_;                    // Filled as units are first seen.
+  CharacterIndex word_of_;                    // Filled by Prepare.
   std::vector<lm::WordIndex> word_of_token_;  // By token ID, for token units.
 };
 

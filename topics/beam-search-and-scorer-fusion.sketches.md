@@ -18,8 +18,8 @@ state management, and scheduling.
 Intentionally defer device-side lookup, pruning, and beam-search work.
 The topic's lifecycle draft separately allows overlapping ASR/scorer model
 calls under resource limits; it does not require GPU-resident search.
-Keep `FloatView` as the initial CPU-readable
-score contract; do not add device-result variants or GPU lookup APIs now.
+Keep scorer results CPU-readable under the current caller-owned-array
+contract; do not add device-result variants or GPU lookup APIs now.
 `Ort::Value` can own CPU or GPU tensors, so retaining one behind a view does
 not itself imply GPU execution. CPU tensors can be viewed without copying;
 device-only outputs must become host-accessible before serving this contract.

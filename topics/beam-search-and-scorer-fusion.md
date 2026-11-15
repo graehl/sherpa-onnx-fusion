@@ -30,7 +30,7 @@ everything is kept in the
 | CTC prefix search, sum and max | `ctc-prefix-search.h` | § Search semantics |
 | Transducer, RNN-T, TDT prefix search | `transducer-prefix-search.h` | § Search semantics |
 | `kenlm` scorer | `kenlm-scorer.h` | needs `-DSHERPA_ONNX_ENABLE_KENLM=ON` (KenLM is LGPL) |
-| `onnx-rnn` scorer (LSTM or GRU) | `recurrent-lm-scorer.h`, `onnx-recurrent-lm-step.cc` | character units |
+| `onnx-rnn` scorer (LSTM or GRU) | `recurrent-lm-scorer.h`, `onnx-recurrent-lm-step.cc` | character or recognizer-token units |
 | Options and JSON | `fusion-config.h`, `option-collection.h`, `option-json.h` | § Options; [option collections](json-option-collections.md) |
 | Offline CTC recognizer | `offline-ctc-prefix-beam-search-decoder.h` | batch shares scorer calls |
 | w2v-BERT CTC model type | `offline-w2v-bert-ctc-model.h` (`--w2v-bert-ctc`) | transformers export with the input `input_features`; one utterance at a time, or padded batches when the export also takes `input_lengths` and masks padding itself |
@@ -38,7 +38,7 @@ everything is kept in the
 | Streaming CTC recognizer | `online-ctc-prefix-beam-search-decoder.h` | search kept per stream |
 | Offline transducer recognizers | `offline-transducer-prefix-beam-search-decoder.h` | stateless and NeMo |
 | Streaming stateless-transducer recognizer | `online-transducer-prefix-beam-search-decoder.h` | search kept per segment |
-| NeMo RNN-T/TDT search, offline and streaming | `nemo-transducer-prefix-segment.h`, `online-transducer-prefix-beam-search-nemo-decoder.h` | one class for both; on 300 LibriSpeech recordings a public streaming RNN-T gave ER2 7.55 greedy, 7.23 with the existing beam search, 7.31 with prefix search |
+| NeMo RNN-T search, offline and streaming; TDT search, offline | `nemo-transducer-prefix-segment.h`, `online-transducer-prefix-beam-search-nemo-decoder.h` | one class for both; on 300 LibriSpeech recordings a public streaming RNN-T gave ER2 7.55 greedy, 7.23 with the existing beam search, 7.31 with prefix search |
 | Scorers over the recognizer's tokens | `kenlm-scorer.h`, `recurrent-lm-scorer.h` (`--scorer.unit=token`) | § Scorers over the recognizer's tokens |
 | Rescore-only mode for any scorer | `rescoring-scorer.h` (`--scorer.N.rescore`) | n-best rescoring |
 | `modified_beam_search` rules | `TransducerPrefixSearchOptions::prune_steps` (`--modified-beam-search-rules`) | § Transducers |
@@ -393,9 +393,9 @@ are single runs on a loaded host. The streaming LM file is the same
 weights exported in step form for this check; the existing decoder reads
 it with three metadata entries added.
 
-Identical transcripts mean the two searches made the same choices, so the
-streaming speedup is not a different pruning. Where it comes from was not
-measured apart; the differences in the code are that the existing decoder
+The transcripts agree, but intermediate pruning was not compared. The
+contributions to the speedup were not measured separately; the differences
+in the code are that the existing decoder
 copies each kept hypothesis's LM state and next-token scores every frame
 and runs the LM for one hypothesis per call as soon as a token is
 emitted, while the scorer keeps one state per output prefix, shared by
@@ -755,8 +755,19 @@ model, or anything with the same contract. The interface is
   utterances, writing each child state and its raw natural-log score into
   caller arrays. `Finish` scores the end of input without invalidating
   states. A token of several units is advanced one unit per call, so a
-  neural scorer sees each step as one batch across the beam. One
-  coordinator calls a scorer serially.
+  neural scorer sees each step as one batch across the beam.
+- **What a scorer holds, and sharing.** A scorer holds its model and what
+  follows from its options and from the decoder bound to it; none of that
+  changes while decoding. A decoder binds itself once, when it is built,
+  by giving the scorer every unit it can send (`Scorer::Prepare`, through
+  `PrepareScorers`), so per-unit lookups such as the KenLM word of a
+  character are complete before the first utterance. Whatever is
+  allocated, cached, or computed lazily depending on the input lives in
+  the per-utterance object or in the call that needs it (the recurrent
+  scorer's batch for one model step). So several coordinators, such as
+  the threads of `sherpa-onnx-offline-parallel`, may call one scorer at
+  the same time; an utterance and its states belong to one coordinator.
+  Calls from different threads are not batched together.
 - **Rejection.** `Advance` may reject a continuation and `Finish` a
   hypothesis; the search drops them. The scorers built so far never do.
   A rejection holds even at zero weight; leave a scorer out of the
@@ -776,23 +787,27 @@ model, or anything with the same contract. The interface is
 
 ### Scorer types
 
-- **`kenlm`** (`kenlm-scorer.h`): a character n-gram model in ARPA or
-  KenLM binary form. Scores are KenLM's log10 times ln 10; an unknown
-  character scores as `<unk>`; the end of input scores `</s>`. With
+- **`kenlm`** (`kenlm-scorer.h`): an n-gram model in ARPA or
+  KenLM binary form, over characters or recognizer tokens (`unit=token`).
+  Token mode maps IDs to LM words through the token table or an explicit
+  ID convention in `extra`. Scores are KenLM's log10 times ln 10; an unknown
+  unit scores as `<unk>`; the end of input scores `</s>`. With
   `"words": true` in `extra` the model is over words instead: characters
   are collected to the word boundary and the word is scored there, an
-  unknown word as `<unk>`, with an optional `"floor"` on what one word can
-  cost. Nothing is charged inside a word, so pruning within a word is by
-  the recognizer's score alone.
-- **`onnx-rnn`** (`recurrent-lm-scorer.h`): a character LSTM or GRU
+  unknown word as `<unk>`. This word scorer adds no score until the word
+  boundary. An optional `"floor"`
+  limits the cost of one character, token, word, or end-of-input score.
+- **`onnx-rnn`** (`recurrent-lm-scorer.h`): a character or token LSTM or GRU
   exported as one step. The first model input is the previous unit IDs,
   `[batch, 1]`; every further input is a recurrent state tensor
   `[layers, batch, hidden]`; the outputs are next-unit log probabilities
   then the new states. An LSTM has two state tensors and a GRU one, and the
   scorer carries however many the model declares. A node is computed only
   when something is scored after it, batched with the other nodes that
-  call needs. `extra` names the unit list file (`vocab`,
-  `vocab-encoding`) and the boundary and unknown unit IDs.
+  call needs. In character mode, `extra` names the unit list file (`vocab`,
+  `vocab-encoding`) and the boundary and unknown unit IDs. Token mode uses
+  the recognizer's IDs with an optional `id-offset`; `boundary-id`,
+  `unknown-id`, and `score-end` configure the special units and final score.
 
 ### Sketched, not built
 
@@ -803,11 +818,12 @@ The companion keeps the full original sketch. From it, still intended:
   privately), so the search can use a character LM's first-character score
   before finishing a token's spelling. This is the early partial-score
   beam's input.
-- The recognizer's token table passed to scorer factories, for token-unit
-  language models and for a scorer vocabulary different from the
-  recognizer's (`OurToken`).
+- The recognizer's loaded token table passed directly to scorer factories,
+  to avoid separately configured token mappings and support the proposed
+  adaptation to a different scorer vocabulary (`OurToken`).
 - A composite scorer that owns several scorers behind one state.
-- A scorer shared by several coordinators or threads.
+- Scorer calls from several coordinators or threads combined into one
+  batch (they may already share a scorer; each call is its own batch).
 
 ## Proposed adjustable beam for partially scored expansions
 
@@ -879,8 +895,8 @@ batching all ready next-unit work before advancing to the next wave. Avoid
 per-hypothesis neural calls when the work can be grouped.
 
 Beam search initially runs on CPU. Changing the model provider does not move
-prefix merging, bookkeeping, or pruning to the GPU. The current `FloatView`
-score interface makes that choice explicit; a GPU-resident search would need
+prefix merging, bookkeeping, or pruning to the GPU. Scorers write scores
+into caller-owned CPU-readable result arrays; a GPU-resident search would need
 additional implementation and potentially a device-resident score interface.
 Backend-owned neural states can nevertheless remain on their accelerator.
 Keep model execution separate from the search so later implementations can
@@ -1038,7 +1054,7 @@ show. Dependent operations
 still wait for their input states/scores; independent hypotheses or
 utterances can supply useful overlapping work. CPU search and control
 remain separate from GPU execution. This does not implement GPU beam search
-or change the CPU-readable `FloatView` contract.
+or change the CPU-readable scorer-result contract.
 
 The motivation for alternation is potentially substantial temporary storage
 per call, particularly when expansion generates many more successors than
@@ -1127,7 +1143,7 @@ offline NeMo transducer models. The options are fields of `FusionConfig`
 | `--ctc-prior`, `--ctc-prior-weight` | none, 1 | CTC only: a label-prior correction (below) |
 | `--scorer-text-case` | `keep` | `lower` gives character scorers lowercase text; the output keeps its case |
 | `--scorer.N.rescore` | false | Apply the scorer only to the hypotheses that survive the search |
-| `--scorer.N.unit` | `char` | `token` for a scorer trained on the recognizer's tokens (`onnx-rnn`) |
+| `--scorer.N.unit` | `char` | `token` for a scorer trained on the recognizer's tokens (`kenlm` or `onnx-rnn`) |
 | `--modified-beam-search-rules` | false | Stateless transducers: search exactly as `modified_beam_search` does |
 | `--length-normalize` | false | Transducers: rank results by score over output length |
 

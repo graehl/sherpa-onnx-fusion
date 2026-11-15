@@ -73,10 +73,10 @@ class OnnxRecurrentLmStep : public RecurrentLmStep {
     return shapes_;
   }
 
-  void Run(const std::vector<int64_t> &units,
-           const std::vector<std::vector<float>> &states_in,
-           const float **log_probs,
-           std::vector<const float *> *states_out) override {
+  std::unique_ptr<Outputs> Run(
+      const std::vector<int64_t> &units,
+      const std::vector<std::vector<float>> &states_in, const float **log_probs,
+      std::vector<const float *> *states_out) const override {
     auto memory =
         Ort::MemoryInfo::CreateCpu(OrtDeviceAllocator, OrtMemTypeDefault);
     int64_t batch = static_cast<int64_t>(units.size());
@@ -92,17 +92,23 @@ class OnnxRecurrentLmStep : public RecurrentLmStep {
           memory, const_cast<float *>(states_in[k].data()), states_in[k].size(),
           shape.data(), shape.size()));
     }
-    outputs_ =
+    auto outputs = std::make_unique<Tensors>();
+    outputs->values =
         session_->Run({}, input_names_ptr_.data(), inputs.data(), inputs.size(),
                       output_names_ptr_.data(), output_names_ptr_.size());
-    *log_probs = outputs_[0].GetTensorData<float>();
+    *log_probs = outputs->values[0].GetTensorData<float>();
     states_out->resize(shapes_.size());
     for (size_t k = 0; k != shapes_.size(); ++k) {
-      (*states_out)[k] = outputs_[k + 1].GetTensorData<float>();
+      (*states_out)[k] = outputs->values[k + 1].GetTensorData<float>();
     }
+    return outputs;
   }
 
  private:
+  struct Tensors : public Outputs {
+    std::vector<Ort::Value> values;
+  };
+
   Ort::Env env_;
   Ort::SessionOptions session_options_;
   std::unique_ptr<Ort::Session> session_;
@@ -112,7 +118,6 @@ class OnnxRecurrentLmStep : public RecurrentLmStep {
   std::vector<const char *> output_names_ptr_;
   std::vector<StateShape> shapes_;
   int32_t vocab_size_ = 0;
-  std::vector<Ort::Value> outputs_;  // Kept until the next Run.
 };
 
 std::string Unhex(const std::string &hex) {
