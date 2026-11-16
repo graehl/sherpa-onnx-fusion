@@ -503,6 +503,13 @@ these recordings (p = 0.20).
   claims read greedy 5.65, prefix search with no LM 5.65, the released
   graph 5.39, the 4 MB 6-gram 5.12 and the 16 MB 8-gram 5.11. The
   results files hold totals only, so no paired test was run on them.
+  Rerun two calls at a time on the 8-core host with no more than 8
+  hardware threads busy in any minute (2026-11-16), the summed decode
+  seconds over 19,230 s of audio are: greedy 290, prefix search with no
+  LM 293, the 6-gram 311, the 8-gram 310, the released graph 367. The
+  first five minutes of the `ctc-shipped-graph` run, inside its greedy
+  arm, had up to 15 threads busy from other work; that arm's 311 s is not
+  used, and the committed results file still carries it.
 - **A character LSTM trained here did not beat the n-gram.** Three layers
   of 1,536 units trained for three hours on one GPU on the full text
   (1.39 bits per character held out), quantized to 46 MB, scored 5.02

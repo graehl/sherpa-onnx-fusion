@@ -1,15 +1,15 @@
 {
   "claim": "ctc-shipped-graph",
-  "fork_commit": "11cc27bcff2b0b908bb007fec54e876b6e5f81f3",
+  "fork_commit": "9f8fe13960553f23f52ca0e1814646acb3f88bcb",
   "fork_commit_kind": "checkout-at-start; executable-build-unverified",
   "checkout_dirty": false,
   "executable": {
     "path": "build-repro/bin/sherpa-onnx-offline",
     "sha256": "03802bd38d5d1569fcf57ec55a3efd60b0e78202c95d23b77a6a0ff80128e934"
   },
-  "started_at": "2026-11-15T10:50:38.314695+00:00",
-  "date": "2026-11-15",
-  "host": "x86_64, 8 decodes at a time",
+  "started_at": "2026-11-16T00:05:35.720645+00:00",
+  "date": "2026-11-16",
+  "host": "x86_64, 2 decodes at a time",
   "test_set": {
     "name": "librispeech-test-other",
     "recordings": 2939,
@@ -11786,7 +11786,7 @@
       ],
       "wer": 5.65,
       "errors": 2957,
-      "decode_seconds": 1176.6
+      "decode_seconds": 310.5
     },
     {
       "name": "shipped word 3-gram graph",
@@ -11800,7 +11800,7 @@
       ],
       "wer": 5.39,
       "errors": 2821,
-      "decode_seconds": 1083.7
+      "decode_seconds": 365.2
     },
     {
       "name": "prefix search, best alignment, no LM",
@@ -11816,7 +11816,7 @@
       ],
       "wer": 5.65,
       "errors": 2957,
-      "decode_seconds": 456.9
+      "decode_seconds": 292.8
     }
   ],
   "pins": {
