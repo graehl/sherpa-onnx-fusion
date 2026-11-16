@@ -106,8 +106,10 @@ tokens, § Fusion on RNN-T and TDT, § Matching the existing decoders).
 - w2v-BERT CTC models in LiteRT's `.tflite` form
   (`-DSHERPA_ONNX_ENABLE_LITERT=ON`, off by default), including a graph
   compiled for a Pixel 10 or 11, run on its TPU with `--provider=npu`
-  ([sketch](gaps/sketches/litert-model-backend.md)). A graph has one
-  fixed length; longer audio is cut to it.
+  ([sketch](gaps/sketches/litert-model-backend.md)). A graph has fixed
+  lengths, one per signature, and several graphs may be given: an
+  utterance runs in the shortest length that holds it, a longer one in
+  blended overlapping windows (`--litert-window`).
 - [repro/](repro/README.md): pinned public downloads and a script that
   reruns the English CTC comparisons above, and a check that threads,
   search threads and sorting do not change the bulk program's output.

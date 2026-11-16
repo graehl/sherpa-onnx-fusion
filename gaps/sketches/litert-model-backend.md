@@ -80,37 +80,48 @@ the Tensor dispatch library) and `offline-w2v-bert-ctc-litert-model.{h,cc}`,
 chosen when `--w2v-bert-ctc` names a `.tflite` file. `--provider=npu` with
 `--litert-dispatch-dir` runs a compiled graph on the TPU; any other
 provider runs a portable graph on LiteRT's CPU kernels. The graph has one
-fixed length P and takes `input_lengths`, so an utterance is zero padded
-to P and masked; a longer one is cut to P with an error logged.
+fixed length P and takes `input_lengths`, so a shorter utterance is zero
+padded to P and masked. Longer audio uses the windows described below.
+
+Several lengths and long audio (2026-11-16). A graph costs the same
+whatever the utterance's length (on a Pixel 11, a 600M-parameter model's
+5, 10 and 20 s graphs take about 0.10, 0.30 and 1.5 s per call), and a
+30 s graph of that model did not load (the TPU runtime could not allocate
+its DMA-BUF memory). So `--w2v-bert-ctc` takes several `.tflite` files,
+comma separated, and each signature of each is one length; a file of
+several signatures holds the weights once (about 0.7 GB per extra length
+instead of 1.3 for that model). An utterance runs in the shortest length
+that holds it. A longer one runs in overlapping windows of one length
+(`--litert-window W:O:S`, seconds; default the longest length, 3 s
+overlap, 1 s slack): evenly spaced, interior windows moved to put their
+edges where the filterbank energy is lowest, each window's features
+normalized over the window, logits blended per frame with weight
+1 + distance from the window's nearer edge, then one search over the
+whole utterance: center-weighted stitching of overlapping chunk encodings,
+as used for long inputs to bidirectional text encoders.
 
 Checked: on a Pixel 11 a compiled 5 s graph ran entirely on the TPU
 through `sherpa-onnx-offline`; on an x86 host the portable graph, linked
 against the `ai-edge-litert` wheel's `libLiteRt.so`, gave the ONNX fp32
-graph's transcripts. The compiler's default reduced precision on the TPU
-changes a few characters of some transcripts.
+graph's transcripts, and a 20 s utterance in three 10 s windows gave the
+same greedy transcript as an independent implementation of the scheme.
+The compiler's default precision (bf16) changes a few characters of some
+transcripts.
 
 ## Remaining, in order
 
-1. **Longer audio, and short audio cheaply.** On a Pixel 11, 10 s and
-   20 s graphs of a 600M-parameter model load and run; a 30 s graph
-   compiled but failed to load: the TPU runtime could not allocate its
-   DMA-BUF memory ("Failed to allocate from DMA-BUF heap system: Out of
-   memory"). A graph costs the same whatever the utterance's length, so a
-   short utterance in a long graph can be slower than the CPU. Either load
-   several lengths and run each utterance in the shortest that holds it
-   (their memory together is unmeasured), or run fixed-length windows,
-   which needs overlap and stitching for a CTC model.
-2. **Error rate**, not single transcripts, of the TPU path against ONNX
-   fp32 and int8 on a test set, and whether the compiler's full-precision
-   option is worth its cost.
-3. **The model's description file.** The graph's length and frame rate
-   come from its signature now; the feature options are still the
+1. **Error rate in this repository**, not single transcripts: the TPU
+   path, with lengths and windows, against ONNX fp32 and int8 on a public
+   test set, as `repro/` reruns other claims.
+2. **The model's description file.** The graph's length and frame rate
+   come from its signature; supported outputs have one frame per input
+   row or per two rows. The feature options are still the
    w2v-BERT ones the recognizer sets.
-4. Bindings (C API, JNI/Kotlin) for `litert_dispatch_dir`, and the
-   Android app's packaging of the two libraries.
-5. Transducers: encoder in LiteRT, prediction network and joiner in ONNX
+3. Bindings (C API, JNI/Kotlin) for `litert_dispatch_dir` and
+   `litert_window`, and the Android app's packaging of the two libraries.
+4. Transducers: encoder in LiteRT, prediction network and joiner in ONNX
    Runtime.
-6. Decide from measurements whether the per-step models should move.
+5. Decide from measurements whether the per-step models should move.
 
 ## Completion evidence
 

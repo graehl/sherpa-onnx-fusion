@@ -54,6 +54,9 @@ struct OfflineModelConfig {
   // libLiteRtDispatch_GoogleTensor.so); used with a .tflite model and
   // --provider=npu. See offline-w2v-bert-ctc-litert-model.h.
   std::string litert_dispatch_dir;
+  // WINDOW_S:OVERLAP_S:SLACK_S, how a .tflite model runs an utterance longer
+  // than its window length; empty: windows of its longest length.
+  std::string litert_window;
 
   std::string tokens;
   int32_t num_threads = 2;

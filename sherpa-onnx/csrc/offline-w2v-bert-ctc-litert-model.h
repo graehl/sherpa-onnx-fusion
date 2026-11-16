@@ -17,14 +17,24 @@ namespace sherpa_onnx {
 // The w2v-BERT 2.0 CTC model of offline-w2v-bert-ctc-model.h run through
 // LiteRT from a .tflite file instead of through ONNX Runtime, so that a
 // phone's accelerator can run it. Built with -DSHERPA_ONNX_ENABLE_LITERT=ON
-// and chosen when --w2v-bert-ctc names a file ending in .tflite.
+// and chosen when --w2v-bert-ctc names a file ending in .tflite, or several,
+// comma separated.
 //
-// A LiteRT graph has fixed shapes. This one takes, by signature name,
-// "input_features" float32 (1, P, 160) and "input_lengths" int32 (1), and
-// returns "logits" float32 (1, F, vocab_size) and "logits_lengths" int32
-// (1). It masks padding itself: an utterance is zero padded to P frames and
-// its own frame count passed. One longer than P frames is cut to P, with an
-// error logged.
+// A LiteRT graph for an accelerator has fixed shapes, and costs the same
+// whatever the utterance's length. Each signature of each file given is one
+// length P: it takes, by name, "input_features" float32 (1, P, 160) and
+// "input_lengths" int32 (1), and returns "logits" float32 (1, F, vocab_size)
+// and "logits_lengths" int32 (1), masking the padding itself. F is P or
+// ceil(P / 2), with the same output stride across all signatures. A file of
+// several signatures holds the weights once. An utterance runs in the
+// shortest length that holds it; a longer one runs in overlapping windows
+// of one length (--litert-window W:O:S in seconds: windows of the shortest
+// graph of at least W seconds, default the longest, evenly spaced with at
+// least O seconds of overlap, each interior one moved by up to S seconds to
+// put its edges where the filterbank energy is lowest). The windows' logits
+// are blended per frame with weight 1 + distance from the window's nearer
+// edge, and each run's features are normalized over that run's own frames,
+// so NormalizeFeatures leaves them alone.
 //
 // --provider=npu runs a graph compiled ahead of time for the phone's chip
 // (for a Pixel's Tensor processor, with libLiteRtDispatch_GoogleTensor.so
@@ -35,7 +45,7 @@ class OfflineW2vBertCtcLiteRtModel : public OfflineCtcModel {
   explicit OfflineW2vBertCtcLiteRtModel(const OfflineModelConfig &config);
   ~OfflineW2vBertCtcLiteRtModel() override;
 
-  // features is (1, T, 80), normalized, with features_length int64 (1,).
+  // features is (1, T, 80), unnormalized, with features_length int64 (1,).
   // Returns log probabilities (1, F, vocab_size) and the count of valid
   // frames among the F, int64 (1,).
   std::vector<Ort::Value> Forward(Ort::Value features,
@@ -43,7 +53,7 @@ class OfflineW2vBertCtcLiteRtModel : public OfflineCtcModel {
 
   int32_t VocabSize() const override;
   OrtAllocator *Allocator() const override;
-  int32_t SubsamplingFactor() const override { return 2; }
+  int32_t SubsamplingFactor() const override;
   bool SupportBatchProcessing() const override { return false; }
 
   void NormalizeFeatures(float *features, int32_t num_frames,
