@@ -20,6 +20,7 @@
 #include "sherpa-onnx/csrc/macros.h"
 #include "sherpa-onnx/csrc/offline-recognizer-impl.h"
 #include "sherpa-onnx/csrc/offline-recognizer.h"
+#include "sherpa-onnx/csrc/offline-stream-encoder.h"
 #include "sherpa-onnx/csrc/offline-transducer-decoder.h"
 #include "sherpa-onnx/csrc/offline-transducer-greedy-search-decoder.h"
 #include "sherpa-onnx/csrc/offline-transducer-model.h"
@@ -135,6 +136,7 @@ class OfflineRecognizerTransducerImpl : public OfflineRecognizerImpl {
                        config_.decoding_method.c_str());
       SHERPA_ONNX_EXIT(-1);
     }
+    InitEncoder();
   }
 
   template <typename Manager>
@@ -184,6 +186,7 @@ class OfflineRecognizerTransducerImpl : public OfflineRecognizerImpl {
                        config_.decoding_method.c_str());
       SHERPA_ONNX_EXIT(-1);
     }
+    InitEncoder();
   }
 
   std::unique_ptr<OfflineStream> CreateStream(
@@ -228,7 +231,18 @@ class OfflineRecognizerTransducerImpl : public OfflineRecognizerImpl {
                                            hotwords_graph_);
   }
 
+  void EncodeStreams(OfflineStream **ss, int32_t n) const override {
+    encoder_->Encode(ss, n);
+  }
+
   void DecodeStreams(OfflineStream **ss, int32_t n) const override {
+    if (encoder_->Active() || AnyHasEncoderOutput(ss, n)) {
+      encoder_->Encode(ss, n);
+      auto t = TakeEncoderOutputs(ss, n, model_->Allocator());
+      DecodeEncoderOutput(ss, n, std::move(t[0]), std::move(t[1]));
+      return;
+    }
+
     auto memory_info =
         Ort::MemoryInfo::CreateCpu(OrtDeviceAllocator, OrtMemTypeDefault);
 
@@ -269,8 +283,16 @@ class OfflineRecognizerTransducerImpl : public OfflineRecognizerImpl {
                                -23.025850929940457f);
 
     auto t = model_->RunEncoder(std::move(x), std::move(x_length));
-    auto results =
-        decoder_->Decode(std::move(t.first), std::move(t.second), ss, n);
+    DecodeEncoderOutput(ss, n, std::move(t.first), std::move(t.second));
+  }
+
+  // Searches and sets the results of the n streams, given their encoder
+  // output (n, T, D) and its valid frames.
+  void DecodeEncoderOutput(OfflineStream **ss, int32_t n,
+                           Ort::Value encoder_out,
+                           Ort::Value encoder_out_length) const {
+    auto results = decoder_->Decode(std::move(encoder_out),
+                                    std::move(encoder_out_length), ss, n);
 
     int32_t frame_shift_ms = 10;
     for (int32_t i = 0; i != n; ++i) {
@@ -334,6 +356,26 @@ class OfflineRecognizerTransducerImpl : public OfflineRecognizerImpl {
   }
 
  private:
+  void InitEncoder() {
+    OfflineEncoderAdapter adapter;
+    adapter.encode = [this](Ort::Value x, Ort::Value x_length) {
+      auto t = model_->RunEncoder(std::move(x), std::move(x_length));
+      std::vector<Ort::Value> ans;
+      ans.push_back(std::move(t.first));
+      ans.push_back(std::move(t.second));
+      return ans;
+    };
+    adapter.subsampling_factor = model_->SubsamplingFactor();
+    adapter.padding_value = -23.025850929940457f;
+    // The export sizes its mask by the longest of the lengths.
+    adapter.pads_past_longest = false;
+    adapter.allocator = model_->Allocator();
+    const auto &encoder = config_.model_config.encoder;
+    MoveStreamNormalizationToEncoder(encoder, &config_.feat_config, &adapter);
+    encoder_ = std::make_unique<OfflineStreamEncoder>(
+        std::move(adapter), encoder, config_.feat_config.frame_shift_ms);
+  }
+
   OfflineRecognizerConfig config_;
   SymbolTable symbol_table_;
   std::vector<std::vector<int32_t>> hotwords_;
@@ -343,6 +385,7 @@ class OfflineRecognizerTransducerImpl : public OfflineRecognizerImpl {
   std::unique_ptr<OfflineTransducerModel> model_;
   std::unique_ptr<OfflineTransducerDecoder> decoder_;
   std::unique_ptr<OfflineLM> lm_;
+  std::unique_ptr<OfflineStreamEncoder> encoder_;
   int32_t unk_id_ = -1;
 };
 

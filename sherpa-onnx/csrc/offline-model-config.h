@@ -9,6 +9,7 @@
 #include "sherpa-onnx/csrc/offline-canary-model-config.h"
 #include "sherpa-onnx/csrc/offline-cohere-transcribe-model-config.h"
 #include "sherpa-onnx/csrc/offline-dolphin-model-config.h"
+#include "sherpa-onnx/csrc/offline-encoder-window.h"
 #include "sherpa-onnx/csrc/offline-fire-red-asr-ctc-model-config.h"
 #include "sherpa-onnx/csrc/offline-fire-red-asr-model-config.h"
 #include "sherpa-onnx/csrc/offline-funasr-nano-model-config.h"
@@ -57,6 +58,8 @@ struct OfflineModelConfig {
   // WINDOW_S:OVERLAP_S:SLACK_S, how a .tflite model runs an utterance longer
   // than its window length; empty: windows of its longest length.
   std::string litert_window;
+  // --encoder.*: how the encoder runs, e.g. a long utterance in windows.
+  OfflineEncoderConfig encoder;
 
   std::string tokens;
   int32_t num_threads = 2;

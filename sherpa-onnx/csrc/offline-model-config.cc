@@ -43,7 +43,9 @@ void OfflineModelConfig::Register(ParseOptions *po) {
   po->Register("litert-window", &litert_window,
                "WINDOW_S:OVERLAP_S:SLACK_S: a .tflite model runs an utterance "
                "longer than WINDOW_S in blended overlapping windows of its "
-               "shortest length of at least WINDOW_S; empty: of its longest");
+               "shortest length of at least WINDOW_S; empty: of its longest. "
+               "Overrides --encoder.window.seconds, overlap and slack");
+  encoder.Register(po);
 
   po->Register("tokens", &tokens, "Path to tokens.txt");
 
@@ -76,6 +78,10 @@ void OfflineModelConfig::Register(ParseOptions *po) {
 }
 
 bool OfflineModelConfig::Validate() const {
+  if (!encoder.Validate()) {
+    return false;
+  }
+
   // For RK NPU, we reinterpret num_threads:
   //
   // For RK3588 only
@@ -271,6 +277,7 @@ std::string OfflineModelConfig::ToString() const {
   os << "w2v_bert_ctc=\"" << w2v_bert_ctc << "\", ";
   os << "litert_dispatch_dir=\"" << litert_dispatch_dir << "\", ";
   os << "litert_window=\"" << litert_window << "\", ";
+  os << "encoder=" << encoder.ToString() << ", ";
   os << "tokens=\"" << tokens << "\", ";
   os << "num_threads=" << num_threads << ", ";
   os << "debug=" << (debug ? "True" : "False") << ", ";

@@ -31,10 +31,13 @@ namespace sherpa_onnx {
 // of one length (--litert-window W:O:S in seconds: windows of the shortest
 // graph of at least W seconds, default the longest, evenly spaced with at
 // least O seconds of overlap, each interior one moved by up to S seconds to
-// put its edges where the filterbank energy is lowest). The windows' logits
-// are blended per frame with weight 1 + distance from the window's nearer
-// edge, and each run's features are normalized over that run's own frames,
-// so NormalizeFeatures leaves them alone.
+// put its edges where the filterbank energy is lowest; without
+// --litert-window, --encoder.window.seconds, overlap and slack). By default
+// the windows' logits are blended per frame with weight 1 + distance from the
+// window's nearer edge, and each run's features are normalized over that
+// run's own frames, so NormalizeFeatures leaves them alone;
+// --encoder.window.normalize, weight and blend choose otherwise
+// (topics/chunked-encoding.md).
 //
 // --provider=npu runs a graph compiled ahead of time for the phone's chip
 // (for a Pixel's Tensor processor, with libLiteRtDispatch_GoogleTensor.so

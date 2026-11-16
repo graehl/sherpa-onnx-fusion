@@ -17,6 +17,7 @@
 #include "sherpa-onnx/csrc/macros.h"
 #include "sherpa-onnx/csrc/offline-recognizer-impl.h"
 #include "sherpa-onnx/csrc/offline-recognizer.h"
+#include "sherpa-onnx/csrc/offline-stream-encoder.h"
 #include "sherpa-onnx/csrc/offline-transducer-greedy-search-nemo-decoder.h"
 #include "sherpa-onnx/csrc/offline-transducer-modified-beam-search-nemo-decoder.h"
 #include "sherpa-onnx/csrc/offline-transducer-nemo-model.h"
@@ -84,6 +85,7 @@ class OfflineRecognizerTransducerNeMoImpl : public OfflineRecognizerImpl {
       SHERPA_ONNX_EXIT(-1);
     }
     PostInit();
+    InitEncoder();
   }
 
   template <typename Manager>
@@ -135,6 +137,7 @@ class OfflineRecognizerTransducerNeMoImpl : public OfflineRecognizerImpl {
     }
 
     PostInit();
+    InitEncoder();
   }
 
   std::unique_ptr<OfflineStream> CreateStream(
@@ -179,7 +182,18 @@ class OfflineRecognizerTransducerNeMoImpl : public OfflineRecognizerImpl {
                                            hotwords_graph_);
   }
 
+  void EncodeStreams(OfflineStream **ss, int32_t n) const override {
+    encoder_->Encode(ss, n);
+  }
+
   void DecodeStreams(OfflineStream **ss, int32_t n) const override {
+    if (encoder_->Active() || AnyHasEncoderOutput(ss, n)) {
+      encoder_->Encode(ss, n);
+      auto t = TakeEncoderOutputs(ss, n, model_->Allocator());
+      DecodeEncoderOutput(ss, n, std::move(t[0]), std::move(t[1]));
+      return;
+    }
+
     auto memory_info =
         Ort::MemoryInfo::CreateCpu(OrtDeviceAllocator, OrtMemTypeDefault);
 
@@ -223,9 +237,16 @@ class OfflineRecognizerTransducerNeMoImpl : public OfflineRecognizerImpl {
     // t[1] encoder_out_length, int64 tensor, (batch_size,)
 
     Ort::Value encoder_out = Transpose12(model_->Allocator(), &t[0]);
+    DecodeEncoderOutput(ss, n, std::move(encoder_out), std::move(t[1]));
+  }
 
-    auto results =
-        decoder_->Decode(std::move(encoder_out), std::move(t[1]), ss, n);
+  // Searches and sets the results of the n streams, given their encoder
+  // output (n, T, D) and its valid frames.
+  void DecodeEncoderOutput(OfflineStream **ss, int32_t n,
+                           Ort::Value encoder_out,
+                           Ort::Value encoder_out_length) const {
+    auto results = decoder_->Decode(std::move(encoder_out),
+                                    std::move(encoder_out_length), ss, n);
 
     int32_t frame_shift_ms = 10;
     for (int32_t i = 0; i != n; ++i) {
@@ -251,6 +272,26 @@ class OfflineRecognizerTransducerNeMoImpl : public OfflineRecognizerImpl {
   OfflineRecognizerConfig GetConfig() const override { return config_; }
 
  private:
+  // After PostInit, which sets the stream's feature normalization.
+  void InitEncoder() {
+    OfflineEncoderAdapter adapter;
+    adapter.encode = [this](Ort::Value x, Ort::Value x_length) {
+      auto t = model_->RunEncoder(std::move(x), std::move(x_length));
+      // (batch_size, dim, T) to time major.
+      std::vector<Ort::Value> ans;
+      ans.push_back(Transpose12(model_->Allocator(), &t[0]));
+      ans.push_back(std::move(t[1]));
+      return ans;
+    };
+    adapter.subsampling_factor = model_->SubsamplingFactor();
+    adapter.padding_value = 0;
+    adapter.allocator = model_->Allocator();
+    const auto &encoder = config_.model_config.encoder;
+    MoveStreamNormalizationToEncoder(encoder, &config_.feat_config, &adapter);
+    encoder_ = std::make_unique<OfflineStreamEncoder>(
+        std::move(adapter), encoder, config_.feat_config.frame_shift_ms);
+  }
+
   void PostInit() {
     int32_t feat_dim = model_->FeatureDim();
 
@@ -349,6 +390,7 @@ class OfflineRecognizerTransducerNeMoImpl : public OfflineRecognizerImpl {
   std::unique_ptr<ssentencepiece::Ssentencepiece> bpe_encoder_;
   std::unique_ptr<OfflineTransducerNeMoModel> model_;
   std::unique_ptr<OfflineTransducerDecoder> decoder_;
+  std::unique_ptr<OfflineStreamEncoder> encoder_;
   int32_t unk_id_ = -1;
 };
 

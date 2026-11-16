@@ -572,7 +572,8 @@ for a list of pre-trained models to download.
               "more, the --nj threads read the files and run the model, and "
               "these threads search the batches after them, so the two can "
               "be sized apart, e.g. --nj=1 for a model on a GPU and several "
-              "search threads. Only CTC models separate the two steps; for "
+              "search threads. CTC, zipformer transducer and NeMo "
+              "transducer models separate the two steps; for "
               "other models these threads also run the model. default=0");
   po.Register("decode-queue-size", &decode_queue_size,
               "With --decode-threads: the most batches that may wait for a "

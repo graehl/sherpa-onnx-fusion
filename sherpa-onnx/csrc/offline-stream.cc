@@ -376,7 +376,8 @@ class OfflineStream::Impl {
 
   void NemoNormalizeFeatures(float *p, int32_t num_frames,
                              int32_t feature_dim) const {
-    if (config_.nemo_normalize_type.empty()) {
+    if (config_.nemo_normalize_type.empty() ||
+        !config_.nemo_normalize_in_stream) {
       return;
     }
 

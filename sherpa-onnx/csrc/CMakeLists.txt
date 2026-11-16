@@ -47,6 +47,7 @@ set(sources
   offline-ctc-model.cc
   offline-dolphin-model-config.cc
   offline-dolphin-model.cc
+  offline-encoder-window.cc
   offline-fire-red-asr-ctc-model-config.cc
   offline-fire-red-asr-ctc-model.cc
   offline-fire-red-asr-greedy-search-decoder.cc
@@ -82,6 +83,7 @@ set(sources
   offline-source-separation-uvr-model.cc
   offline-source-separation.cc
   offline-stream.cc
+  offline-stream-encoder.cc
   offline-tdnn-ctc-model.cc
   offline-tdnn-model-config.cc
   offline-telespeech-ctc-model.cc
@@ -874,6 +876,7 @@ if(SHERPA_ONNX_ENABLE_TESTS)
     lfr-test.cc
     math-test.cc
     offline-ctc-prefix-beam-search-decoder-test.cc
+    offline-encoder-window-test.cc
     offline-recognizer-canary-impl-test.cc
     offline-recognizer-cohere-transcribe-impl-test.cc
     offline-recognizer-ctc-impl-test.cc
