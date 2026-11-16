@@ -33,11 +33,14 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import threading
 import tomllib
 import urllib.request
 
 HERE = pathlib.Path(__file__).resolve().parent
 RESULTS = HERE / "results"
+PROC_STAT = pathlib.Path("/proc/stat")
+BUSY_WINDOW_SECONDS = 10.0
 # Downloads and converted audio stay out of the checkout.
 CACHE = pathlib.Path(
     os.environ.get("SHERPA_ONNX_REPRO_CACHE")
@@ -158,6 +161,65 @@ def decode_one(binary: str, args: list[str], wav: pathlib.Path) -> tuple[str, fl
     return json.loads(f'"{text.group(1)}"'), float(seconds.group(1))
 
 
+def cpu_counters(stat: str) -> tuple[int, int]:
+    """Busy and total clock ticks over all CPUs, from /proc/stat's first line."""
+    # user nice system idle iowait irq softirq steal; guest time is already in user.
+    ticks = [int(x) for x in stat.splitlines()[0].split()[1:9]]
+    return sum(ticks) - ticks[3] - ticks[4], sum(ticks)
+
+
+def physical_cores() -> int | None:
+    cores = set()
+    for topology in pathlib.Path("/sys/devices/system/cpu").glob("cpu[0-9]*/topology"):
+        try:
+            cores.add(
+                (
+                    (topology / "physical_package_id").read_text().strip(),
+                    (topology / "core_id").read_text().strip(),
+                )
+            )
+        except OSError:
+            continue
+    return len(cores) or None
+
+
+class BusyThreads:
+    """While the block runs, how many hardware threads were busy, counting every
+    process on the host, in the busiest window of BUSY_WINDOW_SECONDS. None
+    without /proc/stat (not Linux) or when the block ends before one second."""
+
+    def __init__(self) -> None:
+        self.peak: float | None = None
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+
+    def __enter__(self) -> "BusyThreads":
+        if PROC_STAT.exists():
+            self._thread = threading.Thread(target=self._sample, daemon=True)
+            self._thread.start()
+        return self
+
+    def __exit__(self, *_) -> None:
+        self._stop.set()
+        if self._thread:
+            self._thread.join()
+
+    def _sample(self) -> None:
+        threads = os.cpu_count() or 1
+        before = cpu_counters(PROC_STAT.read_text())
+        while True:
+            stopping = self._stop.wait(BUSY_WINDOW_SECONDS)
+            after = cpu_counters(PROC_STAT.read_text())
+            elapsed = after[1] - before[1]
+            # A trailing window under a second is too coarse at 100 ticks/s.
+            if elapsed >= threads * os.sysconf("SC_CLK_TCK"):
+                busy = threads * (after[0] - before[0]) / elapsed
+                self.peak = busy if self.peak is None else max(self.peak, busy)
+            if stopping:
+                return
+            before = after
+
+
 def resolve(args: list[str], dirs: dict[str, pathlib.Path]) -> list[str]:
     """Replace {artifact} in arguments with that artifact's directory."""
     return [a.format(**{k: str(v) for k, v in dirs.items()}) for a in args]
@@ -199,10 +261,11 @@ def run_claim(config: dict, name: str, sample: int, jobs: int, binary: str) -> N
         recordings = recordings[:: max(1, len(recordings) // sample)][:sample]
     references = [words(reference) for _, _, reference in recordings]
     total_words = sum(len(r) for r in references)
+    cores = physical_cores()
     arms = []
     for arm in claim["arms"]:
         args = resolve(claim["recognizer"] + arm["args"], dirs)
-        with concurrent.futures.ThreadPoolExecutor(jobs) as pool:
+        with BusyThreads() as busy, concurrent.futures.ThreadPoolExecutor(jobs) as pool:
             decoded = list(
                 pool.map(
                     functools.partial(decode_one, binary, args),
@@ -219,11 +282,18 @@ def run_claim(config: dict, name: str, sample: int, jobs: int, binary: str) -> N
                 "wer": round(100 * errors / total_words, 2),
                 "errors": errors,
                 "decode_seconds": round(sum(s for _, s in decoded), 1),
+                "busy_threads_peak": None if busy.peak is None else round(busy.peak, 1),
+                # Timings count as uncontended when the whole host never needed
+                # more hardware threads than it has physical cores.
+                "uncontended": None
+                if busy.peak is None or cores is None
+                else busy.peak <= cores,
             }
         )
         print(
             f"[arm] {name} {arm['name']} wer={arms[-1]['wer']} errors={errors} "
-            f"decode_s={arms[-1]['decode_seconds']}",
+            f"decode_s={arms[-1]['decode_seconds']} "
+            f"busy_threads_peak={arms[-1]['busy_threads_peak']} of {cores} cores",
             flush=True,
         )
     if sample:
@@ -235,6 +305,7 @@ def run_claim(config: dict, name: str, sample: int, jobs: int, binary: str) -> N
         **provenance,
         "date": datetime.date.today().isoformat(),
         "host": f"{platform.machine()}, {jobs} decodes at a time",
+        "host_threads": {"hardware": os.cpu_count(), "physical_cores": cores},
         "test_set": {
             "name": claim["test_set"],
             "recordings": len(recordings),
@@ -251,18 +322,22 @@ def run_claim(config: dict, name: str, sample: int, jobs: int, binary: str) -> N
 
 def print_table(config: dict) -> None:
     """The recorded results as a Markdown table, one row per decoder."""
-    print("| Claim | Test set | Decoder | WER % | Decode s |")
-    print("|---|---|---|---:|---:|")
+    print("| Claim | Test set | Decoder | WER % | Decode s | Uncontended |")
+    print("|---|---|---|---:|---:|---|")
     for name in config["claims"]:
         path = RESULTS / f"{name}.json"
         if not path.exists():
-            print(f"| {name} | | not run yet | | |")
+            print(f"| {name} | | not run yet | | | |")
             continue
         result = json.loads(path.read_text())
         test_set = f"{result['test_set']['name']} ({result['test_set']['recordings']})"
         for arm in result["arms"]:
+            uncontended = {True: "yes", False: "no"}.get(
+                arm.get("uncontended"), "not measured"
+            )
             print(
-                f"| {name} | {test_set} | {arm['name']} | {arm['wer']:.2f} | {arm['decode_seconds']} |"
+                f"| {name} | {test_set} | {arm['name']} | {arm['wer']:.2f} "
+                f"| {arm['decode_seconds']} | {uncontended} |"
             )
 
 

@@ -63,6 +63,27 @@ class ReproTests(unittest.TestCase):
             repro_claims.fetch_artifact("model", spec)
         self.assertFalse(repro_claims.artifact_dir("model", spec).exists())
 
+    def test_busy_threads_counts_the_whole_host_and_skips_short_windows(self) -> None:
+        # 4 hardware threads; 300 of 800 ticks busy (iowait counts as idle) is 1.5 threads.
+        def stats():
+            yield "cpu  0 0 0 0 0 0 0 0 0 0\ncpu0 ...\n"
+            while True:
+                yield "cpu  200 0 100 400 100 0 0 0 50 0\n"
+
+        stat = mock.Mock()
+        stat.exists.return_value = True
+        stat.read_text.side_effect = stats()
+        with (
+            mock.patch.object(repro_claims, "PROC_STAT", stat),
+            mock.patch.object(repro_claims, "BUSY_WINDOW_SECONDS", 0.01),
+            mock.patch.object(repro_claims.os, "cpu_count", return_value=4),
+            mock.patch.object(repro_claims.os, "sysconf", return_value=100),
+        ):
+            with repro_claims.BusyThreads() as busy:
+                while stat.read_text.call_count < 4:
+                    pass
+        self.assertEqual(busy.peak, 1.5)
+
     def test_result_records_pre_run_identity_and_reconstructible_commands(self) -> None:
         archive = self.root / "dataset.tar"
         with tarfile.open(archive, "w") as tar:
@@ -131,6 +152,9 @@ class ReproTests(unittest.TestCase):
         self.assertTrue(argv[-1].startswith(repro_claims.CACHE_NAME), argv[-1])
         self.assertTrue(pathlib.Path(repro_claims.local(argv[-1])).is_file())
         self.assertEqual(result["arms"][0]["errors"], 0)
+        self.assertIn("busy_threads_peak", result["arms"][0])
+        self.assertIn("uncontended", result["arms"][0])
+        self.assertIn("physical_cores", result["host_threads"])
 
     def test_parallel_check_rejects_ineffective_pinned_lstm(self) -> None:
         paths = ["sample.wav", check_parallel.MISSING]

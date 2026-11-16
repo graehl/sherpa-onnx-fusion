@@ -38,6 +38,12 @@ or later with `soundfile` installed.
   run at once; decode seconds are the recognizer's own figure summed, and
   are comparable between configurations only at the same `--jobs` on an
   otherwise idle machine.
+- **Whether the timing was uncontended.** On Linux each configuration
+  records `busy_threads_peak`: the most hardware threads busy in any
+  10-second window while it ran, counting every process on the host. It
+  is `uncontended` when that peak never exceeds the host's physical
+  cores; `mise run table` shows the verdict. Choose `--jobs` so that two
+  threads per call leave room for whatever else the host runs.
 - **What is not here.** The public token-LSTM CTC and transducer comparisons
   have no recipes yet. Claims that need unpublished language models also
   have no entries.
