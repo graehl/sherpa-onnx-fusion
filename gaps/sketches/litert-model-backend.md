@@ -50,11 +50,12 @@ runtime without the search knowing.
   [batch changes transcripts](../offline-batch-changes-transcripts.md):
   the export has to take a length and mask with it, or the padded result
   differs from the unpadded one.
-- **Quantization.** Accelerators generally require integer models with
-  fixed (static) ranges. That is a different thing from the dynamic int8
-  quantization measured so far, and it would remove the dependence of one
-  utterance's output on its batch neighbours. Its accuracy has to be
-  measured per model.
+- **Precision.** Integer quantization is not a universal accelerator
+  requirement: the Tensor compiler supports floating-point truncation,
+  including bf16 and half. Static integer quantization, where supported,
+  avoids batch-dependent dynamic activation ranges; it does not fix
+  masking or normalization differences. Measure accuracy per model and
+  compilation mode ([Tensor compilation flags](https://developers.google.com/edge/tensor-sdk/compilation-flags)).
 - **Conversion belongs with the model's export**, in the repository that
   trains it. This repository takes the `.tflite` file and its small
   description (feature options, output kind, frame rate, token table).
@@ -111,7 +112,132 @@ took 0.13, 0.10, 0.34, 1.06 and 1.41 s warm (RTF 0.046), the 30 s clip
 whole. The compiler's default precision (bf16) changes a few characters
 of some transcripts.
 
+## Proposed shared tiling and Tensor backend path
+
+User-directed (graehl, 2026-11-16): make center-embed tiling of fixed audio
+length graphs available independently of the LiteRT build, for NPU/GPU
+backends generally; sketch the path from encoder acceleration to possible
+LM acceleration. The following is proposed work, not an implemented API.
+
+### Tiling belongs above the runtime
+
+Today `WindowOptions`, `EvenWindowStarts`, and logit accumulation live in
+`sherpa-onnx/csrc/offline-w2v-bert-ctc-litert-model.cc`, which is compiled
+only with LiteRT enabled. Shared w2v-BERT feature normalization already
+lives outside that file, but a build with LiteRT off has no access to
+this window scheduler and stitcher.
+
+Extract graph-length selection, window placement, and center-weighted
+accumulation into code built unconditionally. Give the scheduler a set of
+supported lengths and a model adapter that executes one window. LiteRT,
+ONNX Runtime, and native accelerator adapters should supply the same
+window contract. Keep normalization, masks, and input/output alignment
+in the model adapter; they cannot be inferred from a runtime name.
+An ONNX Runtime adapter could use fixed-length exports or a dynamic
+graph invoked at selected lengths. Preserve `--litert-window` as a
+compatibility alias when adding a generic configuration surface.
+
+The contract must describe valid input length, padding, output stride and
+offset, valid output frames, and whether the output is hidden states,
+logits, or log probabilities. The existing CTC implementation blends
+logits before log-softmax and search. Blending hidden states before a
+nonlinear head is a separate model choice and can produce different
+results. Shift quiet-edge windows only on the output alignment grid,
+and require positive accumulated weight for every retained frame.
+
+Center-weighted overlap is an approximation for a bidirectional encoder
+with global attention. It changes context and, here, per-window feature
+normalization; it cannot promise the whole-utterance result. Stateful
+streaming models instead need their trained chunk/cache protocol.
+Validate the extracted implementation with LiteRT disabled through an
+ONNX execution path, including short and odd-length input, padding,
+window seams, and timestamps. Compare word error rate and end-to-end
+latency against whole-utterance inference and the existing LiteRT path.
+GPU/NPU benefit depends on reduced padding and bounded graph size
+outweighing overlap compute, copies, and dispatch overhead.
+
+### A sherpa backend is practical; an ONNX Runtime EP is a larger project
+
+The existing w2v-BERT implementation establishes feasibility for a
+selected encoder family. Extend that sherpa-level backend first, using
+`OfflineCtcModel` and model-family dispatch rather than replacing every
+use of `Ort::Value`. Keep LiteRT optional, as KenLM is; common tiling
+must neither include LiteRT headers nor fetch or link its libraries.
+
+An actual ONNX Runtime execution provider (EP) claims ONNX nodes or
+subgraphs through `GetCapability()`. The
+[published EP list](https://onnxruntime.ai/docs/execution-providers/)
+does not list a Google Tensor/LiteRT provider as of 2026-11-16.
+A future provider is technically plausible, but SDK beta exit alone
+does not provide ONNX lowering, shape restrictions, compilation caches,
+device/runtime compatibility, or a maintainer for that integration.
+The practical prospect is stronger for selected supported model families
+than for arbitrary ONNX graphs; there is no basis here for a release date
+or probability estimate for an upstream EP.
+
+The current [Tensor SDK compiler](https://developers.google.com/edge/tensor-sdk/tensor-faqs)
+requires a valid `.tflite` model with static shapes. Google's
+[LiteRT NPU documentation](https://developers.google.com/edge/litert/next/npu)
+specifies ahead-of-time compilation for Tensor and no on-device JIT in
+the beta. Use source-model export to LiteRT, followed by chip-specific
+compilation, as the supported route for each selected family. `.tflite`
+is necessary for that compiler today; it need not become sherpa's
+universal model format.
+
+[onnx2tf](https://pypi.org/project/onnx2tf/2.4.0/) already converts ONNX
+models to LiteRT/TFLite. Producing a flatbuffer is only one gate: the
+converted graph must preserve model semantics, compile for Tensor, fit
+device memory, and run efficiently. Treat ONNX conversion as a verified
+build-time recipe per family. Prefer direct source-framework exports
+when they avoid conversion problems; do not wait for an arbitrary-ONNX
+converter before extending this backend.
+
+Revisit an ORT EP when a maintained Tensor/LiteRT provider or reusable
+ONNX lowering path exists. A narrower custom EP could recognize known
+encoder subgraphs and load matching precompiled artifacts, but would
+still need artifact matching and fallback rules. Until that buys more
+than the existing sherpa model dispatch, it adds integration work without
+expanding supported models.
+
+### Extend acceleration by measured stage cost
+
+Keep acoustic encoding, search, and scorer execution separately selectable:
+
+```text
+features -> shared length selection / tiling
+         -> encoder adapter: ORT | LiteRT | native backend
+         -> aligned outputs -> CTC or transducer search on CPU
+                            -> predictor / joiner / neural LM adapters
+```
+
+For transducers, retain the predictor and joiner in ONNX Runtime first.
+For neural LM fusion, `RecurrentLmStep` already separates a batched
+token/state computation from prefix-state management. A LiteRT step
+adapter could batch active hypotheses into fixed-size buckets, provided
+it preserves state ownership and score semantics. Beam expansion,
+prefix tries, and KenLM remain CPU work. Moving a neural LM step to the
+TPU does not imply that the whole fusion algorithm should run there.
+
+Measure each candidate with dispatch, padding, synchronization, state
+transfer, and cache reuse included. Small sequential steps may lose to
+CPU execution; shared device buffers need explicit ownership and lifetime
+rules before any zero-copy claim. Report which stages ran on which
+device, and make whole-stage fallback explicit so a successful decode
+cannot conceal failed acceleration.
+
+Package each supported export with a manifest recording model and
+artifact hashes, feature normalization, vocabulary, tensor names and
+dtypes, lengths/masks, output cadence, and compiler/runtime/chip versions.
+Portable CPU and compiled TPU artifacts must refer to the same model
+contract. Validate numerical agreement and word error rate alongside
+latency, peak memory, and accelerator coverage.
+
+Contributing-model: 6-Astra
+
 ## Remaining, in order
+
+0. Extract the shared tiling facility described above and demonstrate it
+   through ONNX Runtime with `SHERPA_ONNX_ENABLE_LITERT=OFF`.
 
 1. **Error rate in this repository**, not single transcripts: the TPU
    path, with lengths and windows, against ONNX fp32 and int8 on a public
