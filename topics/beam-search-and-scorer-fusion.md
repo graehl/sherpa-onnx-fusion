@@ -899,6 +899,11 @@ model, or anything with the same contract. The interface is
   `vocab-encoding`) and the boundary and unknown unit IDs. Token mode uses
   the recognizer's IDs with an optional `id-offset`; `boundary-id`,
   `unknown-id`, and `score-end` configure the special units and final score.
+  Optional `floor` is a finite, nonpositive natural-log lower bound on each
+  character/token and enabled end-of-input score, before applying the scorer
+  weight. It does not change recurrent state or renormalize probabilities;
+  omitting it preserves raw scores. With a negative scorer weight, it also
+  bounds the reward from subtracting a very low log probability.
 
 ### Sketched, not built
 

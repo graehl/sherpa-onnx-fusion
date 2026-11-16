@@ -3,8 +3,10 @@
 // Copyright (c)  2026  graehl
 
 #include <array>
+#include <cmath>
 #include <exception>
 #include <fstream>
+#include <limits>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -134,6 +136,7 @@ struct Extra {
   int32_t boundary_id = 0;
   int32_t unknown_id = 1;
   bool score_end = true;
+  float score_floor = -std::numeric_limits<float>::infinity();
   int32_t id_offset = 0;
 };
 
@@ -169,6 +172,12 @@ Extra ParseExtra(const std::string &text, bool token_units) {
       extra.id_offset = value.get<int32_t>();
     } else if (key == "score-end" && value.is_boolean()) {
       extra.score_end = value.get<bool>();
+    } else if (key == "floor" && value.is_number()) {
+      extra.score_floor = value.get<float>();
+      if (!std::isfinite(extra.score_floor) || extra.score_floor > 0) {
+        throw std::runtime_error(
+            "onnx-rnn scorer: floor must be finite and nonpositive");
+      }
     } else {
       throw std::runtime_error("onnx-rnn scorer: unknown or invalid option '" +
                                key + "'");
@@ -241,6 +250,7 @@ class OnnxRecurrentLmScorerFactory : public ScorerFactory {
       vocabulary = ReadVocabulary(extra, common.space, step->VocabSize());
     }
     vocabulary.score_end = extra.score_end;
+    vocabulary.score_floor = extra.score_floor;
     return MakeRecurrentLmScorer(std::move(step), std::move(vocabulary));
   }
 };

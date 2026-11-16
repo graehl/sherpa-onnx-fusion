@@ -140,7 +140,8 @@ class RecurrentLmScorer : public Scorer {
     for (size_t i = 0; i != extensions.size; ++i) {
       Node *parent = NodeOf(extensions[i].parent.bytes);
       int32_t unit = IdOf(extensions[i].unit);
-      results[i].log_score = parent->log_probs[unit];
+      results[i].log_score =
+          std::max(vocabulary_.score_floor, parent->log_probs[unit]);
       results[i].rejected = false;
 
       Node *child = parent->pool->New();
@@ -164,7 +165,8 @@ class RecurrentLmScorer : public Scorer {
     Compute(batch);
     for (size_t i = 0; i != states.size; ++i) {
       results[i].log_score =
-          NodeOf(states[i].bytes)->log_probs[vocabulary_.boundary_id];
+          std::max(vocabulary_.score_floor,
+                   NodeOf(states[i].bytes)->log_probs[vocabulary_.boundary_id]);
       results[i].accepted = true;
     }
   }

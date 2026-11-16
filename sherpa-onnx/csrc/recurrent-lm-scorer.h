@@ -6,6 +6,7 @@
 #define SHERPA_ONNX_CSRC_RECURRENT_LM_SCORER_H_
 
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <vector>
 
@@ -54,6 +55,8 @@ struct RecurrentLmVocabulary {
   // rescoring a whole sentence does. Shallow fusion in the existing
   // streaming decoders adds none.
   bool score_end = true;
+  // Lower bound on each raw unit/EOS log score, before its fusion weight.
+  float score_floor = -std::numeric_limits<float>::infinity();
   // The model's unit ID for each character it knows. The boundary between
   // words is the entry for ' '.
   CharacterIndex id_of_char;
@@ -93,6 +96,8 @@ int32_t RecurrentLmLiveNodes();
 //     is t + this. Default 0. Nothing checks that the two vocabularies agree.
 //   "score-end": whether the end of input adds the boundary's score.
 //     Default true.
+//   "floor": nonpositive natural-log score floor per unit and end of input.
+//     Omitted means no floor; recurrent state updates are unchanged.
 std::unique_ptr<ScorerFactory> MakeOnnxRecurrentLmScorerFactory();
 
 }  // namespace sherpa_onnx

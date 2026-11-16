@@ -201,6 +201,53 @@ TEST(RecurrentLmScorer, ScoresMatchSteppingOneHistoryAtATime) {
   }
 }
 
+TEST(RecurrentLmScorer, FloorCapsUnitAndEndScores) {
+  auto vocabulary = Vocabulary();
+  vocabulary.score_floor = -1.0f;
+  auto scorer = MakeRecurrentLmScorer(std::make_unique<FakeStep>(), vocabulary);
+  auto utterance = scorer->NewUtterance();
+  alignas(8) std::byte start[8], a[8], ax[8];
+  scorer->Start(utterance.get(), start);
+  ScorerExtension first = {{utterance.get(), start}, 'a', a};
+  ScorerAdvanceResult result;
+  scorer->Advance({&first, 1}, &result);
+  ASSERT_LT(ReferenceLogProbs({})[2], -1.0f);
+  EXPECT_FLOAT_EQ(result.log_score, -1.0f);
+  ScorerExtension unknown = {{utterance.get(), a}, 'x', ax};
+  scorer->Advance({&unknown, 1}, &result);
+  EXPECT_FLOAT_EQ(result.log_score, -1.0f);
+  ScorerStateRef ends[2] = {{utterance.get(), start}, {utterance.get(), ax}};
+  ScorerFinalScore finals[2];
+  scorer->Finish({ends, 2}, finals);
+  ASSERT_GT(ReferenceLogProbs({})[0], -1.0f);
+  EXPECT_FLOAT_EQ(finals[0].log_score, ReferenceLogProbs({})[0]);
+  ASSERT_LT(ReferenceLogProbs({2, 1})[0], -1.0f);
+  EXPECT_FLOAT_EQ(finals[1].log_score, -1.0f);
+  for (std::byte *state : {start, a, ax}) scorer->Info().destroy_state(state);
+  EXPECT_EQ(RecurrentLmLiveNodes(), 0);
+}
+
+TEST(RecurrentLmScorer, FlooredUnitPreservesTheRecurrentHistory) {
+  auto vocabulary = Vocabulary();
+  vocabulary.score_floor = -2.0f;
+  auto scorer = MakeRecurrentLmScorer(std::make_unique<FakeStep>(), vocabulary);
+  auto utterance = scorer->NewUtterance();
+  alignas(8) std::byte start[8], a[8];
+  scorer->Start(utterance.get(), start);
+  ScorerExtension extension = {{utterance.get(), start}, 'a', a};
+  ScorerAdvanceResult result;
+  scorer->Advance({&extension, 1}, &result);
+  ASSERT_LT(ReferenceLogProbs({})[2], -2.0f);
+  EXPECT_FLOAT_EQ(result.log_score, -2.0f);
+  ScorerStateRef end = {utterance.get(), a};
+  ScorerFinalScore final;
+  scorer->Finish({&end, 1}, &final);
+  ASSERT_GT(ReferenceLogProbs({2})[0], -2.0f);
+  EXPECT_FLOAT_EQ(final.log_score, ReferenceLogProbs({2})[0]);
+  scorer->Info().destroy_state(start);
+  scorer->Info().destroy_state(a);
+}
+
 // A model trained on the recognizer's tokens: unit IDs are token IDs.
 TEST(RecurrentLmScorer, TokenUnitsAreTheModelsOwnIds) {
   RecurrentLmVocabulary vocabulary;
