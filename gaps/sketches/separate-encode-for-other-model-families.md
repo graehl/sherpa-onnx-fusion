@@ -13,33 +13,22 @@ offline decoders to run the model and the search as separate calls, as CTC
 does, so `sherpa-onnx-offline-parallel --decode-threads` and any later
 scheduler can size the two apart.
 
-`OfflineRecognizer::EncodeStreams` does something only for CTC. For every
-other family it is empty and `DecodeStreams` runs everything, so search
-threads also run the model.
+`OfflineRecognizer::EncodeStreams` does something for CTC and, since
+2026-11-16, for the zipformer and NeMo transducers. For every other family
+it is empty and `DecodeStreams` runs everything, so search threads also
+run the model.
 
 ## What it takes
 
-**Transducers (zipformer and NeMo): straightforward.** Both implementations
-already have the two halves in one function: pad the features, run the
-encoder, then hand the encoder output and lengths to the decoder object
-(`offline-recognizer-transducer-impl.h`, `-transducer-nemo-impl.h`).
-
-- `EncodeStreams` runs the encoder on the batch and keeps each stream's
-  valid frames on the stream. `OfflineStream` already stores that for CTC
-  (`SetEncoderOutput`, `HasEncoderOutput`, `TakeEncoderOutput`: a float
-  vector and a frame count); nothing in it is CTC-specific.
-- `DecodeStreams` pads the kept outputs of the streams it is given into
-  one tensor with their lengths, calls the decoder object as now, and runs
-  the encoder itself for streams that have none.
-- The CTC implementation's two helpers that do the keeping and the
-  re-padding (`KeepEncoderOutput`, `DecodeEncodedStreams`) move to a shared
-  place; the layout of the encoder output differs for NeMo and needs its
-  own slicing.
-
-Roughly a hundred lines and a test like the CTC one (same result whether
-or not the two calls are separate, and with different groupings). Cost per
-utterance: the encoder output is copied twice more, out of the batch and
-back into one.
+**Transducers (zipformer and NeMo): built** with
+[chunked encoding](../../topics/chunked-encoding.md), through the shared
+`OfflineStreamEncoder` that CTC also uses: `EncodeStreams` keeps each
+stream's valid encoder frames on the stream, and `DecodeStreams` re-pads
+them (`TakeEncoderOutputs`) for the decoder. `sherpa-onnx-offline-parallel
+--decode-threads=2` gave the same transcripts as without it for both
+transducers, with and without windows. Cost per utterance: the encoder
+output is copied twice more, out of the batch and back into one. The GPU
+timing in Closure is still owed.
 
 **Encoder-decoder models with attention (Whisper, Moonshine, Canary,
 FireRed, Cohere): possible, less natural.** They run one utterance at a

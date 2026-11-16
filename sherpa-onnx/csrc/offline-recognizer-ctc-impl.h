@@ -21,8 +21,10 @@
 #include "sherpa-onnx/csrc/offline-ctc-model.h"
 #include "sherpa-onnx/csrc/offline-ctc-prefix-beam-search-decoder.h"
 #include "sherpa-onnx/csrc/offline-recognizer-impl.h"
+#include "sherpa-onnx/csrc/offline-stream-encoder.h"
 #include "sherpa-onnx/csrc/pad-sequence.h"
 #include "sherpa-onnx/csrc/symbol-table.h"
+#include "sherpa-onnx/csrc/text-utils.h"
 
 namespace sherpa_onnx {
 
@@ -186,6 +188,8 @@ class OfflineRecognizerCtcImpl : public OfflineRecognizerImpl {
     config_.feat_config.nemo_normalize_type =
         model_->FeatureNormalizationMethod();
 
+    InitEncoder();
+
     if (!config_.ctc_fst_decoder_config.graph.empty()) {
       // TODO(fangjun): Support android to read the graph from
       // asset_manager
@@ -245,6 +249,10 @@ class OfflineRecognizerCtcImpl : public OfflineRecognizerImpl {
   }
 
   void EncodeStreams(OfflineStream **ss, int32_t n) const override {
+    if (encoder_) {
+      encoder_->Encode(ss, n);
+      return;
+    }
     std::vector<OfflineStream *> todo;
     for (int32_t i = 0; i != n; ++i) {
       if (!ss[i]->HasEncoderOutput()) {
@@ -270,13 +278,12 @@ class OfflineRecognizerCtcImpl : public OfflineRecognizerImpl {
   }
 
   void DecodeStreams(OfflineStream **ss, int32_t n) const override {
-    for (int32_t i = 0; i != n; ++i) {
-      if (ss[i]->HasEncoderOutput()) {
-        // Some streams were encoded ahead; encode the rest and search all.
-        EncodeStreams(ss, n);
-        DecodeEncodedStreams(ss, n);
-        return;
-      }
+    if ((encoder_ && encoder_->Active()) || AnyHasEncoderOutput(ss, n)) {
+      // Some streams were encoded ahead, or --encoder options apply: encode
+      // the rest and search all.
+      EncodeStreams(ss, n);
+      DecodeEncodedStreams(ss, n);
+      return;
     }
 
     if (!model_->SupportBatchProcessing() || (n == 1) ||
@@ -312,6 +319,48 @@ class OfflineRecognizerCtcImpl : public OfflineRecognizerImpl {
   OfflineRecognizerConfig GetConfig() const override { return config_; }
 
  private:
+  // The shared encoder step, for every model whose input is feature frames.
+  // An omnilingual model's input is its samples: it keeps its own path and
+  // has no windows. A LiteRT model runs its own windows.
+  void InitEncoder() {
+    const auto &model_config = config_.model_config;
+    if (!model_config.omnilingual.model.empty()) {
+      if (model_config.encoder.window.Enabled()) {
+        SHERPA_ONNX_LOGE(
+            "--encoder.window.seconds does not apply to an omnilingual ASR "
+            "model, whose input is samples");
+        SHERPA_ONNX_EXIT(-1);
+      }
+      return;
+    }
+    OfflineEncoderConfig encoder = model_config.encoder;
+    if (EndsWith(model_config.w2v_bert_ctc, ".tflite")) {
+      // Its graphs have fixed lengths.
+      encoder.window.seconds = 0;
+      encoder.lengths.clear();
+      encoder.pad_to = 0;
+    }
+    OfflineEncoderAdapter adapter;
+    adapter.encode = [this](Ort::Value x, Ort::Value x_length) {
+      return model_->Forward(std::move(x), std::move(x_length));
+    };
+    adapter.normalize = [this](float *f, int32_t num_frames, int32_t dim) {
+      model_->NormalizeFeatures(f, num_frames, dim);
+    };
+    adapter.subsampling_factor = model_->SubsamplingFactor();
+    adapter.batch = model_->SupportBatchProcessing();
+    adapter.padding_value = -23.025850929940457f;
+    adapter.rows = WindowBlend::Rows::kScores;
+    adapter.allocator = model_->Allocator();
+    // A zipformer export sizes its mask by the longest length; a TDNN model
+    // reports every padded frame as valid.
+    adapter.pads_past_longest = model_config.zipformer_ctc.model.empty() &&
+                                model_config.tdnn.model.empty();
+    MoveStreamNormalizationToEncoder(encoder, &config_.feat_config, &adapter);
+    encoder_ = std::make_unique<OfflineStreamEncoder>(
+        std::move(adapter), encoder, config_.feat_config.frame_shift_ms);
+  }
+
   // Runs the model on a batch of streams; returns what Forward returns.
   std::vector<Ort::Value> ForwardStreams(OfflineStream **ss, int32_t n) const {
     if (!config_.model_config.omnilingual.model.empty()) {
@@ -542,13 +591,8 @@ class OfflineRecognizerCtcImpl : public OfflineRecognizerImpl {
   // result, for input that is too short, has no output and keeps that result.
   void DecodeEncodedStreams(OfflineStream **ss, int32_t n) const {
     std::vector<OfflineStream *> encoded;
-    std::vector<std::vector<float>> outputs;
-    std::vector<int32_t> lengths;
     for (int32_t i = 0; i != n; ++i) {
       if (ss[i]->HasEncoderOutput()) {
-        int32_t num_frames = 0;
-        outputs.push_back(ss[i]->TakeEncoderOutput(&num_frames));
-        lengths.push_back(num_frames);
         encoded.push_back(ss[i]);
       }
     }
@@ -557,33 +601,8 @@ class OfflineRecognizerCtcImpl : public OfflineRecognizerImpl {
     }
 
     auto batch = static_cast<int32_t>(encoded.size());
-    int32_t max_frames = *std::max_element(lengths.begin(), lengths.end());
-    int32_t dim = 0;
-    for (int32_t i = 0; i != batch && dim == 0; ++i) {
-      if (lengths[i] > 0) {
-        dim = static_cast<int32_t>(outputs[i].size()) / lengths[i];
-      }
-    }
-
-    // onnxruntime shapes, and the lengths the decoders read, are int64.
-    std::array<int64_t, 3> shape = {batch, max_frames, dim};
-    Ort::Value log_probs = Ort::Value::CreateTensor<float>(
-        model_->Allocator(), shape.data(), shape.size());
-    float *p = log_probs.GetTensorMutableData<float>();
-    size_t stride = static_cast<size_t>(max_frames) * dim;
-    std::fill(p, p + batch * stride, 0.0f);
-    for (int32_t i = 0; i != batch; ++i) {
-      std::copy(outputs[i].begin(), outputs[i].end(), p + i * stride);
-    }
-
-    std::array<int64_t, 1> length_shape = {batch};
-    Ort::Value log_probs_length = Ort::Value::CreateTensor<int64_t>(
-        model_->Allocator(), length_shape.data(), length_shape.size());
-    std::copy(lengths.begin(), lengths.end(),
-              log_probs_length.GetTensorMutableData<int64_t>());
-
-    auto results =
-        decoder_->Decode(std::move(log_probs), std::move(log_probs_length));
+    auto t = TakeEncoderOutputs(encoded.data(), batch, model_->Allocator());
+    auto results = decoder_->Decode(std::move(t[0]), std::move(t[1]));
 
     for (int32_t i = 0; i != batch; ++i) {
       auto r = Convert(results[i], symbol_table_, FrameShiftMs(),
@@ -599,6 +618,8 @@ class OfflineRecognizerCtcImpl : public OfflineRecognizerImpl {
   SymbolTable symbol_table_;
   std::unique_ptr<OfflineCtcModel> model_;
   std::unique_ptr<OfflineCtcDecoder> decoder_;
+  // Null for an omnilingual model.
+  std::unique_ptr<OfflineStreamEncoder> encoder_;
 };
 
 }  // namespace sherpa_onnx

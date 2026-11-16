@@ -34,7 +34,7 @@ everything is kept in the
 | Options and JSON | `fusion-config.h`, `option-collection.h`, `option-json.h` | § Options; [option collections](json-option-collections.md) |
 | Offline CTC recognizer | `offline-ctc-prefix-beam-search-decoder.h` | batch shares scorer calls |
 | w2v-BERT CTC model type | `offline-w2v-bert-ctc-model.h` (`--w2v-bert-ctc`) | transformers export with the input `input_features`; one utterance at a time, or padded batches when the export also takes `input_lengths` and masks padding itself |
-| Model run ahead of the search, offline CTC | `OfflineRecognizer::EncodeStreams` | § Inflight batching |
+| Model run ahead of the search, offline CTC and transducers | `OfflineRecognizer::EncodeStreams` | § Inflight batching |
 | Streaming CTC recognizer | `online-ctc-prefix-beam-search-decoder.h` | search kept per stream |
 | Offline transducer recognizers | `offline-transducer-prefix-beam-search-decoder.h` | stateless and NeMo |
 | Streaming stateless-transducer recognizer | `online-transducer-prefix-beam-search-decoder.h` | search kept per segment |
@@ -1017,10 +1017,12 @@ thing: the utterances or streams handed to one decode call share each
 scorer call (`DecodeFramesTogether` in `ctc-prefix-search.h`). The
 transducer decoders run one utterance at a time for now.
 
-For offline CTC models the model run and the search are separate calls.
-`OfflineRecognizer::EncodeStreams` runs the model and leaves each stream's
-log probabilities on the stream; `DecodeStreams` searches streams that
-have them and runs the model itself for the rest. The two calls can take
+For offline CTC models and the zipformer and NeMo transducers the model
+run and the search are separate calls. `OfflineRecognizer::EncodeStreams`
+runs the model and leaves each stream's output on the stream (log
+probabilities for CTC, encoder frames for a transducer, whose search still
+runs its prediction network and joiner); `DecodeStreams` searches streams
+that have them and runs the model itself for the rest. The two calls can take
 different sets of streams, so a caller can run the model for an utterance
 when its recording ends and search it later together with others. Other
 model families ignore `EncodeStreams`. On a batch-capable CTC model and on

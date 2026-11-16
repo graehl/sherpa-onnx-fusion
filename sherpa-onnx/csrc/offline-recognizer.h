@@ -123,7 +123,9 @@ class OfflineRecognizer {
    * only searches for those streams. Optional per stream: DecodeStreams runs
    * the model for any stream that was not encoded. The two calls can batch
    * different sets of streams. Does nothing for a model family that does not
-   * separate the two steps (currently every family except CTC).
+   * separate the two steps (every family except CTC, the zipformer
+   * transducer and NeMo transducers). A long utterance may be encoded in
+   * windows; see --encoder.window.seconds.
    *
    * @param ss Pointer to an array of streams.
    * @param n  Size of the input array.

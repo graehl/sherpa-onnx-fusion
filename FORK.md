@@ -97,8 +97,9 @@ tokens, § Fusion on RNN-T and TDT, § Matching the existing decoders).
   that cannot be read, printed as each finishes or in list order
   (`--ordered-output`); batches of similar length by default
   (`--sort-by-length`) under a padded-audio limit (`--max-batch-seconds`);
-  and, for CTC models, search threads sized
-  apart from the threads that run the model (`--decode-threads`). Scorers
+  and, for CTC models and the zipformer and NeMo transducers, search
+  threads sized apart from the threads that run the model
+  (`--decode-threads`). Scorers
   are shared across threads. `sherpa-onnx-offline` itself still pads every
   file on its command line into one batch.
 - Batched decoding for w2v-BERT and omnilingual CTC exports that take
@@ -110,6 +111,13 @@ tokens, § Fusion on RNN-T and TDT, § Matching the existing decoders).
   lengths, one per signature, and several graphs may be given: an
   utterance runs in the shortest length that holds it, a longer one in
   blended overlapping windows (`--litert-window`).
+- [Chunked encoding](topics/chunked-encoding.md), off by default: an
+  utterance longer than `--encoder.window.seconds` is encoded in
+  overlapping windows, batched, and joined per output frame before one
+  search, for the offline CTC models, the zipformer transducer and NeMo
+  RNN-T and TDT; `--encoder.lengths` and `--encoder.pad-to` keep encoder
+  inputs to a few lengths for a GPU or NPU. On a 92 s recording, 20 s
+  windows cut peak memory 1.6 to 3.7 times on three public models.
 - [repro/](repro/README.md): pinned public downloads and a script that
   reruns the English CTC comparisons above, and a check that threads,
   search threads and sorting do not change the bulk program's output.
@@ -153,6 +161,8 @@ present and prints a warning describing the correct result.
 - [Prefix search against the FST decoder on a graph with an LM](gaps/sketches/fst-decoder-lm-graph-comparison.md) (run for a character LM; what remains is in the sketch).
 - [Checking that a token scorer and a recognizer share a vocabulary](gaps/sketches/scorer-vocabulary-compatibility.md).
 - [Running models through LiteRT](gaps/sketches/litert-model-backend.md).
+- [Hybrid chunked streaming](gaps/sketches/hybrid-chunked-streaming.md):
+  searching an offline model's finished windows before the audio ends.
 - [A remaining-cost estimate for partly spelled words](gaps/sketches/word-lm-remaining-cost.md).
 
 ## Relationship to upstream

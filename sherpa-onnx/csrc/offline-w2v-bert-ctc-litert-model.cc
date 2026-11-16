@@ -27,7 +27,7 @@
 #include "litert/c/litert_tensor_buffer.h"
 #include "litert/c/litert_tensor_buffer_requirements.h"
 #include "sherpa-onnx/csrc/macros.h"
-#include "sherpa-onnx/csrc/math.h"
+#include "sherpa-onnx/csrc/offline-encoder-window.h"
 #include "sherpa-onnx/csrc/offline-w2v-bert-ctc-model.h"
 #include "sherpa-onnx/csrc/text-utils.h"
 
@@ -191,20 +191,12 @@ class FixedLengthGraph {
     return frames;
   }
 
-  // Adds weight(f) times the last run's logits of each of its first `frames`
-  // frames f into sum's rows from row `offset`, and weight(f) into weights.
-  template <typename Weight>
-  void AccumulateLogits(int32_t frames, int32_t offset, Weight weight,
-                        std::vector<double> *sum,
-                        std::vector<double> *weights) const {
+  // Adds the last run's logits of its first `frames` frames to `blend`, the
+  // first at output frame `offset`.
+  void AccumulateLogits(int32_t frames, int32_t offset,
+                        WindowBlend *blend) const {
     Locked logits(Out(kLogits).buffer, kLiteRtTensorBufferLockModeRead);
-    const float *row = logits.As<float>();
-    for (int32_t f = 0; f < frames; ++f, row += vocab_size_) {
-      double w = weight(f);
-      double *to = sum->data() + static_cast<size_t>(offset + f) * vocab_size_;
-      for (int32_t v = 0; v < vocab_size_; ++v) to[v] += w * row[v];
-      (*weights)[offset + f] += w;
-    }
+    blend->Add(logits.As<float>(), frames, offset);
   }
 
  private:
@@ -269,18 +261,11 @@ class FixedLengthGraph {
   int32_t output_stride_ = 1;
 };
 
-// How a clip longer than one window is run: overlapping windows of one graph,
-// in input rows of 20 ms.
-struct WindowOptions {
-  int32_t window_rows = 0;  // 0: the longest graph
-  int32_t min_overlap_rows = 150;
-  int32_t slack_rows = 50;
-};
-
-// --litert-window W:O:S, in seconds.
-WindowOptions ParseWindowOptions(const std::string &spec) {
-  WindowOptions o;
-  if (spec.empty()) return o;
+// --litert-window W:O:S, in seconds, as a schedule in input rows of 20 ms;
+// without it, --encoder.window.*. A window of 0 rows means the longest graph.
+WindowSchedule ParseWindowSchedule(const OfflineModelConfig &config) {
+  const std::string &spec = config.litert_window;
+  if (spec.empty()) return ScheduleInUnits(config.encoder.window, kRowSeconds);
   std::vector<float> seconds;
   std::istringstream in(spec);
   for (std::string part; std::getline(in, part, ':');) {
@@ -300,62 +285,16 @@ WindowOptions ParseWindowOptions(const std::string &spec) {
                      spec.c_str());
     SHERPA_ONNX_EXIT(-1);
   }
-  o.window_rows = static_cast<int32_t>(std::lround(seconds[0] / kRowSeconds));
-  o.min_overlap_rows =
-      static_cast<int32_t>(std::lround(seconds[1] / kRowSeconds));
-  o.slack_rows = static_cast<int32_t>(std::lround(seconds[2] / kRowSeconds));
-  if (o.window_rows < 2) {
+  WindowSchedule s;
+  s.window = static_cast<int32_t>(std::lround(seconds[0] / kRowSeconds));
+  s.min_overlap = static_cast<int32_t>(std::lround(seconds[1] / kRowSeconds));
+  s.slack = static_cast<int32_t>(std::lround(seconds[2] / kRowSeconds));
+  if (s.window < 2) {
     SHERPA_ONNX_LOGE(
         "--litert-window needs a positive window of at least 0.04 s");
     SHERPA_ONNX_EXIT(-1);
   }
-  return o;
-}
-
-// Window starts aligned to output frames
-// covering `rows` with windows of `window` rows: as few as keep neighbours
-// overlapping by at least o.min_overlap_rows, evenly spaced, the first at 0
-// and the last ending at the clip's end; then each interior window moves by up
-// to o.slack_rows to the start whose two edge rows are quietest, keeping half
-// the minimum overlap with both neighbours.
-std::vector<int32_t> EvenWindowStarts(int32_t rows, int32_t window,
-                                      const WindowOptions &o,
-                                      const std::vector<float> &loudness,
-                                      int32_t stride) {
-  if (rows <= window) return {0};
-  const int32_t step = window - o.min_overlap_rows;
-  if (step < stride) {
-    SHERPA_ONNX_LOGE("--litert-window overlap leaves no step");
-    SHERPA_ONNX_EXIT(-1);
-  }
-  const int32_t count = 1 + (rows - window + step - 1) / step;
-  int32_t last = rows - window;
-  last += (stride - last % stride) % stride;
-  std::vector<int32_t> starts(count);
-  for (int32_t i = 0; i < count; ++i) {
-    starts[i] = count == 1 ? 0
-                           : static_cast<int32_t>(static_cast<int64_t>(last) *
-                                                  i / (count - 1));
-    starts[i] -= starts[i] % stride;
-  }
-  starts.back() = last;
-  auto edges = [&](int32_t s) {
-    return loudness[s] + loudness[std::min(s + window, rows) - 1];
-  };
-  const int32_t keep = o.min_overlap_rows / 2;
-  for (int32_t i = 1; i + 1 < count; ++i) {
-    int32_t lo = std::max({starts[i] - o.slack_rows, starts[i - 1] + stride,
-                           starts[i + 1] - window + keep});
-    int32_t hi = std::min({starts[i] + o.slack_rows, starts[i + 1] - stride,
-                           starts[i - 1] + window - keep});
-    lo += (stride - lo % stride) % stride;
-    int32_t chosen = starts[i];
-    for (int32_t s = lo; s <= hi; s += stride) {
-      if (edges(s) < edges(chosen)) chosen = s;
-    }
-    starts[i] = chosen;
-  }
-  return starts;
+  return s;
 }
 
 }  // namespace
@@ -363,7 +302,9 @@ std::vector<int32_t> EvenWindowStarts(int32_t rows, int32_t window,
 class OfflineW2vBertCtcLiteRtModel::Impl {
  public:
   explicit Impl(const OfflineModelConfig &config)
-      : allocator_{}, windows_(ParseWindowOptions(config.litert_window)) {
+      : allocator_{},
+        windows_(ParseWindowSchedule(config)),
+        window_config_(config.encoder.window) {
     bool npu = config.provider == "npu";
     LiteRtEnvOption env_option;
     env_option.tag = kLiteRtEnvOptionTagDispatchLibraryDir;
@@ -428,21 +369,24 @@ class OfflineW2vBertCtcLiteRtModel::Impl {
       }
     }
     window_graph_ = graphs_.back().get();
-    if (windows_.window_rows > 0) {
+    if (windows_.window > 0) {
       auto fits = std::find_if(graphs_.begin(), graphs_.end(), [&](auto &g) {
-        return g->positions() >= windows_.window_rows;
+        return g->positions() >= windows_.window;
       });
       if (fits == graphs_.end()) {
-        SHERPA_ONNX_LOGE("--litert-window exceeds every supplied graph length");
+        SHERPA_ONNX_LOGE(
+            "The LiteRT window (--litert-window or --encoder.window.seconds) "
+            "exceeds every supplied graph length");
         SHERPA_ONNX_EXIT(-1);
       }
       window_graph_ = fits->get();
     }
-    if (windows_.min_overlap_rows >
+    if (windows_.min_overlap >
         window_graph_->positions() - window_graph_->output_stride()) {
       SHERPA_ONNX_LOGE(
-          "--litert-window overlap leaves no step for the "
-          "selected graph length");
+          "The LiteRT window overlap (--litert-window or "
+          "--encoder.window.overlap) leaves no step for the selected graph "
+          "length");
       SHERPA_ONNX_EXIT(-1);
     }
   }
@@ -495,41 +439,46 @@ class OfflineW2vBertCtcLiteRtModel::Impl {
     std::vector<int32_t> starts =
         EvenWindowStarts(rows, graph.positions(), windows_, loudness, stride);
 
-    std::vector<double> sum(static_cast<size_t>(total_frames) * vocab, 0.0);
-    std::vector<double> weights(total_frames, 0.0);
+    // With --encoder.window.normalize=utterance, normalized once over every
+    // frame; else each window over its own frames, so that it looks like an
+    // utterance of its own (the last also counting an odd last frame).
+    const bool per_window =
+        starts.size() > 1 && window_config_.normalize == "window";
+    std::vector<float> normalized;
+    if (!per_window) {
+      normalized.assign(raw, raw + static_cast<size_t>(num_frames) * bins);
+      NormalizeW2vBertFeatures(normalized.data(), num_frames, bins);
+      raw = normalized.data();
+    }
+
+    WindowBlend blend(total_frames, vocab, WindowBlend::Rows::kScores,
+                      window_config_);
     {
       // The buffers belong to the model, so one utterance runs at a time.
       std::lock_guard<std::mutex> lock(mutex_);
       for (int32_t start : starts) {
         const int32_t valid = std::min(graph.positions(), rows - start);
-        // Each window normalized over its own frames, so that it looks like
-        // an utterance of its own; the last also counts an odd last frame.
         const int32_t first = start * kStack;
         const int32_t end =
             start + valid == rows ? num_frames : (start + valid) * kStack;
         std::vector<float> window(raw + static_cast<size_t>(first) * bins,
                                   raw + static_cast<size_t>(end) * bins);
-        NormalizeW2vBertFeatures(window.data(), end - first, bins);
+        if (per_window) {
+          NormalizeW2vBertFeatures(window.data(), end - first, bins);
+        }
         const int32_t frames = std::min(graph.Run(window.data(), valid),
                                         total_frames - start / stride);
-        graph.AccumulateLogits(
-            frames, start / stride,
-            [frames](int32_t f) { return 1.0 + std::min(f, frames - 1 - f); },
-            &sum, &weights);
+        graph.AccumulateLogits(frames, start / stride, &blend);
       }
     }
 
     std::array<int64_t, 3> logits_shape = {1, total_frames, vocab};
     Ort::Value logits = Ort::Value::CreateTensor<float>(
         allocator_, logits_shape.data(), logits_shape.size());
-    float *out = logits.GetTensorMutableData<float>();
-    for (int32_t f = 0; f < total_frames; ++f) {
-      for (int32_t v = 0; v < vocab; ++v) {
-        const size_t i = static_cast<size_t>(f) * vocab + v;
-        out[i] = static_cast<float>(sum[i] / weights[f]);
-      }
+    if (!blend.Finish(logits.GetTensorMutableData<float>())) {
+      SHERPA_ONNX_LOGE("LiteRT windows leave an output frame uncovered");
+      SHERPA_ONNX_EXIT(-1);
     }
-    LogSoftmax(out, vocab, total_frames);
     std::array<int64_t, 1> length_shape = {1};
     Ort::Value logits_length = Ort::Value::CreateTensor<int64_t>(
         allocator_, length_shape.data(), length_shape.size());
@@ -549,7 +498,9 @@ class OfflineW2vBertCtcLiteRtModel::Impl {
 
  private:
   Ort::AllocatorWithDefaultOptions allocator_;
-  WindowOptions windows_;
+  WindowSchedule windows_;  // in input rows
+  // Normalization scope, weight and blend.
+  OfflineEncoderWindowConfig window_config_;
   LiteRtEnvironment env_ = nullptr;
   std::vector<LiteRtModel> models_;
   std::vector<LiteRtCompiledModel> compiled_;

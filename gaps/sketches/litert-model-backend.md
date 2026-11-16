@@ -32,9 +32,9 @@ utterance or chunk with no dependence on the search. The parts the search
 calls per frame and per hypothesis are small, are called many times, and
 have shapes that change with the beam, which accelerators and their
 delegates handle poorly. The fork's search already takes encoder output as
-plain arrays (`OfflineRecognizer::EncodeStreams` for CTC; the transducer
-decoders take the encoder tensor), so the encoder can come from another
-runtime without the search knowing.
+plain arrays (`OfflineRecognizer::EncodeStreams` leaves them on the stream
+for CTC models and the zipformer and NeMo transducers), so the encoder can
+come from another runtime without the search knowing.
 
 ## Design notes
 
@@ -118,44 +118,19 @@ of some transcripts.
 User-directed (graehl, 2026-11-16): make center-embed tiling of fixed audio
 length graphs available independently of the LiteRT build, for NPU/GPU
 backends generally; sketch the path from encoder acceleration to possible
-LM acceleration. The following is proposed work, not an implemented API.
+LM acceleration.
 
-### Tiling belongs above the runtime
+### Tiling belongs above the runtime: built
 
-Today `WindowOptions`, `EvenWindowStarts`, and logit accumulation live in
-`sherpa-onnx/csrc/offline-w2v-bert-ctc-litert-model.cc`, which is compiled
-only with LiteRT enabled. Shared w2v-BERT feature normalization already
-lives outside that file, but a build with LiteRT off has no access to
-this window scheduler and stitcher.
-
-Extract graph-length selection, window placement, and center-weighted
-accumulation into code built unconditionally. Give the scheduler a set of
-supported lengths and a model adapter that executes one window. LiteRT,
-ONNX Runtime, and native accelerator adapters should supply the same
-window contract. Keep normalization, masks, and input/output alignment
-in the model adapter; they cannot be inferred from a runtime name.
-An ONNX Runtime adapter could use fixed-length exports or a dynamic
-graph invoked at selected lengths. Preserve `--litert-window` as a
-compatibility alias when adding a generic configuration surface.
-
-The contract must describe valid input length, padding, output stride and
-offset, valid output frames, and whether the output is hidden states,
-logits, or log probabilities. The existing CTC implementation blends
-logits before log-softmax and search. Blending hidden states before a
-nonlinear head is a separate model choice and can produce different
-results. Shift quiet-edge windows only on the output alignment grid,
-and require positive accumulated weight for every retained frame.
-
-Center-weighted overlap is an approximation for a bidirectional encoder
-with global attention. It changes context and, here, per-window feature
-normalization; it cannot promise the whole-utterance result. Stateful
-streaming models instead need their trained chunk/cache protocol.
-Validate the extracted implementation with LiteRT disabled through an
-ONNX execution path, including short and odd-length input, padding,
-window seams, and timestamps. Compare word error rate and end-to-end
-latency against whole-utterance inference and the existing LiteRT path.
-GPU/NPU benefit depends on reduced padding and bounded graph size
-outweighing overlap compute, copies, and dispatch overhead.
+Built 2026-11-16 as [chunked encoding](../../topics/chunked-encoding.md):
+the scheduler and the join are built unconditionally, LiteRT uses them,
+and ONNX Runtime runs every CTC model, the zipformer transducer and NeMo
+RNN-T/TDT in windows (`--encoder.window.*`), with input lengths chosen
+from a set (`--encoder.lengths`, `--encoder.pad-to`) as LiteRT's graphs
+are. Normalization scope, weighting and the blend space are options;
+`--litert-window` is kept. What remains of this part is the comparison
+of settings, and against whole-utterance inference and the LiteRT path,
+on a test set of long recordings.
 
 ### A sherpa backend is practical; an ONNX Runtime EP is a larger project
 
@@ -237,9 +212,6 @@ Contributing-model: 6-Astra
 
 ## Remaining, in order
 
-0. Extract the shared tiling facility described above and demonstrate it
-   through ONNX Runtime with `SHERPA_ONNX_ENABLE_LITERT=OFF`.
-
 1. **Broaden the existing smoke-scale accuracy checks** above to public
    test-set error rates: the TPU path, with lengths and windows, against
    ONNX fp32 and int8, as `repro/` reruns other claims. The existing
@@ -249,8 +221,8 @@ Contributing-model: 6-Astra
    come from its signature; supported outputs have one frame per input
    row or per two rows. The feature options are still the
    w2v-BERT ones the recognizer sets.
-3. Bindings (C API, JNI/Kotlin) for `litert_dispatch_dir` and
-   `litert_window`, and the Android app's packaging of the two libraries.
+3. Bindings (C API, JNI/Kotlin) for `litert_dispatch_dir`,
+   `litert_window` and the `--encoder.*` options, and the Android app's packaging of the two libraries.
 4. Transducers: encoder in LiteRT, prediction network and joiner in ONNX
    Runtime.
 5. Decide from measurements whether the per-step models should move.

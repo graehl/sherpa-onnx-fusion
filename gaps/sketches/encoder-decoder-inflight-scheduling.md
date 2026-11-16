@@ -33,7 +33,8 @@ log probabilities on the stream, and `DecodeStreams` searches streams that
 have them, running the model itself for any that do not. The two calls can
 take different sets of streams, so a caller can encode an utterance when its
 recording ends and search it later in a batch with others. Both calls still
-block their caller, and nothing schedules them. Other model families ignore
+block their caller, and nothing schedules them. The zipformer and NeMo
+transducers share the same step; other model families ignore
 `EncodeStreams`.
 
 ## Work deferred

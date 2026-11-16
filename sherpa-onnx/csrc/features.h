@@ -73,6 +73,9 @@ struct FeatureExtractorConfig {
   // https://github.com/NVIDIA/NeMo/blob/main/nemo/collections/asr/parts/preprocessing/features.py#L59
   // for details
   std::string nemo_normalize_type;
+  // false: OfflineStream::GetFrames leaves the nemo_normalize_type
+  // normalization to its caller, which applies it per encoder window.
+  bool nemo_normalize_in_stream = true;
 
   // for MFCC
   int32_t num_ceps = 13;
