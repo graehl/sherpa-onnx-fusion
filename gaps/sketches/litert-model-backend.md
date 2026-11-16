@@ -105,8 +105,11 @@ through `sherpa-onnx-offline`; on an x86 host the portable graph, linked
 against the `ai-edge-litert` wheel's `libLiteRt.so`, gave the ONNX fp32
 graph's transcripts, and a 20 s utterance in three 10 s windows gave the
 same greedy transcript as an independent implementation of the scheme.
-The compiler's default precision (bf16) changes a few characters of some
-transcripts.
+On the Pixel 11 TPU, with 5 and 10 s bf16 graphs and
+`--litert-window=10:3:1`, greedy decoding of 2, 5, 10, 20 and 30 s clips
+took 0.13, 0.10, 0.34, 1.06 and 1.41 s warm (RTF 0.046), the 30 s clip
+whole. The compiler's default precision (bf16) changes a few characters
+of some transcripts.
 
 ## Remaining, in order
 
