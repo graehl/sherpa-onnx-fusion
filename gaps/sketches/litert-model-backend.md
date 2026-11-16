@@ -101,7 +101,8 @@ normalized over the window, logits blended per frame with weight
 whole utterance: center-weighted stitching of overlapping chunk encodings,
 as used for long inputs to bidirectional text encoders.
 
-Checked: on a Pixel 11 a compiled 5 s graph ran entirely on the TPU
+Smoke-scale accuracy checks exist for one w2v-BERT 2.0 CTC model:
+on a Pixel 11 a compiled 5 s graph ran entirely on the TPU
 through `sherpa-onnx-offline`; on an x86 host the portable graph, linked
 against the `ai-edge-litert` wheel's `libLiteRt.so`, gave the ONNX fp32
 graph's transcripts, and a 20 s utterance in three 10 s windows gave the
@@ -239,9 +240,11 @@ Contributing-model: 6-Astra
 0. Extract the shared tiling facility described above and demonstrate it
    through ONNX Runtime with `SHERPA_ONNX_ENABLE_LITERT=OFF`.
 
-1. **Error rate in this repository**, not single transcripts: the TPU
-   path, with lengths and windows, against ONNX fp32 and int8 on a public
-   test set, as `repro/` reruns other claims.
+1. **Broaden the existing smoke-scale accuracy checks** above to public
+   test-set error rates: the TPU path, with lengths and windows, against
+   ONNX fp32 and int8, as `repro/` reruns other claims. The existing
+   transcript comparisons cover one model; broader accuracy evaluation
+   remains to be done.
 2. **The model's description file.** The graph's length and frame rate
    come from its signature; supported outputs have one frame per input
    row or per two rows. The feature options are still the
