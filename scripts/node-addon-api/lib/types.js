@@ -323,6 +323,8 @@
  * @property {string} [provider]
  * @property {string} [w2vBertCtc] - Path to a w2v-BERT 2.0 CTC model
  *   exported from transformers.
+ * @property {string} [litertDispatchDir] - Where LiteRT finds its
+ *   accelerator library, used with a .tflite model and provider 'npu'.
  */
 
 /**

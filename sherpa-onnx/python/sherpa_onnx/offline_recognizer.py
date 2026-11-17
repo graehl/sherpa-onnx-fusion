@@ -2028,6 +2028,7 @@ class OfflineRecognizer(object):
         hr_lexicon: str = "",
         fusion: Optional[FusionConfig] = None,
         options_json: str = "",
+        litert_dispatch_dir: str = "",
     ):
         """
         A w2v-BERT 2.0 CTC model exported from transformers. The recognizer
@@ -2035,7 +2036,8 @@ class OfflineRecognizer(object):
 
         Args:
           model:
-            Path to ``model.onnx``, with the single input ``input_features``.
+            Path to ``model.onnx``, with the single input ``input_features``,
+            or to a LiteRT ``.tflite`` model.
           tokens:
             Path to ``tokens.txt``. Each line in ``tokens.txt`` contains two
             columns::
@@ -2063,6 +2065,9 @@ class OfflineRecognizer(object):
             A JSON object of command-line options applied after every other
             option, e.g. ``'{"scorer": [{"weight": 40}], "score-beam": 0}'``.
             An error raises ``ValueError``.
+          litert_dispatch_dir:
+            Directory of LiteRT's accelerator library, for a ``.tflite`` model
+            run with ``provider="npu"``.
         """
         self = cls.__new__(cls)
         model_config = OfflineModelConfig(
@@ -2071,6 +2076,7 @@ class OfflineRecognizer(object):
             num_threads=num_threads,
             debug=debug,
             provider=provider,
+            litert_dispatch_dir=litert_dispatch_dir,
         )
 
         recognizer_config = OfflineRecognizerConfig(

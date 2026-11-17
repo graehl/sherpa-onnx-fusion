@@ -480,6 +480,10 @@ pub struct OfflineModelConfig {
     pub telespeech_ctc: Option<String>,
     /// Path to a w2v-BERT 2.0 CTC model exported from transformers.
     pub w2v_bert_ctc: Option<String>,
+    /// Where LiteRT finds its accelerator library, used with a .tflite model
+    /// and provider `npu`; for a Pixel, the directory holding
+    /// `libLiteRtDispatch_GoogleTensor.so`.
+    pub litert_dispatch_dir: Option<String>,
 }
 
 impl OfflineModelConfig {
@@ -549,6 +553,7 @@ impl OfflineModelConfig {
             bpe_vocab: to_c_ptr(&self.bpe_vocab, cstrings),
             telespeech_ctc: to_c_ptr(&self.telespeech_ctc, cstrings),
             w2v_bert_ctc: to_c_ptr(&self.w2v_bert_ctc, cstrings),
+            litert_dispatch_dir: to_c_ptr(&self.litert_dispatch_dir, cstrings),
         }
     }
 }

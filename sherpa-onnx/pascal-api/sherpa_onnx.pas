@@ -590,6 +590,9 @@ type
     Qwen3Asr: TSherpaOnnxOfflineQwen3ASRModelConfig;
     CohereTranscribe: TSherpaOnnxOfflineCohereTranscribeModelConfig;
     W2vBertCtc: AnsiString; { w2v-BERT 2.0 CTC model exported from transformers }
+    { Where LiteRT finds its accelerator library, for a .tflite model run
+      with provider 'npu'. }
+    LitertDispatchDir: AnsiString;
     class operator Initialize({$IFDEF FPC}var{$ELSE}out{$ENDIF} Dest: TSherpaOnnxOfflineModelConfig);
     function ToString: AnsiString;
   end;
@@ -1269,6 +1272,7 @@ type
     Qwen3Asr: SherpaOnnxOfflineQwen3ASRModelConfig;
     CohereTranscribe: SherpaOnnxOfflineCohereTranscribeModelConfig;
     W2vBertCtc: PAnsiChar;
+    LitertDispatchDir: PAnsiChar;
   end;
 
   SherpaOnnxOfflineCtcFstDecoderConfig = record
@@ -2500,6 +2504,7 @@ begin
      ', Qwen3Asr := %s' +
      ', CohereTranscribe := %s' +
      ', W2vBertCtc := %s' +
+     ', LitertDispatchDir := %s' +
      ')',
     [Self.Transducer.ToString, Self.Paraformer.ToString,
      Self.NeMoCtc.ToString, Self.Whisper.ToString, Self.Tdnn.ToString,
@@ -2511,7 +2516,7 @@ begin
      Self.Omnilingual.ToString, Self.MedAsr.ToString,
      Self.FunAsrNano.ToString, Self.FireRedAsrCtc.ToString,
      Self.Qwen3Asr.ToString, Self.CohereTranscribe.ToString,
-     Self.W2vBertCtc
+     Self.W2vBertCtc, Self.LitertDispatchDir
       ]);
 end;
 
@@ -2636,6 +2641,7 @@ begin
   C.ModelConfig.CohereTranscribe.UseItn := Ord(Config.ModelConfig.CohereTranscribe.UseItn);
 
   C.ModelConfig.W2vBertCtc := PAnsiChar(Config.ModelConfig.W2vBertCtc);
+  C.ModelConfig.LitertDispatchDir := PAnsiChar(Config.ModelConfig.LitertDispatchDir);
 
   C.LMConfig.Model := PAnsiChar(Config.LMConfig.Model);
   C.LMConfig.Scale := Config.LMConfig.Scale;

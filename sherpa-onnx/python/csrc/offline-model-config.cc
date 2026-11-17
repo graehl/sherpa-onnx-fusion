@@ -94,6 +94,10 @@ Args:
   w2v_bert_ctc:
     Path to a w2v-BERT 2.0 CTC model exported from transformers, with the
     single input ``input_features``.
+  litert_dispatch_dir:
+    Directory of LiteRT's accelerator library (for a Pixel,
+    ``libLiteRtDispatch_GoogleTensor.so``), for a ``.tflite`` model run with
+    ``provider="npu"``.
 )doc";
 
 void PybindOfflineModelConfig(py::module *m) {
@@ -142,7 +146,8 @@ void PybindOfflineModelConfig(py::module *m) {
                  int32_t num_threads, bool debug, const std::string &provider,
                  const std::string &model_type,
                  const std::string &modeling_unit, const std::string &bpe_vocab,
-                 const std::string &w2v_bert_ctc) {
+                 const std::string &w2v_bert_ctc,
+                 const std::string &litert_dispatch_dir) {
                 PyClass c(transducer, paraformer, nemo_ctc, whisper,
                           fire_red_asr, tdnn, zipformer_ctc, wenet_ctc,
                           sense_voice, moonshine, dolphin, canary,
@@ -151,6 +156,7 @@ void PybindOfflineModelConfig(py::module *m) {
                           num_threads, debug, provider, model_type,
                           modeling_unit, bpe_vocab);
                 c.w2v_bert_ctc = w2v_bert_ctc;
+                c.litert_dispatch_dir = litert_dispatch_dir;
                 return c;
               }),
           py::arg("transducer") = OfflineTransducerModelConfig(),
@@ -175,7 +181,8 @@ void PybindOfflineModelConfig(py::module *m) {
           py::arg("num_threads") = 1, py::arg("debug") = false,
           py::arg("provider") = "cpu", py::arg("model_type") = "",
           py::arg("modeling_unit") = "cjkchar", py::arg("bpe_vocab") = "",
-          py::arg("w2v_bert_ctc") = "", kOfflineModelConfigInitDoc)
+          py::arg("w2v_bert_ctc") = "", py::arg("litert_dispatch_dir") = "",
+          kOfflineModelConfigInitDoc)
       .def_readwrite("transducer", &PyClass::transducer)
       .def_readwrite("paraformer", &PyClass::paraformer)
       .def_readwrite("nemo_ctc", &PyClass::nemo_ctc)
@@ -196,6 +203,7 @@ void PybindOfflineModelConfig(py::module *m) {
       .def_readwrite("qwen3_asr", &PyClass::qwen3_asr)
       .def_readwrite("telespeech_ctc", &PyClass::telespeech_ctc)
       .def_readwrite("w2v_bert_ctc", &PyClass::w2v_bert_ctc)
+      .def_readwrite("litert_dispatch_dir", &PyClass::litert_dispatch_dir)
       .def_readwrite("tokens", &PyClass::tokens)
       .def_readwrite("num_threads", &PyClass::num_threads)
       .def_readwrite("debug", &PyClass::debug)

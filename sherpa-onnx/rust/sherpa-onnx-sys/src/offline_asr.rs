@@ -195,6 +195,7 @@ pub struct OfflineModelConfig {
     pub qwen3_asr: OfflineQwen3ASRModelConfig,
     pub cohere_transcribe: OfflineCohereTranscribeModelConfig,
     pub w2v_bert_ctc: *const c_char,
+    pub litert_dispatch_dir: *const c_char,
 }
 
 #[repr(C)]
