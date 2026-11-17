@@ -13,18 +13,18 @@ the fork's own terms in the [glossary](GLOSSARY.md).
 
 ## WER on public models
 
-Word error rate in percent. Every recognizer here can be downloaded.
+Word error rate in percent. Every recognizer here can be downloaded ([recipes](repro/)).
 
-| Recognizer | Test set | Language model | Greedy | Best k2-fsa sherpa-onnx decoder, with LM | Prefix search, no LM | Prefix search, with LM | RTF greedy | RTF prefix search, no LM | RTF prefix search, with LM | RTF k2-fsa decoder, no LM | RTF k2-fsa decoder, with LM |
-|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Vietnamese Parakeet CTC 0.6B (NVIDIA, int8) * | FLEURS Vietnamese (857) | character 8-gram | 9.27 | § | 9.09 | 6.30 | 0.030 | 0.028 | 0.030 | 0.030 | – |
-| English zipformer CTC ([recipe](repro/)) | LibriSpeech test-other (2,939) | published character 8-gram from the LibriSpeech LM text (16 MB) | 5.65 | 5.39 (k2-fsa's word-3-gram graph released with the model, 334 MB) | 5.65 | 5.11 | 0.015 | 0.015 | 0.016 | 0.015 | 0.019 |
-| the same * | LibriSpeech test-other (600) | public LibriSpeech LSTM over its tokens (icefall's `rnn_lm`, 388 MB) | 5.63 | ¶ | 5.59 | 4.45 | 0.021 | 0.015 | 0.13 | 0.021 | – |
-| Vietnamese zipformer transducer (gipformer 1.5, 68M) * | FLEURS Vietnamese (857) | 4-gram over the recognizer's tokens | 5.59 | ‖ | 5.49 | 5.23 | – | 0.021 | 0.021 | – | – |
-| the same * | FLEURS Vietnamese (857) | LSTM over the recognizer's tokens (int8, 49 MB) | 5.59 | 5.21 (rescoring, with the fp32 model) | 5.49 | 4.89 | – | 0.021 | 0.028 | – | 0.049 |
-| English zipformer transducer * | LibriSpeech test-other (600) | public LibriSpeech LSTM over its tokens (icefall's `rnn_lm`, 388 MB) | 4.65 | 4.38 (rescoring) | 4.60 (k2-fsa `modified_beam_search`, which it reproduces) | 4.20 | 0.059 ‡ | 0.063 ‡ | 0.51 ‡ | – | 0.13 ‡ |
-| GigaAM v3 RNN-T * | FLEURS Russian (743) | character 8-gram from Russian Wikipedia | 4.63 | # | 4.52 | 4.21 | 0.067 | 0.25 † | 0.22 | – | – |
-| Parakeet TDT 0.6B v3 * | FLEURS Russian (743) | character 8-gram from Russian Wikipedia | 8.32 | # | 7.77 | 6.78 | 0.25 | 0.69 † | 0.22 | – | – |
+| Recognizer | Test set | Language model | LM MB | Greedy | Best k2-fsa sherpa-onnx decoder, with LM | Prefix search, no LM | Prefix search, with LM | RTF greedy | RTF prefix search, no LM | RTF prefix search, with LM | RTF k2-fsa decoder, no LM | RTF k2-fsa decoder, with LM |
+|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Vietnamese Parakeet CTC 0.6B (NVIDIA, int8) * | FLEURS Vietnamese (857) | character 8-gram | 144 | 9.27 | § | 9.09 | 6.30 | 0.030 | 0.028 | 0.030 | 0.030 | – |
+| English zipformer CTC | LibriSpeech test-other (2,939) | character 8-gram (LibriSpeech LM text) | 16 | 5.65 | 5.39 ◊ | 5.65 | 5.11 | 0.015 | 0.015 | 0.016 | 0.015 | 0.019 |
+| the same * | LibriSpeech test-other (600) | LibriSpeech LSTM, ASR-tokens (icefall's `rnn_lm`) | 407 | 5.63 | ¶ | 5.59 | 4.45 | 0.021 | 0.015 | 0.13 | 0.021 | – |
+| Vietnamese zipformer transducer (gipformer 1.5, 68M) * | FLEURS Vietnamese (857) | 4-gram, ASR-tokens | 108 | 5.59 | ‖ | 5.49 | 5.23 | – | 0.021 | 0.021 | – | – |
+| the same * | FLEURS Vietnamese (857) | LSTM, ASR-tokens (int8) | 51 | 5.59 | 5.21 (rescoring, with the fp32 LSTM) | 5.49 | 4.89 | – | 0.021 | 0.028 | – | 0.049 |
+| English zipformer transducer * | LibriSpeech test-other (600) | LibriSpeech LSTM, ASR-tokens (icefall's `rnn_lm`) | 407 | 4.65 | 4.38 (rescoring) | 4.60 | 4.20 | 0.059 ‡ | 0.063 ‡ | 0.51 ‡ | – | 0.13 ‡ |
+| GigaAM v3 RNN-T * | FLEURS Russian (743) | character 8-gram from Russian Wikipedia | 907 | 4.63 | # | 4.52 | 4.21 | 0.067 | 0.25 † | 0.22 | – | – |
+| Parakeet TDT 0.6B v3 * | FLEURS Russian (743) | character 8-gram from Russian Wikipedia | 907 | 8.32 | # | 7.77 | 6.78 | 0.25 | 0.69 † | 0.22 | – | – |
 
 RTF is the recognizer's own decode seconds over audio seconds, summed over
 calls of one recording each, two threads per call, model loading
@@ -45,7 +45,9 @@ transducer, not timed here; – means not measured. Where k2-fsa
 sherpa-onnx has no decoder for the row's LM: § it takes an n-gram only as a
 compiled graph, and not for NeMo CTC models; ¶ it has no RNN LM for CTC
 models; ‖ it has no n-gram LM for transducers; # it has no LM for NeMo
-models.
+models. ◊ With k2-fsa's word 3-gram graph released with the model
+(350 MB), not the row's LM. LM MB is the size of the file the scorer
+loads, in millions of bytes.
 
 - **Language models.** The two Vietnamese models are not public. Both were
   built from 29.5 million sentences: Vietnamese Wikipedia, FineWeb-2, and
@@ -73,10 +75,10 @@ models.
   as the graph decoder in 5 to 23 µs per frame against 380 to 3200, the
   graph holding no LM.
 
-These are single runs, on a sample where the row gives a count below the
-test set's size. The topic gives settings and paired tests (§ Fusion on a
-public CTC model, § Fusion on a transducer, § Scorers over the recognizer's
-tokens, § Fusion on RNN-T and TDT, § Matching the existing decoders).
+[Shared beam search and scorer fusion](topics/beam-search-and-scorer-fusion.md)
+gives settings and paired tests (§ Fusion on a public CTC model, § Fusion
+on a transducer, § Scorers over the recognizer's tokens, § Fusion on RNN-T
+and TDT, § Matching the existing decoders).
 
 ## In this fork
 
@@ -89,7 +91,7 @@ tokens, § Fusion on RNN-T and TDT, § Matching the existing decoders).
 - Scorers fused during the search, several at once with independent
   weights: a KenLM character n-gram (`-DSHERPA_ONNX_ENABLE_KENLM=ON`, off by
   default because KenLM is LGPL) and an ONNX LSTM or GRU over characters or
-  over the recognizer's tokens, configured on the command line
+  ASR-tokens, configured on the command line
   (`--scorer.type=kenlm --scorer.model=lm.bin`, or `--scorer.N.<option>` for
   several) or from a JSON file
   ([option collections](topics/json-option-collections.md)).
