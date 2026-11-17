@@ -29,4 +29,5 @@ pub struct FusionConfig {
     pub ctc_alignment: *const c_char,
     pub token_candidates: i32,
     pub score_beam: c_float,
+    pub scorer_text_case: *const c_char,
 }

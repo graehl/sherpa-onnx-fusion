@@ -83,6 +83,7 @@ class FusionConfig {
     this.ctcAlignment = 'sum',
     this.tokenCandidates = 8,
     this.scoreBeam = 12.0,
+    this.scorerTextCase = 'keep',
   });
 
   factory FusionConfig.fromJson(Map<String, dynamic> json) {
@@ -96,12 +97,13 @@ class FusionConfig {
       ctcAlignment: json['ctcAlignment'] as String? ?? 'sum',
       tokenCandidates: json['tokenCandidates'] as int? ?? 8,
       scoreBeam: (json['scoreBeam'] as num?)?.toDouble() ?? 12.0,
+      scorerTextCase: json['scorerTextCase'] as String? ?? 'keep',
     );
   }
 
   @override
   String toString() {
-    return 'FusionConfig(scorers: $scorers, lengthBonus: $lengthBonus, lengthBonusUnit: $lengthBonusUnit, ctcAlignment: $ctcAlignment, tokenCandidates: $tokenCandidates, scoreBeam: $scoreBeam)';
+    return 'FusionConfig(scorers: $scorers, lengthBonus: $lengthBonus, lengthBonusUnit: $lengthBonusUnit, ctcAlignment: $ctcAlignment, tokenCandidates: $tokenCandidates, scoreBeam: $scoreBeam, scorerTextCase: $scorerTextCase)';
   }
 
   Map<String, dynamic> toJson() => {
@@ -111,6 +113,7 @@ class FusionConfig {
         'ctcAlignment': ctcAlignment,
         'tokenCandidates': tokenCandidates,
         'scoreBeam': scoreBeam,
+        'scorerTextCase': scorerTextCase,
       };
 
   /// Scorers fused with independent weights.
@@ -131,4 +134,8 @@ class FusionConfig {
   /// A hypothesis survives a frame only within this score of the best.
   /// Negative: no limit. 0 means 12; use `optionsJson` to set 0.
   final double scoreBeam;
+
+  /// Case of the text character scorers are given: `keep` or `lower`. The
+  /// recognizer's output is unchanged.
+  final String scorerTextCase;
 }

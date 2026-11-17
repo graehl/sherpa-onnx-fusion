@@ -12,6 +12,8 @@ public class FusionConfig {
     // A hypothesis survives a frame only within this score of the best;
     // 0 or less: no limit.
     private final float scoreBeam;
+    // Case of the text character scorers are given: "keep" or "lower".
+    private final String scorerTextCase;
 
     private FusionConfig(Builder builder) {
         this.scorers = builder.scorers;
@@ -20,6 +22,7 @@ public class FusionConfig {
         this.ctcAlignment = builder.ctcAlignment;
         this.tokenCandidates = builder.tokenCandidates;
         this.scoreBeam = builder.scoreBeam;
+        this.scorerTextCase = builder.scorerTextCase;
     }
 
     public static Builder builder() {
@@ -50,6 +53,10 @@ public class FusionConfig {
         return scoreBeam;
     }
 
+    public String getScorerTextCase() {
+        return scorerTextCase;
+    }
+
     public static class Builder {
         private ScorerConfig[] scorers = new ScorerConfig[0];
         private float lengthBonus = 0.0f;
@@ -57,6 +64,7 @@ public class FusionConfig {
         private String ctcAlignment = "sum";
         private int tokenCandidates = 8;
         private float scoreBeam = 12.0f;
+        private String scorerTextCase = "keep";
 
         public FusionConfig build() {
             return new FusionConfig(this);
@@ -89,6 +97,11 @@ public class FusionConfig {
 
         public Builder setScoreBeam(float scoreBeam) {
             this.scoreBeam = scoreBeam;
+            return this;
+        }
+
+        public Builder setScorerTextCase(String scorerTextCase) {
+            this.scorerTextCase = scorerTextCase;
             return this;
         }
     }

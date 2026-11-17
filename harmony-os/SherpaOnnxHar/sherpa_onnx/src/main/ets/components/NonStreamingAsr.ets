@@ -234,6 +234,8 @@ export class FusionConfig {
   public ctcAlignment: string = 'sum';  // CTC models: 'sum' or 'max'
   public tokenCandidates: number = 8;
   public scoreBeam: number = 12;  // a negative value means no limit
+  // Case of the text character scorers are given: 'keep' or 'lower'
+  public scorerTextCase: string = 'keep';
 }
 
 export class OfflineRecognizerConfig {

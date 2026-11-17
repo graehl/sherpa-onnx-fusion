@@ -253,6 +253,7 @@ SherpaOnnxFusionConfig GetFusionConfig(Napi::Object obj) {
   SHERPA_ONNX_ASSIGN_ATTR_STR(ctc_alignment, ctcAlignment);
   SHERPA_ONNX_ASSIGN_ATTR_INT32(token_candidates, tokenCandidates);
   SHERPA_ONNX_ASSIGN_ATTR_FLOAT(score_beam, scoreBeam);
+  SHERPA_ONNX_ASSIGN_ATTR_STR(scorer_text_case, scorerTextCase);
 
   return c;
 }
@@ -272,6 +273,7 @@ void FreeFusionConfig(const SherpaOnnxFusionConfig &c) {
 
   SHERPA_ONNX_DELETE_C_STR(c.length_bonus_unit);
   SHERPA_ONNX_DELETE_C_STR(c.ctc_alignment);
+  SHERPA_ONNX_DELETE_C_STR(c.scorer_text_case);
 }
 
 static Napi::External<SherpaOnnxOnlineRecognizer> CreateOnlineRecognizerWrapper(

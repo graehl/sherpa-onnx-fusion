@@ -211,6 +211,9 @@ struct FusionConfig {
   /** A hypothesis survives a frame only within this score of the best.
    * Negative: no limit. */
   float score_beam = 12.0f;
+  /** Case of the text character scorers are given: `"keep"` or
+   * `"lower"`. */
+  std::string scorer_text_case = "keep";
 };
 
 /**

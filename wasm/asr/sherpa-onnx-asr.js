@@ -513,12 +513,18 @@ function initSherpaOnnxFusionConfig(config, Module) {
   const lengthBonusUnitLen =
       Module.lengthBytesUTF8(config.lengthBonusUnit || '') + 1;
   const ctcAlignmentLen = Module.lengthBytesUTF8(config.ctcAlignment || '') + 1;
-  const buffer = Module._malloc(lengthBonusUnitLen + ctcAlignmentLen);
+  const scorerTextCaseLen =
+      Module.lengthBytesUTF8(config.scorerTextCase || '') + 1;
+  const buffer =
+      Module._malloc(lengthBonusUnitLen + ctcAlignmentLen + scorerTextCaseLen);
   Module.stringToUTF8(config.lengthBonusUnit || '', buffer, lengthBonusUnitLen);
   Module.stringToUTF8(
       config.ctcAlignment || '', buffer + lengthBonusUnitLen, ctcAlignmentLen);
+  Module.stringToUTF8(
+      config.scorerTextCase || '',
+      buffer + lengthBonusUnitLen + ctcAlignmentLen, scorerTextCaseLen);
 
-  const len = 7 * 4;
+  const len = 8 * 4;
   const ptr = Module._malloc(len);
 
   let offset = 0;
@@ -541,6 +547,11 @@ function initSherpaOnnxFusionConfig(config, Module) {
   offset += 4;
 
   Module.setValue(ptr + offset, config.scoreBeam || 0, 'float');
+  offset += 4;
+
+  Module.setValue(
+      ptr + offset, buffer + lengthBonusUnitLen + ctcAlignmentLen,
+      'i8*');  // scorer_text_case
   offset += 4;
 
   return {ptr: ptr, len: len, buffer: buffer, scorers: scorers};

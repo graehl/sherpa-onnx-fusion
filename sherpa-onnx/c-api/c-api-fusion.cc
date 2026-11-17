@@ -55,6 +55,7 @@ FusionConfig GetFusionConfig(const SherpaOnnxFusionConfig &c) {
   SetIfGiven(c.ctc_alignment, &f.ctc_alignment);
   if (c.token_candidates > 0) f.token_candidates = c.token_candidates;
   if (c.score_beam != 0) f.score_beam = c.score_beam;
+  SetIfGiven(c.scorer_text_case, &f.scorer_text_case);
   return f;
 }
 

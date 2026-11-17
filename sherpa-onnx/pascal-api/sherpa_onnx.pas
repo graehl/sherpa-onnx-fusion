@@ -336,6 +336,7 @@ type
     CtcAlignment: AnsiString; { 'sum' or 'max' }
     TokenCandidates: Integer;
     ScoreBeam: Single; { negative: no limit }
+    ScorerTextCase: AnsiString; { 'keep' or 'lower' }
     function ToString: AnsiString;
     class operator Initialize({$IFDEF FPC}var{$ELSE}out{$ENDIF} Dest: TSherpaOnnxFusionConfig);
   end;
@@ -1094,6 +1095,7 @@ type
     CtcAlignment: PAnsiChar;
     TokenCandidates: cint32;
     ScoreBeam: cfloat;
+    ScorerTextCase: PAnsiChar;
   end;
 
   SherpaOnnxOnlineRecognizerConfig = record
@@ -2098,6 +2100,7 @@ begin
   Result.CtcAlignment := PAnsiChar(Config.CtcAlignment);
   Result.TokenCandidates := Config.TokenCandidates;
   Result.ScoreBeam := Config.ScoreBeam;
+  Result.ScorerTextCase := PAnsiChar(Config.ScorerTextCase);
 end;
 
 constructor TSherpaOnnxOnlineRecognizer.Create(Config: TSherpaOnnxOnlineRecognizerConfig);
@@ -3076,6 +3079,7 @@ begin
   Dest.CtcAlignment := 'sum';
   Dest.TokenCandidates := 8;
   Dest.ScoreBeam := 12;
+  Dest.ScorerTextCase := 'keep';
 end;
 
 function TSherpaOnnxScorerConfig.ToString: AnsiString;
@@ -3104,9 +3108,9 @@ begin
 
   Result := Format('TSherpaOnnxFusionConfig(Scorers := %s, ' +
     'LengthBonus := %.3f, LengthBonusUnit := %s, CtcAlignment := %s, ' +
-    'TokenCandidates := %d, ScoreBeam := %.3f)',
+    'TokenCandidates := %d, ScoreBeam := %.3f, ScorerTextCase := %s)',
     [ScorersStr, Self.LengthBonus, Self.LengthBonusUnit, Self.CtcAlignment,
-     Self.TokenCandidates, Self.ScoreBeam]);
+     Self.TokenCandidates, Self.ScoreBeam, Self.ScorerTextCase]);
 end;
 
 constructor TSherpaOnnxCircularBuffer.Create(Capacity: Integer);

@@ -23,4 +23,6 @@ data class FusionConfig(
     // A hypothesis survives a frame only within this score of the best;
     // 0 or less: no limit.
     var scoreBeam: Float = 12.0f,
+    // Case of the text character scorers are given: "keep" or "lower".
+    var scorerTextCase: String = "keep",
 )
