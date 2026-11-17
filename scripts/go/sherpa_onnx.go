@@ -723,6 +723,8 @@ type OfflineModelConfig struct {
 	ModelingUnit  string // Optional. cjkchar, bpe, cjkchar+bpe
 	BpeVocab      string // Optional.
 	TeleSpeechCtc string // Optional.
+
+	W2vBertCtc string // Path to a w2v-BERT 2.0 CTC model exported from transformers
 }
 
 // Configuration for the offline/non-streaming recognizer.
@@ -874,6 +876,8 @@ func newCOfflineRecognizerConfig(config *OfflineRecognizerConfig) *C.struct_Sher
 
 	c.model_config.telespeech_ctc = C.CString(config.ModelConfig.TeleSpeechCtc)
 
+	c.model_config.w2v_bert_ctc = C.CString(config.ModelConfig.W2vBertCtc)
+
 	c.lm_config.model = C.CString(config.LmConfig.Model)
 	c.lm_config.scale = C.float(config.LmConfig.Scale)
 
@@ -952,6 +956,7 @@ func freeCOfflineRecognizerConfig(c *C.struct_SherpaOnnxOfflineRecognizerConfig)
 		&c.model_config.modeling_unit,
 		&c.model_config.bpe_vocab,
 		&c.model_config.telespeech_ctc,
+		&c.model_config.w2v_bert_ctc,
 		&c.lm_config.model,
 		&c.decoding_method,
 		&c.hotwords_file,

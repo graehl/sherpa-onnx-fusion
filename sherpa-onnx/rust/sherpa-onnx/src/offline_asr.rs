@@ -478,6 +478,8 @@ pub struct OfflineModelConfig {
     pub modeling_unit: Option<String>,
     pub bpe_vocab: Option<String>,
     pub telespeech_ctc: Option<String>,
+    /// Path to a w2v-BERT 2.0 CTC model exported from transformers.
+    pub w2v_bert_ctc: Option<String>,
 }
 
 impl OfflineModelConfig {
@@ -546,6 +548,7 @@ impl OfflineModelConfig {
             modeling_unit: to_c_ptr(&self.modeling_unit, cstrings),
             bpe_vocab: to_c_ptr(&self.bpe_vocab, cstrings),
             telespeech_ctc: to_c_ptr(&self.telespeech_ctc, cstrings),
+            w2v_bert_ctc: to_c_ptr(&self.w2v_bert_ctc, cstrings),
         }
     }
 }

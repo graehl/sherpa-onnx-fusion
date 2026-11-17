@@ -734,6 +734,8 @@ struct OfflineModelConfig {
   OfflineQwen3ASRModelConfig qwen3_asr;
   /** Cohere Transcribe configuration. */
   OfflineCohereTranscribeModelConfig cohere_transcribe;
+  /** w2v-BERT 2.0 CTC model file. */
+  std::string w2v_bert_ctc;
 };
 
 /** @brief Optional language-model rescoring configuration for offline ASR. */

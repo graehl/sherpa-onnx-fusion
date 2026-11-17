@@ -295,6 +295,7 @@ class OfflineRecognizer {
     c.ref.model.modelingUnit = config.model.modelingUnit.toNativeUtf8();
     c.ref.model.bpeVocab = config.model.bpeVocab.toNativeUtf8();
     c.ref.model.telespeechCtc = config.model.telespeechCtc.toNativeUtf8();
+    c.ref.model.w2vBertCtc = config.model.w2vBertCtc.toNativeUtf8();
 
     c.ref.lm.model = config.lm.model.toNativeUtf8();
     c.ref.lm.scale = config.lm.scale;
@@ -334,6 +335,7 @@ class OfflineRecognizer {
     calloc.free(c.ref.hotwordsFile);
     calloc.free(c.ref.decodingMethod);
     calloc.free(c.ref.lm.model);
+    calloc.free(c.ref.model.w2vBertCtc);
     calloc.free(c.ref.model.telespeechCtc);
     calloc.free(c.ref.model.bpeVocab);
     calloc.free(c.ref.model.modelingUnit);

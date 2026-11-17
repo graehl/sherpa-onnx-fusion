@@ -321,6 +321,8 @@
  * @property {number} [numThreads]
  * @property {boolean|number} [debug]
  * @property {string} [provider]
+ * @property {string} [w2vBertCtc] - Path to a w2v-BERT 2.0 CTC model
+ *   exported from transformers.
  */
 
 /**

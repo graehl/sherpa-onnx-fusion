@@ -202,6 +202,8 @@ export class OfflineModelConfig {
   public funasrNano: OfflineFunASRNanoModelConfig = new OfflineFunASRNanoModelConfig();
   public qwen3Asr: OfflineQwen3AsrModelConfig = new OfflineQwen3AsrModelConfig();
   public fireRedAsrCtc: OfflineFireRedAsrCtcModelConfig = new OfflineFireRedAsrCtcModelConfig();
+  // Path to a w2v-BERT 2.0 CTC model exported from transformers
+  public w2vBertCtc: string = '';
 }
 
 export class OfflineLMConfig {

@@ -1661,7 +1661,7 @@ function initSherpaOnnxOfflineModelConfig(config, Module) {
       tdnn.len + 8 * 4 + senseVoice.len + moonshine.len + fireRedAsr.len +
       dolphin.len + zipformerCtc.len + canary.len + wenetCtc.len +
       omnilingual.len + medasr.len + funasrNano.len + fireRedAsrCtc.len +
-      qwen3Asr.len + cohereTranscribe.len;
+      qwen3Asr.len + cohereTranscribe.len + 1 * 4;
 
   const ptr = Module._malloc(len);
 
@@ -1688,9 +1688,10 @@ function initSherpaOnnxOfflineModelConfig(config, Module) {
   const bpeVocabLen = Module.lengthBytesUTF8(config.bpeVocab || '') + 1;
   const teleSpeechCtcLen =
       Module.lengthBytesUTF8(config.teleSpeechCtc || '') + 1;
+  const w2vBertCtcLen = Module.lengthBytesUTF8(config.w2vBertCtc || '') + 1;
 
   const bufferLen = tokensLen + providerLen + modelTypeLen + modelingUnitLen +
-      bpeVocabLen + teleSpeechCtcLen;
+      bpeVocabLen + teleSpeechCtcLen + w2vBertCtcLen;
 
   const buffer = Module._malloc(bufferLen);
 
@@ -1714,6 +1715,10 @@ function initSherpaOnnxOfflineModelConfig(config, Module) {
   Module.stringToUTF8(
       config.teleSpeechCtc || '', buffer + offset, teleSpeechCtcLen);
   offset += teleSpeechCtcLen;
+
+  const w2vBertCtcPtr = buffer + offset;
+  Module.stringToUTF8(config.w2vBertCtc || '', w2vBertCtcPtr, w2vBertCtcLen);
+  offset += w2vBertCtcLen;
 
   offset =
       transducer.len + paraformer.len + nemoCtc.len + whisper.len + tdnn.len;
@@ -1789,6 +1794,9 @@ function initSherpaOnnxOfflineModelConfig(config, Module) {
 
   Module._CopyHeap(cohereTranscribe.ptr, cohereTranscribe.len, ptr + offset);
   offset += cohereTranscribe.len;
+
+  Module.setValue(ptr + offset, w2vBertCtcPtr, 'i8*');
+  offset += 4;
 
   return {
     buffer: buffer,

@@ -579,6 +579,8 @@ final class SherpaOnnxOfflineModelConfig extends Struct {
   external SherpaOnnxOfflineFireRedAsrCtcModelConfig fireRedAsrCtc;
   external SherpaOnnxOfflineQwen3AsrModelConfig qwen3Asr;
   external SherpaOnnxOfflineCohereTranscribeModelConfig cohereTranscribe;
+
+  external Pointer<Utf8> w2vBertCtc;
 }
 
 final class SherpaOnnxOfflineRecognizerConfig extends Struct {

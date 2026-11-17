@@ -712,7 +712,8 @@ public func sherpaOnnxOfflineModelConfig(
   qwen3Asr: SherpaOnnxOfflineQwen3ASRModelConfig =
     sherpaOnnxOfflineQwen3ASRModelConfig(),
   cohereTranscribe: SherpaOnnxOfflineCohereTranscribeModelConfig =
-    sherpaOnnxOfflineCohereTranscribeModelConfig()
+    sherpaOnnxOfflineCohereTranscribeModelConfig(),
+  w2vBertCtc: String = ""
 ) -> SherpaOnnxOfflineModelConfig {
   return SherpaOnnxOfflineModelConfig(
     transducer: transducer,
@@ -740,7 +741,8 @@ public func sherpaOnnxOfflineModelConfig(
     funasr_nano: funasrNano,
     fire_red_asr_ctc: fireRedAsrCtc,
     qwen3_asr: qwen3Asr,
-    cohere_transcribe: cohereTranscribe
+    cohere_transcribe: cohereTranscribe,
+    w2v_bert_ctc: toCPointer(w2vBertCtc)
   )
 }
 

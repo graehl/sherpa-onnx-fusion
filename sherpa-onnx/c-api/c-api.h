@@ -1211,6 +1211,8 @@ typedef struct SherpaOnnxOfflineModelConfig {
   SherpaOnnxOfflineQwen3ASRModelConfig qwen3_asr;
   /** Cohere Transcribe configuration. */
   SherpaOnnxOfflineCohereTranscribeModelConfig cohere_transcribe;
+  /** Path to a w2v-BERT 2.0 CTC model exported from transformers. */
+  const char *w2v_bert_ctc;
 } SherpaOnnxOfflineModelConfig;
 
 /**

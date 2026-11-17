@@ -29,6 +29,8 @@ public class OfflineModelConfig {
     private final String modelType;
     private final String modelingUnit;
     private final String bpeVocab;
+    // Path to a w2v-BERT 2.0 CTC model exported from transformers.
+    private final String w2vBertCtc;
 
     private OfflineModelConfig(Builder builder) {
         this.transducer = builder.transducer;
@@ -56,6 +58,7 @@ public class OfflineModelConfig {
         this.modelType = builder.modelType;
         this.modelingUnit = builder.modelingUnit;
         this.bpeVocab = builder.bpeVocab;
+        this.w2vBertCtc = builder.w2vBertCtc;
     }
 
     public static Builder builder() {
@@ -162,6 +165,10 @@ public class OfflineModelConfig {
         return teleSpeech;
     }
 
+    public String getW2vBertCtc() {
+        return w2vBertCtc;
+    }
+
     public static class Builder {
         private OfflineParaformerModelConfig paraformer = OfflineParaformerModelConfig.builder().build();
         private OfflineTransducerModelConfig transducer = OfflineTransducerModelConfig.builder().build();
@@ -189,6 +196,7 @@ public class OfflineModelConfig {
         private String modelType = "";
         private String modelingUnit = "cjkchar";
         private String bpeVocab = "";
+        private String w2vBertCtc = "";
 
         public OfflineModelConfig build() {
             return new OfflineModelConfig(this);
@@ -316,6 +324,11 @@ public class OfflineModelConfig {
 
         public Builder setBpeVocab(String bpeVocab) {
             this.bpeVocab = bpeVocab;
+            return this;
+        }
+
+        public Builder setW2vBertCtc(String w2vBertCtc) {
+            this.w2vBertCtc = w2vBertCtc;
             return this;
         }
     }
