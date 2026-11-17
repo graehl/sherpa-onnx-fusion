@@ -1549,6 +1549,35 @@ SHERPA_ONNX_API void SherpaOnnxDecodeMultipleOfflineStreams(
     const SherpaOnnxOfflineStream **streams, int32_t n);
 
 /**
+ * @brief Run the model for one stream ahead of decoding it.
+ *
+ * Optional: a later SherpaOnnxDecodeOfflineStream() or
+ * SherpaOnnxDecodeMultipleOfflineStreams() then only searches, and runs the
+ * model itself for a stream that was not encoded. Does nothing for a model
+ * family that does not separate the two steps.
+ *
+ * @param recognizer A pointer returned by SherpaOnnxCreateOfflineRecognizer().
+ * @param stream A stream that has received its utterance.
+ */
+SHERPA_ONNX_API void SherpaOnnxEncodeOfflineStream(
+    const SherpaOnnxOfflineRecognizer *recognizer,
+    const SherpaOnnxOfflineStream *stream);
+
+/**
+ * @brief Run the model for several streams in one batch ahead of decoding.
+ *
+ * The streams may then be decoded in other batches; see
+ * SherpaOnnxEncodeOfflineStream().
+ *
+ * @param recognizer A pointer returned by SherpaOnnxCreateOfflineRecognizer().
+ * @param streams Array of @p n offline stream pointers.
+ * @param n Number of streams in @p streams.
+ */
+SHERPA_ONNX_API void SherpaOnnxEncodeMultipleOfflineStreams(
+    const SherpaOnnxOfflineRecognizer *recognizer,
+    const SherpaOnnxOfflineStream **streams, int32_t n);
+
+/**
  * @brief Recognition result for a non-streaming ASR stream.
  *
  * All pointers in this struct are owned by the result object returned from

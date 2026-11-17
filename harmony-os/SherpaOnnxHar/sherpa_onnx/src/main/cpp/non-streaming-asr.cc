@@ -5,6 +5,7 @@
 #include <memory>
 #include <sstream>
 #include <string>
+#include <vector>
 
 #include "macros.h"  // NOLINT
 #include "napi.h"    // NOLINT
@@ -1056,6 +1057,165 @@ static void DecodeOfflineStreamWrapper(const Napi::CallbackInfo &info) {
   SherpaOnnxDecodeOfflineStream(recognizer, stream);
 }
 
+// Run the model for a stream ahead of decoding it; see
+// SherpaOnnxEncodeOfflineStream().
+static void EncodeOfflineStreamWrapper(const Napi::CallbackInfo &info) {
+  Napi::Env env = info.Env();
+  if (info.Length() != 2) {
+    std::ostringstream os;
+    os << "Expect only 2 arguments. Given: " << info.Length();
+
+    Napi::TypeError::New(env, os.str()).ThrowAsJavaScriptException();
+
+    return;
+  }
+
+  if (!info[0].IsExternal()) {
+    Napi::TypeError::New(env,
+                         "Argument 0 should be an offline recognizer pointer.")
+        .ThrowAsJavaScriptException();
+
+    return;
+  }
+
+  if (!info[1].IsExternal()) {
+    Napi::TypeError::New(env, "Argument 1 should be an offline stream pointer.")
+        .ThrowAsJavaScriptException();
+
+    return;
+  }
+
+  const SherpaOnnxOfflineRecognizer *recognizer =
+      info[0].As<Napi::External<SherpaOnnxOfflineRecognizer>>().Data();
+
+  const SherpaOnnxOfflineStream *stream =
+      info[1].As<Napi::External<SherpaOnnxOfflineStream>>().Data();
+
+  SherpaOnnxEncodeOfflineStream(recognizer, stream);
+}
+
+static void EncodeMultipleOfflineStreamsWrapper(
+    const Napi::CallbackInfo &info) {
+  Napi::Env env = info.Env();
+  if (info.Length() != 2) {
+    std::ostringstream os;
+    os << "Expect only 2 arguments. Given: " << info.Length();
+
+    Napi::TypeError::New(env, os.str()).ThrowAsJavaScriptException();
+
+    return;
+  }
+
+  if (!info[0].IsExternal()) {
+    Napi::TypeError::New(env,
+                         "Argument 0 should be an offline recognizer pointer.")
+        .ThrowAsJavaScriptException();
+
+    return;
+  }
+
+  if (!info[1].IsArray()) {
+    Napi::TypeError::New(
+        env, "Argument 1 should be an array of offline stream pointers.")
+        .ThrowAsJavaScriptException();
+
+    return;
+  }
+
+  const SherpaOnnxOfflineRecognizer *recognizer =
+      info[0].As<Napi::External<SherpaOnnxOfflineRecognizer>>().Data();
+
+  Napi::Array arr = info[1].As<Napi::Array>();
+
+  std::vector<const SherpaOnnxOfflineStream *> streams;
+  streams.reserve(arr.Length());
+
+  for (uint32_t i = 0; i != arr.Length(); ++i) {
+    Napi::Value v = arr.Get(i);
+    if (!v.IsExternal()) {
+      std::ostringstream os;
+      os << "Element " << i << " should be an offline stream pointer.";
+
+      Napi::TypeError::New(env, os.str()).ThrowAsJavaScriptException();
+
+      return;
+    }
+
+    streams.push_back(v.As<Napi::External<SherpaOnnxOfflineStream>>().Data());
+  }
+
+  if (streams.empty()) {
+    return;
+  }
+
+  SherpaOnnxEncodeMultipleOfflineStreams(recognizer, streams.data(),
+                                         static_cast<int32_t>(streams.size()));
+}
+
+class EncodeOfflineStreamAsyncWorker : public Napi::AsyncWorker {
+ public:
+  EncodeOfflineStreamAsyncWorker(Napi::Env env,
+                                 const SherpaOnnxOfflineRecognizer *recognizer,
+                                 const SherpaOnnxOfflineStream *stream,
+                                 Napi::Promise::Deferred deferred)
+      : Napi::AsyncWorker(env),
+        recognizer_(recognizer),
+        stream_(stream),
+        deferred_(deferred) {}
+
+  void Execute() override {
+    try {
+      SherpaOnnxEncodeOfflineStream(recognizer_, stream_);
+    } catch (const std::exception &e) {
+      SetError(e.what());
+    }
+  }
+
+  void OnOK() override { deferred_.Resolve(Env().Undefined()); }
+
+  void OnError(const Napi::Error &e) override { deferred_.Reject(e.Value()); }
+
+ private:
+  const SherpaOnnxOfflineRecognizer *recognizer_;
+  const SherpaOnnxOfflineStream *stream_;
+  Napi::Promise::Deferred deferred_;
+};
+
+static Napi::Value EncodeOfflineStreamAsyncWrapper(
+    const Napi::CallbackInfo &info) {
+  Napi::Env env = info.Env();
+
+  if (info.Length() != 2) {
+    std::ostringstream os;
+    os << "Expect 2 arguments. Given: " << info.Length();
+    Napi::TypeError::New(env, os.str()).ThrowAsJavaScriptException();
+    return env.Null();
+  }
+
+  if (!info[0].IsExternal() || !info[1].IsExternal()) {
+    Napi::TypeError::New(env,
+                         "Expected recognizer and stream as external pointers")
+        .ThrowAsJavaScriptException();
+    return env.Null();
+  }
+
+  const SherpaOnnxOfflineRecognizer *recognizer =
+      info[0].As<Napi::External<SherpaOnnxOfflineRecognizer>>().Data();
+
+  const SherpaOnnxOfflineStream *stream =
+      info[1].As<Napi::External<SherpaOnnxOfflineStream>>().Data();
+
+  Napi::Promise::Deferred deferred = Napi::Promise::Deferred::New(env);
+
+  // no need to free worker by ourselves
+  auto worker =
+      new EncodeOfflineStreamAsyncWorker(env, recognizer, stream, deferred);
+
+  worker->Queue();
+
+  return deferred.Promise();
+}
+
 static Napi::String GetOfflineStreamResultAsJsonWrapper(
     const Napi::CallbackInfo &info) {
   Napi::Env env = info.Env();
@@ -1113,6 +1273,15 @@ void InitNonStreamingAsr(Napi::Env env, Napi::Object exports) {
 
   exports.Set(Napi::String::New(env, "decodeOfflineStreamAsync"),
               Napi::Function::New(env, DecodeOfflineStreamAsyncWrapper));
+
+  exports.Set(Napi::String::New(env, "encodeOfflineStream"),
+              Napi::Function::New(env, EncodeOfflineStreamWrapper));
+
+  exports.Set(Napi::String::New(env, "encodeMultipleOfflineStreams"),
+              Napi::Function::New(env, EncodeMultipleOfflineStreamsWrapper));
+
+  exports.Set(Napi::String::New(env, "encodeOfflineStreamAsync"),
+              Napi::Function::New(env, EncodeOfflineStreamAsyncWrapper));
 
   exports.Set(Napi::String::New(env, "offlineRecognizerSetConfig"),
               Napi::Function::New(env, OfflineRecognizerSetConfigWrapper));

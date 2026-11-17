@@ -636,6 +636,11 @@ type
     destructor Destroy; override;
     function CreateStream: TSherpaOnnxOfflineStream;
     procedure Decode(Stream: TSherpaOnnxOfflineStream);
+    { Run the model ahead of Decode, which then only searches. Does nothing
+      for a model family that does not separate the two steps. }
+    procedure Encode(Stream: TSherpaOnnxOfflineStream); overload;
+    { The same for several streams in one batch. }
+    procedure Encode(const Streams: array of TSherpaOnnxOfflineStream); overload;
     procedure SetConfig(Config: TSherpaOnnxOfflineRecognizerConfig);
     function GetResult(Stream: TSherpaOnnxOfflineStream): TSherpaOnnxOfflineRecognizerResult;
     property Config: TSherpaOnnxOfflineRecognizerConfig Read _Config;
@@ -1854,6 +1859,13 @@ procedure SherpaOnnxOfflineStreamSetOption(Stream: Pointer; Key: PAnsiChar;
 procedure SherpaOnnxDecodeOfflineStream(Recognizer: Pointer; Stream: Pointer); cdecl;
   external SherpaOnnxLibName;
 
+procedure SherpaOnnxEncodeOfflineStream(Recognizer: Pointer; Stream: Pointer); cdecl;
+  external SherpaOnnxLibName;
+
+procedure SherpaOnnxEncodeMultipleOfflineStreams(Recognizer: Pointer;
+  Streams: PPointer; N: cint32); cdecl;
+  external SherpaOnnxLibName;
+
 procedure SherpaOnnxOfflineRecognizerSetConfig(Recognizer: Pointer; Config: PSherpaOnnxOfflineRecognizerConfig); cdecl;
   external SherpaOnnxLibName;
 
@@ -2655,6 +2667,24 @@ end;
 procedure TSherpaOnnxOfflineRecognizer.Decode(Stream: TSherpaOnnxOfflineStream);
 begin
   SherpaOnnxDecodeOfflineStream(Self.Handle, Stream.Handle);
+end;
+
+procedure TSherpaOnnxOfflineRecognizer.Encode(Stream: TSherpaOnnxOfflineStream);
+begin
+  SherpaOnnxEncodeOfflineStream(Self.Handle, Stream.Handle);
+end;
+
+procedure TSherpaOnnxOfflineRecognizer.Encode(const Streams: array of TSherpaOnnxOfflineStream);
+var
+  Handles: array of Pointer;
+  I: Integer;
+begin
+  if Length(Streams) = 0 then
+    Exit;
+  SetLength(Handles, Length(Streams));
+  for I := 0 to High(Streams) do
+    Handles[I] := Streams[I].Handle;
+  SherpaOnnxEncodeMultipleOfflineStreams(Self.Handle, @Handles[0], Length(Handles));
 end;
 
 function TSherpaOnnxOfflineRecognizer.GetResult(Stream: TSherpaOnnxOfflineStream): TSherpaOnnxOfflineRecognizerResult;

@@ -742,6 +742,45 @@ Java_com_k2fsa_sherpa_onnx_OfflineRecognizer_decodeStreams(
 }
 
 SHERPA_ONNX_EXTERN_C
+JNIEXPORT void JNICALL Java_com_k2fsa_sherpa_onnx_OfflineRecognizer_encode(
+    JNIEnv *env, jobject /*obj*/, jlong ptr, jlong stream_ptr) {
+  SafeJNI(env, "OfflineRecognizer_encode", [&] {
+    if (!ValidatePointer(env, ptr, "OfflineRecognizer_encode",
+                         "OfflineRecognizer pointer is null.") ||
+        !ValidatePointer(env, stream_ptr, "OfflineRecognizer_encode",
+                         "OfflineStream pointer is null.")) {
+      return;
+    }
+
+    auto recognizer = reinterpret_cast<sherpa_onnx::OfflineRecognizer *>(ptr);
+    auto stream = reinterpret_cast<sherpa_onnx::OfflineStream *>(stream_ptr);
+    recognizer->EncodeStreams(&stream, 1);
+  });
+}
+
+SHERPA_ONNX_EXTERN_C
+JNIEXPORT void JNICALL
+Java_com_k2fsa_sherpa_onnx_OfflineRecognizer_encodeStreams(
+    JNIEnv *env, jobject /*obj*/, jlong ptr, jlongArray stream_ptrs) {
+  SafeJNI(env, "OfflineRecognizer_encode_streams", [&] {
+    if (!ValidatePointer(env, ptr, "OfflineRecognizer_encode_streams",
+                         "OfflineRecognizer pointer is null.")) {
+      return;
+    }
+
+    auto recognizer = reinterpret_cast<sherpa_onnx::OfflineRecognizer *>(ptr);
+
+    jlong *p = env->GetLongArrayElements(stream_ptrs, nullptr);
+    jsize n = env->GetArrayLength(stream_ptrs);
+
+    auto ss = reinterpret_cast<sherpa_onnx::OfflineStream **>(p);
+    recognizer->EncodeStreams(ss, n);
+
+    env->ReleaseLongArrayElements(stream_ptrs, p, JNI_ABORT);
+  });
+}
+
+SHERPA_ONNX_EXTERN_C
 JNIEXPORT jobject JNICALL
 Java_com_k2fsa_sherpa_onnx_OfflineRecognizer_getResult(JNIEnv *env,
                                                        jobject /*obj*/,

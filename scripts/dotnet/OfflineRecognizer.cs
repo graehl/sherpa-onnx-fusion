@@ -57,6 +57,26 @@ namespace SherpaOnnx
             Decode(_handle.Handle, ptrs, ptrs.Length);
         }
 
+        /// Runs the model for a stream ahead of Decode(), which then only
+        /// searches. Does nothing for a model family that does not separate
+        /// the two steps.
+        public void Encode(OfflineStream stream)
+        {
+            Encode(_handle.Handle, stream.Handle);
+        }
+
+        /// Runs the model for several streams in one batch ahead of Decode().
+        public void Encode(IEnumerable<OfflineStream> streams)
+        {
+            List<IntPtr> list = new List<IntPtr>();
+            foreach (OfflineStream s in streams)
+            {
+              list.Add(s.Handle);
+            }
+            IntPtr[] ptrs = list.ToArray();
+            Encode(_handle.Handle, ptrs, ptrs.Length);
+        }
+
         public void Dispose()
         {
             Cleanup();
@@ -97,6 +117,12 @@ namespace SherpaOnnx
 
         [DllImport(Dll.Filename, EntryPoint = "SherpaOnnxDecodeMultipleOfflineStreams")]
         private static extern void Decode(IntPtr handle, IntPtr[] streams, int n);
+
+        [DllImport(Dll.Filename, EntryPoint = "SherpaOnnxEncodeOfflineStream")]
+        private static extern void Encode(IntPtr handle, IntPtr stream);
+
+        [DllImport(Dll.Filename, EntryPoint = "SherpaOnnxEncodeMultipleOfflineStreams")]
+        private static extern void Encode(IntPtr handle, IntPtr[] streams, int n);
     }
 
 }

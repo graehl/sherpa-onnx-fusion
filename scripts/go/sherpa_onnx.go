@@ -1048,6 +1048,25 @@ func (recognizer *OfflineRecognizer) DecodeStreams(s []*OfflineStream) {
 	C.SherpaOnnxDecodeMultipleOfflineStreams(recognizer.impl, &ss[0], C.int(len(s)))
 }
 
+// Run the model for the offline stream ahead of decoding it. Optional: a
+// later Decode or DecodeStreams then only searches, and runs the model
+// itself for a stream that was not encoded. Does nothing for a model family
+// that does not separate the two steps.
+func (recognizer *OfflineRecognizer) Encode(s *OfflineStream) {
+	C.SherpaOnnxEncodeOfflineStream(recognizer.impl, s.impl)
+}
+
+// Run the model for multiple streams in one batch ahead of decoding them;
+// they may then be decoded in other batches. See Encode.
+func (recognizer *OfflineRecognizer) EncodeStreams(s []*OfflineStream) {
+	ss := make([]*C.struct_SherpaOnnxOfflineStream, len(s))
+	for i, v := range s {
+		ss[i] = v.impl
+	}
+
+	C.SherpaOnnxEncodeMultipleOfflineStreams(recognizer.impl, &ss[0], C.int(len(s)))
+}
+
 // Get the recognition result of the offline stream.
 func (s *OfflineStream) GetResult() *OfflineRecognizerResult {
 	p := C.SherpaOnnxGetOfflineStreamResult(s.impl)

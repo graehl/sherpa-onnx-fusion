@@ -754,6 +754,28 @@ impl OfflineRecognizer {
             sys::SherpaOnnxDecodeMultipleOfflineStreams(self.ptr, ptrs.as_ptr(), ptrs.len() as i32)
         }
     }
+
+    /// Run the model for one stream ahead of decoding it.
+    ///
+    /// Optional: a later [`decode`](Self::decode) or
+    /// [`decode_multiple_streams`](Self::decode_multiple_streams) then only
+    /// searches, and runs the model itself for a stream that was not encoded.
+    /// Does nothing for a model family that does not separate the two steps.
+    pub fn encode(&self, stream: &OfflineStream) {
+        unsafe { sys::SherpaOnnxEncodeOfflineStream(self.ptr, stream.ptr) }
+    }
+
+    /// Run the model for several streams in one batch ahead of decoding them;
+    /// they may then be decoded in other batches. See [`encode`](Self::encode).
+    pub fn encode_multiple_streams(&self, streams: &[&OfflineStream]) {
+        let ptrs: Vec<*const sys::OfflineStream> = streams
+            .iter()
+            .map(|s| s.ptr)
+            .collect();
+        unsafe {
+            sys::SherpaOnnxEncodeMultipleOfflineStreams(self.ptr, ptrs.as_ptr(), ptrs.len() as i32)
+        }
+    }
 }
 
 impl Drop for OfflineRecognizer {

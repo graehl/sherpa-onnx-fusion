@@ -44,6 +44,8 @@ set(exported_functions
   SherpaOnnxDestroyOfflineRecognizerResult
   SherpaOnnxDestroyOfflineStream
   SherpaOnnxDestroyOfflineStreamResultJson
+  SherpaOnnxEncodeMultipleOfflineStreams
+  SherpaOnnxEncodeOfflineStream
   SherpaOnnxGetOfflineStreamResult
   SherpaOnnxGetOfflineStreamResultAsJson
   SherpaOnnxOfflineStreamGetOption

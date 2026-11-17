@@ -818,6 +818,25 @@ void SherpaOnnxDecodeMultipleOfflineStreams(
   recognizer->impl->DecodeStreams(ss.data(), n);
 }
 
+void SherpaOnnxEncodeOfflineStream(
+    const SherpaOnnxOfflineRecognizer *recognizer,
+    const SherpaOnnxOfflineStream *stream) {
+  if (!recognizer || !stream) return;
+  sherpa_onnx::OfflineStream *s = stream->impl.get();
+  recognizer->impl->EncodeStreams(&s, 1);
+}
+
+void SherpaOnnxEncodeMultipleOfflineStreams(
+    const SherpaOnnxOfflineRecognizer *recognizer,
+    const SherpaOnnxOfflineStream **streams, int32_t n) {
+  if (!recognizer || !streams) return;
+  std::vector<sherpa_onnx::OfflineStream *> ss(n);
+  for (int32_t i = 0; i != n; ++i) {
+    ss[i] = streams[i]->impl.get();
+  }
+  recognizer->impl->EncodeStreams(ss.data(), n);
+}
+
 const SherpaOnnxOfflineRecognizerResult *SherpaOnnxGetOfflineStreamResult(
     const SherpaOnnxOfflineStream *stream) {
   if (!stream) return nullptr;

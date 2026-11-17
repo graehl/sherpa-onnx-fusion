@@ -53,10 +53,14 @@ class TestOfflineFusion(unittest.TestCase):
             **kwargs,
         )
 
-    def decode(self, recognizer: sherpa_onnx.OfflineRecognizer) -> str:
+    def decode(
+        self, recognizer: sherpa_onnx.OfflineRecognizer, encode: bool = False
+    ) -> str:
         samples, rate = read_wave(self.wav)
         s = recognizer.create_stream()
         s.accept_waveform(rate, samples)
+        if encode:
+            recognizer.encode_stream(s)
         recognizer.decode_stream(s)
         return s.result.text
 
@@ -87,6 +91,17 @@ class TestOfflineFusion(unittest.TestCase):
             )
         )
         self.assertNotEqual(heavy, no_lm)
+
+    def test_encode_ahead_of_decode(self):
+        recognizer = self.recognizer(decoding_method="prefix_beam_search")
+        self.assertEqual(self.decode(recognizer, encode=True), self.decode(recognizer))
+        samples, rate = read_wave(self.wav)
+        ss = [recognizer.create_stream() for _ in range(2)]
+        for s in ss:
+            s.accept_waveform(rate, samples)
+        recognizer.encode_streams(ss)
+        recognizer.decode_streams(ss)
+        self.assertEqual(ss[0].result.text, ss[1].result.text)
 
     def test_bad_options_json_fails_creation(self):
         with self.assertRaises(ValueError) as e:

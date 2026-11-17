@@ -285,6 +285,17 @@ extern "C" {
         n: i32,
     );
 
+    pub fn SherpaOnnxEncodeOfflineStream(
+        recognizer: *const OfflineRecognizer,
+        stream: *const OfflineStream,
+    );
+
+    pub fn SherpaOnnxEncodeMultipleOfflineStreams(
+        recognizer: *const OfflineRecognizer,
+        streams: *const *const OfflineStream,
+        n: i32,
+    );
+
     pub fn SherpaOnnxGetOfflineStreamResultAsJson(stream: *const OfflineStream) -> *const c_char;
 
     pub fn SherpaOnnxDestroyOfflineStreamResultJson(s: *const c_char);

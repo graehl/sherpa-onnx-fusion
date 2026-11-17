@@ -1612,6 +1612,24 @@ typedef DecodeOfflineStream =
       Pointer<SherpaOnnxOfflineStream>,
     );
 
+typedef EncodeOfflineStreamNative = DecodeOfflineStreamNative;
+
+typedef EncodeOfflineStream = DecodeOfflineStream;
+
+typedef EncodeMultipleOfflineStreamsNative =
+    Void Function(
+      Pointer<SherpaOnnxOfflineRecognizer>,
+      Pointer<Pointer<SherpaOnnxOfflineStream>>,
+      Int32,
+    );
+
+typedef EncodeMultipleOfflineStreams =
+    void Function(
+      Pointer<SherpaOnnxOfflineRecognizer>,
+      Pointer<Pointer<SherpaOnnxOfflineStream>>,
+      int,
+    );
+
 typedef GetOfflineStreamResultAsJsonNative =
     Pointer<Utf8> Function(Pointer<SherpaOnnxOfflineStream>);
 
@@ -2211,6 +2229,8 @@ class SherpaOnnxBindings {
 
   static OfflineStreamHasOption? offlineStreamHasOption;
   static DecodeOfflineStream? decodeOfflineStream;
+  static EncodeOfflineStream? encodeOfflineStream;
+  static EncodeMultipleOfflineStreams? encodeMultipleOfflineStreams;
   static GetOfflineStreamResultAsJson? getOfflineStreamResultAsJson;
   static DestroyOfflineStreamResultJson? destroyOfflineStreamResultJson;
 
@@ -2815,6 +2835,18 @@ class SherpaOnnxBindings {
     decodeOfflineStream ??= dynamicLibrary
         .lookup<NativeFunction<DecodeOfflineStreamNative>>(
           'SherpaOnnxDecodeOfflineStream',
+        )
+        .asFunction();
+
+    encodeOfflineStream ??= dynamicLibrary
+        .lookup<NativeFunction<EncodeOfflineStreamNative>>(
+          'SherpaOnnxEncodeOfflineStream',
+        )
+        .asFunction();
+
+    encodeMultipleOfflineStreams ??= dynamicLibrary
+        .lookup<NativeFunction<EncodeMultipleOfflineStreamsNative>>(
+          'SherpaOnnxEncodeMultipleOfflineStreams',
         )
         .asFunction();
 

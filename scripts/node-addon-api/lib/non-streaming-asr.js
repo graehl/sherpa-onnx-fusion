@@ -163,6 +163,43 @@ class OfflineRecognizer {
   }
 
   /**
+   * Run the model for a stream ahead of decoding it (synchronous).
+   *
+   * Optional: a later decode() then only searches, and runs the model itself
+   * for a stream that was not encoded. Does nothing for a model family that
+   * does not separate the two steps.
+   * @param {OfflineStream} stream
+   */
+  encode(stream) {
+    addon.encodeOfflineStream(this.handle, stream.handle);
+  }
+
+  /**
+   * Run the model for several streams in one batch ahead of decoding them;
+   * see encode().
+   * @param {OfflineStream[]} streams
+   */
+  encodeStreams(streams) {
+    const handles = streams.map((stream) => {
+      if (!(stream instanceof OfflineStream)) {
+        throw new TypeError('Every element should be an OfflineStream');
+      }
+      return stream.handle;
+    });
+    addon.encodeMultipleOfflineStreams(this.handle, handles);
+  }
+
+  /**
+   * Run the model for a stream ahead of decoding it, asynchronously
+   * (non-blocking); see encode().
+   * @param {OfflineStream} stream
+   * @returns {Promise<void>}
+   */
+  async encodeAsync(stream) {
+    await addon.encodeOfflineStreamAsync(this.handle, stream.handle);
+  }
+
+  /**
    * Get recognition result for a stream.
    * @param {OfflineStream} stream
    * @returns {OfflineRecognizerResult}

@@ -85,6 +85,24 @@ class OfflineRecognizer {
     decodeFn?.callAsFunction(handle, stream.ptr as JSObject);
   }
 
+  /// Run the model for [stream] ahead of decoding it. Optional: a later
+  /// [decode] then only searches.
+  void encode(OfflineStream stream) {
+    final handle = ptr as JSObject;
+    final encodeFn = handle.getProperty('encode'.toJS) as JSFunction?;
+    encodeFn?.callAsFunction(handle, stream.ptr as JSObject);
+  }
+
+  /// Run the model for [streams] in one batch ahead of decoding; see
+  /// [encode].
+  void encodeStreams(List<OfflineStream> streams) {
+    final handle = ptr as JSObject;
+    final encodeStreamsFn =
+        handle.getProperty('encodeStreams'.toJS) as JSFunction?;
+    final jsStreams = [for (final s in streams) s.ptr as JSObject].toJS;
+    encodeStreamsFn?.callAsFunction(handle, jsStreams);
+  }
+
   OfflineRecognizerResult getResult(OfflineStream stream) {
     final handle = ptr as JSObject;
     final getResultFn = handle.getProperty('getResult'.toJS) as JSFunction?;
