@@ -299,18 +299,17 @@ class OfflineStream::Impl {
 
   const ContextGraphPtr &GetContextGraph() const { return context_graph_; }
 
-  void SetEncoderOutput(std::vector<float> values, int32_t num_frames) {
-    encoder_output_ = std::move(values);
-    encoder_output_frames_ = num_frames;
-    has_encoder_output_ = true;
+  void SetEncoderOutput(std::shared_ptr<const EncoderOutputBatch> batch,
+                        int32_t item) {
+    encoder_output_ = std::move(batch);
+    encoder_output_item_ = item;
   }
 
-  bool HasEncoderOutput() const { return has_encoder_output_; }
+  bool HasEncoderOutput() const { return encoder_output_ != nullptr; }
 
-  std::vector<float> TakeEncoderOutput(int32_t *num_frames) {
-    *num_frames = encoder_output_frames_;
-    has_encoder_output_ = false;
-    encoder_output_frames_ = 0;
+  std::shared_ptr<const EncoderOutputBatch> TakeEncoderOutput(int32_t *item) {
+    *item = encoder_output_item_;
+    encoder_output_item_ = 0;
     return std::move(encoder_output_);
   }
 
@@ -412,9 +411,8 @@ class OfflineStream::Impl {
 
   std::unordered_map<std::string, std::string> options_;
 
-  std::vector<float> encoder_output_;
-  int32_t encoder_output_frames_ = 0;
-  bool has_encoder_output_ = false;
+  std::shared_ptr<const EncoderOutputBatch> encoder_output_;
+  int32_t encoder_output_item_ = 0;
 };
 
 OfflineStream::OfflineStream(const FeatureExtractorConfig &config /*= {}*/,
@@ -463,17 +461,18 @@ const OfflineRecognitionResult &OfflineStream::GetResult() const {
   return impl_->GetResult();
 }
 
-void OfflineStream::SetEncoderOutput(std::vector<float> values,
-                                     int32_t num_frames) {
-  impl_->SetEncoderOutput(std::move(values), num_frames);
+void OfflineStream::SetEncoderOutput(
+    std::shared_ptr<const EncoderOutputBatch> batch, int32_t item) {
+  impl_->SetEncoderOutput(std::move(batch), item);
 }
 
 bool OfflineStream::HasEncoderOutput() const {
   return impl_->HasEncoderOutput();
 }
 
-std::vector<float> OfflineStream::TakeEncoderOutput(int32_t *num_frames) {
-  return impl_->TakeEncoderOutput(num_frames);
+std::shared_ptr<const EncoderOutputBatch> OfflineStream::TakeEncoderOutput(
+    int32_t *item) {
+  return impl_->TakeEncoderOutput(item);
 }
 
 void OfflineStream::SetOption(const std::string &key,

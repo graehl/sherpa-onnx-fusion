@@ -348,8 +348,11 @@ std::vector<std::vector<float>> EncodeAll(
   std::vector<std::vector<float>> out;
   for (auto *s : ss) {
     EXPECT_TRUE(s->HasEncoderOutput());
-    int32_t frames = 0;
-    out.push_back(s->TakeEncoderOutput(&frames));
+    int32_t item = 0;
+    auto batch = s->TakeEncoderOutput(&item);
+    const float *row = batch->Row(item);
+    out.emplace_back(
+        row, row + static_cast<size_t>(batch->Frames(item)) * batch->Dim());
   }
   return out;
 }
@@ -463,6 +466,61 @@ TEST(OfflineStreamEncoder, PadsInputsToTheAllowedLengths) {
   EXPECT_EQ(rounded.padded_lengths, std::vector<int64_t>{3200});
   LocalEncoder plain_whole;
   ExpectNear(out, EncodeAll({}, true, nullptr, &plain_whole), 0);
+}
+
+// A batch of three items, (3, 4, 2), whose item i has i + 2 valid frames,
+// value 10 * item + frame, and nonzero padding.
+std::shared_ptr<const EncoderOutputBatch> ThreeItems(OrtAllocator *allocator) {
+  std::array<int64_t, 3> shape = {3, 4, 2};
+  Ort::Value values =
+      Ort::Value::CreateTensor<float>(allocator, shape.data(), shape.size());
+  float *p = values.GetTensorMutableData<float>();
+  std::fill(p, p + 24, -7.0f);
+  std::array<int64_t, 1> length_shape = {3};
+  Ort::Value lengths = Ort::Value::CreateTensor<int64_t>(
+      allocator, length_shape.data(), length_shape.size());
+  for (int64_t i = 0; i != 3; ++i) {
+    lengths.GetTensorMutableData<int64_t>()[i] = i + 2;
+    for (int64_t t = 0; t != i + 2; ++t) {
+      p[(i * 4 + t) * 2] = p[(i * 4 + t) * 2 + 1] = 10.0f * i + t;
+    }
+  }
+  return std::make_shared<const EncoderOutputBatch>(std::move(values), lengths);
+}
+
+TEST(TakeEncoderOutputs, ViewsConsecutiveItemsAndCopiesOtherwise) {
+  Ort::AllocatorWithDefaultOptions allocator;
+  FeatureExtractorConfig feat;
+  auto batch = ThreeItems(allocator);
+  std::vector<std::unique_ptr<OfflineStream>> streams;
+  for (int i = 0; i != 3; ++i) {
+    streams.push_back(std::make_unique<OfflineStream>(feat));
+  }
+
+  // Items 1 and 2, in order: the batch's own rows.
+  for (int i = 1; i != 3; ++i) streams[i]->SetEncoderOutput(batch, i);
+  OfflineStream *tail[] = {streams[1].get(), streams[2].get()};
+  auto view = TakeEncoderOutputs(tail, 2, allocator);
+  EXPECT_EQ(view.values.GetTensorData<float>(), batch->Row(1));
+  EXPECT_EQ(view.values.GetTensorTypeAndShapeInfo().GetShape(),
+            (std::vector<int64_t>{2, 4, 2}));
+  EXPECT_EQ(view.lengths.GetTensorData<int64_t>()[1], 4);
+  EXPECT_FALSE(streams[1]->HasEncoderOutput());
+  ASSERT_EQ(view.batches.size(), 1u);
+
+  // Items 2 and 0: a padded copy, padding zeroed.
+  streams[0]->SetEncoderOutput(batch, 2);
+  streams[1]->SetEncoderOutput(batch, 0);
+  OfflineStream *swapped[] = {streams[0].get(), streams[1].get()};
+  auto copy = TakeEncoderOutputs(swapped, 2, allocator);
+  EXPECT_NE(copy.values.GetTensorData<float>(), batch->Row(2));
+  EXPECT_EQ(copy.values.GetTensorTypeAndShapeInfo().GetShape(),
+            (std::vector<int64_t>{2, 4, 2}));
+  const float *c = copy.values.GetTensorData<float>();
+  EXPECT_EQ(c[3 * 2], 23.0f);       // item 2, frame 3
+  EXPECT_EQ(c[(4 + 1) * 2], 1.0f);  // item 0, frame 1
+  EXPECT_EQ(c[(4 + 2) * 2], 0.0f);  // item 0's padding
+  EXPECT_TRUE(copy.batches.empty());
 }
 
 }  // namespace sherpa_onnx

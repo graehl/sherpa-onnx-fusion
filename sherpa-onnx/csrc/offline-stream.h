@@ -94,6 +94,7 @@ struct OmnilingualAsrTag {};
 struct SpeakerDiarizationTag {
   int32_t sample_rate = 16000;
 };
+class EncoderOutputBatch;
 
 class OfflineStream {
  public:
@@ -143,12 +144,15 @@ class OfflineStream {
   const ContextGraphPtr &GetContextGraph() const;
 
   // The model's output for this stream when it is computed ahead of the
-  // search, by OfflineRecognizer::EncodeStreams. "values" is
-  // (num_frames, dim), flattened; for a CTC model, log probabilities.
-  void SetEncoderOutput(std::vector<float> values, int32_t num_frames);
+  // search, by OfflineRecognizer::EncodeStreams: item "item" of "batch",
+  // which the stream shares with the batch's other streams, so nothing is
+  // copied (see encoder-output.h).
+  void SetEncoderOutput(std::shared_ptr<const EncoderOutputBatch> batch,
+                        int32_t item);
   bool HasEncoderOutput() const;
-  // Moves the output out of the stream, which then has none.
-  std::vector<float> TakeEncoderOutput(int32_t *num_frames);
+  // Moves the output out of the stream, which then has none, and sets
+  // *item to the stream's item in the returned batch.
+  std::shared_ptr<const EncoderOutputBatch> TakeEncoderOutput(int32_t *item);
 
   // Generic per-stream option mechanism (key-value string pairs).
   void SetOption(const std::string &key, const std::string &value);

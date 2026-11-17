@@ -38,6 +38,17 @@ one batch.
 - **Timing.** It reports the recognizer's own time, excluding loading and
   `--warm-up` decodes; `--pause-seconds` leaves time to attach a monitor.
 
+## Encoder output kept by reference
+
+When the model runs ahead of the search, each stream shares its encoder
+call's output (`EncoderOutputBatch`, `encoder-output.h`) and keeps its
+item's index; nothing is copied into the stream, and the output is freed
+when its last stream is searched. A search call whose streams are
+consecutive items of one call, in order, reads that output in place
+(`TakeEncoderOutputs`); any other mix is copied once into a padded tensor.
+A call's padding, and windows of other utterances in the same call, stay
+alive until its last stream is searched.
+
 ## The check
 
 [`repro/check_parallel.py`](../repro/check_parallel.py) runs a CTC model, a
