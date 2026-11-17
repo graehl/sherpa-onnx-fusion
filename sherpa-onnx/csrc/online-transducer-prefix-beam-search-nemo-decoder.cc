@@ -8,6 +8,7 @@
 #include <utility>
 #include <vector>
 
+#include "sherpa-onnx/csrc/keep-alive.h"
 #include "sherpa-onnx/csrc/nemo-transducer-prefix-segment.h"
 #include "sherpa-onnx/csrc/online-stream.h"
 
@@ -24,9 +25,10 @@ Decoder::OnlineTransducerPrefixBeamSearchNeMoDecoder(
     int32_t max_active, const SymbolTable &symbol_table, float blank_penalty)
     : config_(config),
       max_active_(max_active),
-      fusion_(config, symbol_table, model->VocabSize() - 1, model->VocabSize()),
+      fusion_(std::make_shared<TransducerFusion>(
+          config, symbol_table, model->VocabSize() - 1, model->VocabSize())),
       blank_penalty_(blank_penalty),
-      calls_(std::make_unique<NeMoTransducerCalls>()) {
+      calls_(std::make_shared<NeMoTransducerCalls>()) {
   // NOLINTEND
   calls_->run_decoder = [model](Ort::Value tokens,
                                 std::vector<Ort::Value> states) {
@@ -65,8 +67,11 @@ void OnlineTransducerPrefixBeamSearchNeMoDecoder::Decode(Ort::Value encoder_out,
   for (int32_t b = 0; b != n; ++b) {
     OnlineTransducerDecoderResult &r = ss[b]->GetResult();
     if (r.prefix_segment == nullptr) {
-      r.prefix_segment = std::make_shared<NeMoTransducerPrefixSegment>(
-          calls_.get(), &fusion_, config_, max_active_, blank_penalty_);
+      r.prefix_segment =
+          KeepingAlive(std::make_unique<NeMoTransducerPrefixSegment>(
+                           calls_.get(), fusion_.get(), config_, max_active_,
+                           blank_penalty_),
+                       fusion_, calls_);
     }
     r.prefix_segment->Decode(
         p + static_cast<size_t>(b) * num_frames * encoder_dim, num_frames,

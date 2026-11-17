@@ -44,7 +44,8 @@ class OnlineCtcPrefixBeamSearchDecoder : public OnlineCtcDecoder {
   CtcPrefixSearchOptions options_;
   std::mutex vocabulary_mutex_;
   std::shared_ptr<CtcSearchVocabulary> vocabulary_;
-  std::vector<std::unique_ptr<Scorer>> scorers_;
+  // Shared with each stream's search, which may outlive the decoder.
+  std::shared_ptr<std::vector<std::unique_ptr<Scorer>>> scorers_;
   std::vector<Scorer *> scorer_pointers_;
   std::vector<float> weights_;
 };

@@ -208,6 +208,49 @@ TEST(OnlineCtcPrefixBeamSearchDecoder, RejectedFinalClearsPartialOutput) {
   EXPECT_EQ(results[0].num_trailing_blanks, 2);
 }
 
+int32_t live_counted_scorers = 0;
+
+class CountedScorer : public BigramTableScorer {
+ public:
+  CountedScorer() : BigramTableScorer(ScorerUnit::kAsrToken, 0.0f) {
+    ++live_counted_scorers;
+  }
+  ~CountedScorer() override { --live_counted_scorers; }
+};
+
+class CountedScorerFactory : public ScorerFactory {
+ public:
+  std::unique_ptr<Scorer> Create(const CommonScorerOptions & /*common*/,
+                                 const std::string & /*extra*/) const override {
+    return std::make_unique<CountedScorer>();
+  }
+};
+
+// A binding may destroy a recognizer before its streams; a stream's search
+// still frees its scorer states through the scorers.
+TEST(OnlineCtcPrefixBeamSearchDecoder, StreamMayOutliveTheDecoder) {
+  RegisterScorerFactory("test-counted",
+                        std::make_unique<CountedScorerFactory>());
+  SymbolTable symbol_table(kTokens, false);
+  FusionConfig config;
+  config.scorers.resize(1);
+  config.scorers[0].type = "test-counted";
+  auto stream = std::make_unique<OnlineStream>();
+  OnlineStream *streams[] = {stream.get()};
+  std::vector<float> samples(16000, 0.0f);
+  stream->AcceptWaveform(16000, samples.data(), samples.size());
+  {
+    OnlineCtcPrefixBeamSearchDecoder decoder(config, 4, symbol_table, 0);
+    std::vector<OnlineCtcDecoderResult> results(1);
+    std::vector<float> frame(kVocabSize, -20.0f);
+    frame[1] = 0.0f;
+    decoder.Decode(frame.data(), 1, 1, kVocabSize, &results, streams, 1);
+  }
+  EXPECT_EQ(live_counted_scorers, 1);
+  stream.reset();
+  EXPECT_EQ(live_counted_scorers, 0);
+}
+
 TEST(OnlineCtcPrefixBeamSearchDecoder, GraphAndPrefixSearchAreExclusive) {
   OfflineRecognizerConfig offline;
   offline.decoding_method = "prefix_beam_search";

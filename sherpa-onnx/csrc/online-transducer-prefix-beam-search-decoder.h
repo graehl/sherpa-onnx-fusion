@@ -5,6 +5,7 @@
 #ifndef SHERPA_ONNX_CSRC_ONLINE_TRANSDUCER_PREFIX_BEAM_SEARCH_DECODER_H_
 #define SHERPA_ONNX_CSRC_ONLINE_TRANSDUCER_PREFIX_BEAM_SEARCH_DECODER_H_
 
+#include <memory>
 #include <vector>
 
 #include "sherpa-onnx/csrc/fusion-config.h"
@@ -41,7 +42,8 @@ class OnlineTransducerPrefixBeamSearchDecoder : public OnlineTransducerDecoder {
         options_(MakeTransducerPrefixSearchOptions(
             config, max_active, TransducerTopology::kOneSymbolPerFrame,
             model->ContextSize())),
-        fusion_(config, symbol_table, 0, model->VocabSize()),
+        fusion_(std::make_shared<TransducerFusion>(config, symbol_table, 0,
+                                                   model->VocabSize())),
         blank_penalty_(blank_penalty) {
     options_.blank_like_token = UnknownTokenAsBlank(config, symbol_table);
   }
@@ -59,7 +61,8 @@ class OnlineTransducerPrefixBeamSearchDecoder : public OnlineTransducerDecoder {
  private:
   OnlineTransducerModel *model_;
   TransducerPrefixSearchOptions options_;
-  TransducerFusion fusion_;
+  // Shared with each stream's search, which may outlive the decoder.
+  std::shared_ptr<TransducerFusion> fusion_;
   float blank_penalty_;
 };
 
