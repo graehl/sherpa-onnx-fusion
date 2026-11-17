@@ -17,7 +17,7 @@ Word error rate in percent. Every recognizer here can be downloaded.
 
 | Recognizer, test set | Language model | Greedy | Best k2-fsa sherpa-onnx decoder with the LM | Prefix search, no LM | Prefix search with the LM | RTF greedy | RTF prefix search, no LM | RTF with the LM | RTF k2-fsa decoder with the LM |
 |---|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| Vietnamese Parakeet CTC 0.6B (NVIDIA, int8), FLEURS test, 857 clips * | character 8-gram | 9.27 | not supported (a graph only, and not for NeMo CTC models) | 9.09 | 6.30 | 0.030 | 0.028 | 0.030 | – |
+| Vietnamese Parakeet CTC 0.6B (NVIDIA, int8), FLEURS test, 857 clips * | character 8-gram | 9.27 | not supported (graph only, and not for NeMo CTC models) | 9.09 | 6.30 | 0.030 | 0.028 | 0.030 | – |
 | English zipformer CTC, all 2,939 LibriSpeech test-other recordings ([recipe](repro/)) | published character 8-gram from the LibriSpeech LM text (16 MB) | 5.65 | 5.39 (k2-fsa's word-3-gram graph released with the model, 334 MB) | 5.65 | 5.11 | 0.015 | 0.015 | 0.016 | 0.019 |
 | the same, 600 of those recordings * | public LibriSpeech LSTM over its tokens (icefall's `rnn_lm`, 388 MB) | 5.63 | not supported (no RNN LM for CTC models) | 5.59 | 4.45 | 0.021 | 0.015 | 0.13 | – |
 | Vietnamese zipformer transducer (gipformer 1.5, 68M), FLEURS test, 857 clips * | 4-gram over the recognizer's tokens | 5.59 | not supported (no n-gram LM for transducers) | 5.49 | 5.23 | – | 0.021 | 0.021 | – |
@@ -52,9 +52,6 @@ fused on the CTC model reads 0.13 under the rough conditions.
   recognizer's own tokens and a character n-gram from the same text give
   the same WER (4.91 each; 126 MB and 37 MB), and the LSTM is better than
   either.
-- **A private recognizer.** On a Vietnamese CTC model that is not public
-  (300 FLEURS test clips) an 8-gram of the same kind takes greedy's 12.05
-  to 8.14, and a character LSTM to 8.28.
 - **A compiled graph against a scorer.** For a CTC model the way k2-fsa
   sherpa-onnx takes an n-gram is a decoding graph built ahead of time. The same character
   3-gram is 30 KB as a KenLM file and 417 MB compiled, with the same WER
@@ -73,51 +70,36 @@ test set's size. The topic gives settings and paired tests (§ Fusion on a
 public CTC model, § Fusion on a transducer, § Scorers over the recognizer's
 tokens, § Fusion on RNN-T and TDT, § Matching the existing decoders).
 
-## What the fork adds
+## In this fork
+
+### Search and LM fusion
 
 - `--decoding-method=prefix_beam_search` for offline and streaming CTC
   models, offline and streaming stateless-decoder transducers (zipformer),
   and offline NeMo RNN-T and TDT models. CTC can sum over alignments or take
   the best.
+- Scorers fused during the search, several at once with independent
+  weights: a KenLM character n-gram (`-DSHERPA_ONNX_ENABLE_KENLM=ON`, off by
+  default because KenLM is LGPL) and an ONNX LSTM or GRU over characters or
+  over the recognizer's tokens, configured on the command line
+  (`--scorer.type=kenlm --scorer.model=lm.bin`, or `--scorer.N.<option>` for
+  several) or from a JSON file
+  ([option collections](topics/json-option-collections.md)).
+- An LSTM on a GPU (`--scorer.N.provider=cuda`) keeps its recurrent states
+  there. With icefall's LibriSpeech LSTM fused into the English CTC model,
+  200 test-other recordings decoded at RTF 0.0014 with the LSTM on the GPU
+  against 0.0112 with it on the CPU, 8 times faster, at the best of a sweep
+  of batch sizes and threads on one RTX PRO 6000
+  ([bulk decoding](topics/bulk-decoding.md#throughput-with-an-lstm-on-one-gpu)).
 - Settings that reproduce the existing decoders exactly:
   `--modified-beam-search-rules` for `modified_beam_search`, and a scorer's
   `rescore` option for RNN-LM rescoring. The topic's "Goals reached" table
   has the measurements.
-- Scorers fused during the search, several at once with independent
-  weights: a KenLM character n-gram (`-DSHERPA_ONNX_ENABLE_KENLM=ON`, off by
-  default because KenLM is LGPL) and an ONNX LSTM or GRU over characters or
-  over the recognizer's tokens. An LSTM on a GPU
-  (`--scorer.N.provider=cuda`) keeps its recurrent states there; with
-  icefall's LibriSpeech LSTM fused into the English CTC model, 200
-  test-other recordings decoded at RTF 0.0014 with the LSTM on the GPU
-  against 0.0112 with it on the CPU, 8 times faster, at the best of a
-  sweep of batch sizes and threads on one RTX PRO 6000
-  ([bulk decoding](topics/bulk-decoding.md#throughput-with-an-lstm-on-one-gpu)).
-- Scorer configuration on the command line (`--scorer.type=kenlm
-  --scorer.model=lm.bin`, or `--scorer.N.<option>` for several) and from a
-  JSON file ([option collections](topics/json-option-collections.md)).
 - A multi-utterance CTC decoder that admits, feeds, finishes, and cancels
   utterances individually while batching scorer calls across them.
-- [Bulk decoding](topics/bulk-decoding.md) in `sherpa-onnx-offline-parallel`: one JSON line per
-  recording naming its position in the list, with an error line for a file
-  that cannot be read, printed as each finishes or in list order
-  (`--ordered-output`); batches of similar length by default
-  (`--sort-by-length`) under a padded-audio limit (`--max-batch-seconds`);
-  and, for CTC models and the zipformer and NeMo transducers, search
-  threads sized apart from the threads that run the model
-  (`--decode-threads`), and search calls sized apart from model batches
-  (`--search-batch-size`). Scorers
-  are shared across threads. `sherpa-onnx-offline` itself still pads every
-  file on its command line into one batch.
-- Batched decoding for w2v-BERT and omnilingual CTC exports that take
-  `input_lengths`, whose fp32 results then do not depend on the batch.
-- w2v-BERT CTC models in LiteRT's `.tflite` form
-  (`-DSHERPA_ONNX_ENABLE_LITERT=ON`, off by default), including a graph
-  compiled for a Pixel 10 or 11, run on its TPU with `--provider=npu`
-  ([topic](topics/litert-backend.md)). A graph has fixed
-  lengths, one per signature, and several graphs may be given: an
-  utterance runs in the shortest length that holds it, a longer one in
-  blended overlapping windows (`--litert-window`).
+
+### Models and encoding
+
 - [Chunked encoding](topics/chunked-encoding.md), off by default: an
   utterance longer than `--encoder.window.seconds` is encoded in
   overlapping windows, batched, and joined per output frame before one
@@ -125,19 +107,50 @@ tokens, § Fusion on RNN-T and TDT, § Matching the existing decoders).
   RNN-T and TDT; `--encoder.lengths` and `--encoder.pad-to` keep encoder
   inputs to a few lengths for a GPU or NPU. On a 92 s recording, 20 s
   windows cut peak memory 1.6 to 3.7 times on three public models.
-- [repro/](repro/README.md): pinned public downloads and a script that
-  reruns the English CTC comparisons above, and a check that threads,
-  search threads and sorting do not change the bulk program's output.
+- w2v-BERT CTC models in LiteRT's `.tflite` form
+  (`-DSHERPA_ONNX_ENABLE_LITERT=ON`, off by default), including a graph
+  compiled for a Pixel 10 or 11, run on its TPU with `--provider=npu`
+  ([topic](topics/litert-backend.md)). A graph has fixed
+  lengths, one per signature, and several graphs may be given: an
+  utterance runs in the shortest length that holds it, a longer one in
+  blended overlapping windows (`--litert-window`).
+- Batched decoding for w2v-BERT and omnilingual CTC exports that take
+  `input_lengths`, whose fp32 results then do not depend on the batch.
 
-Every [language binding](topics/language-bindings.md) exposes these options: the C and C++ APIs, Python,
-Java and Kotlin, Go, Rust, C#, Pascal, Swift, Node.js, HarmonyOS,
-WebAssembly and Dart. Scorers and search settings are typed fields of a
-`fusion` config on both recognizer configs, the encoder and LiteRT
-settings and the w2v-BERT model are fields of the offline model config,
-and offline recognizers have encode methods beside their decode methods.
-Any command-line option can also be given as `options_json`, a JSON
-object applied after the typed fields. The multi-utterance decoder and the
-bulk program's scheduling have no binding.
+### Bulk decoding
+
+[`sherpa-onnx-offline-parallel`](topics/bulk-decoding.md) decodes a list
+of recordings; `sherpa-onnx-offline` itself still pads every file on its
+command line into one batch.
+
+- One JSON line per recording naming its position in the list, with an
+  error line for a file that cannot be read, printed as each finishes or
+  in list order (`--ordered-output`).
+- Batches of similar length by default (`--sort-by-length`) under a
+  padded-audio limit (`--max-batch-seconds`).
+- For CTC models and the zipformer and NeMo transducers, search threads
+  sized apart from the threads that run the model (`--decode-threads`),
+  and search calls sized apart from model batches (`--search-batch-size`).
+  Scorers are shared across threads.
+
+### Language bindings
+
+Every [language binding](topics/language-bindings.md) exposes these
+options: the C and C++ APIs, Python, Java and Kotlin, Go, Rust, C#,
+Pascal, Swift, Node.js, HarmonyOS, WebAssembly and Dart. Scorers and
+search settings are typed fields of a `fusion` config on both recognizer
+configs, the encoder and LiteRT settings and the w2v-BERT model are fields
+of the offline model config, and offline recognizers have encode methods
+beside their decode methods. Any command-line option can also be given as
+`options_json`, a JSON object applied after the typed fields. The
+multi-utterance decoder and the bulk program's scheduling have no binding.
+
+### Reproducing the results
+
+[repro/](repro/README.md) holds pinned public downloads and a script that
+reruns the English CTC comparisons above, and a check that threads, search
+threads, search calls and sorting do not change the bulk program's
+output.
 
 ## Known defect characterized, not fixed
 
