@@ -33,7 +33,7 @@ search.
   overhead between about 35 and 200 seconds of audio depending on whether
   shapes repeat, so the per-shape cost has to be settled first. Before
   shape enters the model, learn what is cached and for how long (graehl,
-  2026-11-15). Within a process nothing is: the cost recurs on every
+  2026-11-15). In the measured process the cost recurred on every
   change of shape from the previous call, seen shape or not. So the term
   to model is "this batch's shape differs from the last one's", which
   depends on the order of batches and on rounding lengths up to shared
@@ -67,6 +67,33 @@ search.
 - **Search time.** With the prefix search and a scorer the search is a
   larger share and has its own batching, so the encoder model alone will
   overstate the gain.
+
+## Windowed inputs and one packer
+
+User-directed (graehl, 2026-11-17): use one batch packer for whole
+utterances and encoder windows, including the parallel offline driver.
+Form windows before sorting and packing them. Keep each window's source
+utterance and output offset independently of its execution order.
+
+The physical slot is one row of the encoder input batch, whose time axis
+is rounded to an allowed length (a bucket). When the source is at least
+that long, fill the slot with real context. Rounding an 11 s window to a
+12 s bucket should encode 12 s of audio. This length check is the difference from packing a
+whole utterance; it does not justify a separate packer. For exports without
+`input_lengths` or `x_lens`, fully occupied slots are the preferred default,
+except for very short utterances. Batchability and padding-mask support
+must be separate capabilities.
+
+Overlap permits some movement toward silence without changing physical
+length. Bound that movement so window centers do not move too far; full
+occupancy takes priority over silence anchoring. The benefit of silence
+anchoring remains unmeasured. LiteRT shapes must come from the supplied
+prebuilt graphs, including their batch widths. Batch width one remains the
+single-user default; larger widths are intended for serving too.
+
+This is follow-up design, not a defect in the initial chunked-encoding
+contract. The current generic encoder sends all expanded windows from one
+utterance batch in one call; it does not yet bound or repack that expansion.
 
 ## How to measure
 
