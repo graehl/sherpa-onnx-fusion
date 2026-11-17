@@ -8,6 +8,7 @@
 #include <utility>
 #include <vector>
 
+#include "sherpa-onnx/csrc/keep-alive.h"
 #include "sherpa-onnx/csrc/macros.h"
 #include "sherpa-onnx/csrc/offline-ctc-prefix-beam-search-decoder.h"
 #include "sherpa-onnx/csrc/online-stream.h"
@@ -20,8 +21,9 @@ OnlineCtcPrefixBeamSearchDecoder::OnlineCtcPrefixBeamSearchDecoder(
     : options_(MakeCtcPrefixSearchOptions(config, max_active)),
       vocabulary_(MakeCtcSearchVocabulary(symbol_table, blank_id,
                                           ScorersWantLowercase(config))),
-      scorers_(CreateScorers(config.scorers)) {
-  for (const auto &scorer : scorers_) scorer_pointers_.push_back(scorer.get());
+      scorers_(std::make_shared<std::vector<std::unique_ptr<Scorer>>>(
+          CreateScorers(config.scorers))) {
+  for (const auto &scorer : *scorers_) scorer_pointers_.push_back(scorer.get());
   for (const auto &scorer : config.scorers) weights_.push_back(scorer.weight);
   PrepareScorers(*vocabulary_, scorer_pointers_, options_.word_boundary_char);
 }
@@ -44,8 +46,10 @@ void OnlineCtcPrefixBeamSearchDecoder::Decode(
   std::vector<CtcPrefixSearch *> searches;
   for (int32_t b = 0; b != batch_size; ++b) {
     if (ss[b]->GetCtcPrefixSearch() == nullptr) {
-      ss[b]->SetCtcPrefixSearch(std::make_shared<CtcPrefixSearch>(
-          options_, vocabulary, scorer_pointers_, weights_));
+      ss[b]->SetCtcPrefixSearch(
+          KeepingAlive(std::make_unique<CtcPrefixSearch>(
+                           options_, vocabulary, scorer_pointers_, weights_),
+                       scorers_));
     }
     searches.push_back(ss[b]->GetCtcPrefixSearch());
   }

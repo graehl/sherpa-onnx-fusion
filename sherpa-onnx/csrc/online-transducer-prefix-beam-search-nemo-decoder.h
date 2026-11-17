@@ -39,9 +39,10 @@ class OnlineTransducerPrefixBeamSearchNeMoDecoder
  private:
   FusionConfig config_;
   int32_t max_active_;
-  TransducerFusion fusion_;
+  // Shared with each stream's segment, which may outlive the decoder.
+  std::shared_ptr<TransducerFusion> fusion_;
   float blank_penalty_;
-  std::unique_ptr<NeMoTransducerCalls> calls_;
+  std::shared_ptr<NeMoTransducerCalls> calls_;
 };
 
 }  // namespace sherpa_onnx

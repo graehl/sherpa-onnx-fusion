@@ -9,6 +9,7 @@
 #include <utility>
 #include <vector>
 
+#include "sherpa-onnx/csrc/keep-alive.h"
 #include "sherpa-onnx/csrc/macros.h"
 #include "sherpa-onnx/csrc/math.h"
 #include "sherpa-onnx/csrc/online-stream.h"
@@ -88,7 +89,7 @@ void OnlineTransducerPrefixBeamSearchDecoder::Decode(
   for (int32_t b = 0; b != batch_size; ++b) {
     OnlineTransducerDecoderResult &r = (*result)[b];
     if (r.prefix_search == nullptr) {
-      r.prefix_search = fusion_.NewSearch(options_);
+      r.prefix_search = KeepingAlive(fusion_->NewSearch(options_), fusion_);
       r.tokens.resize(context_size);  // An empty result: only its context.
       r.timestamps.clear();
     }
@@ -137,7 +138,7 @@ void OnlineTransducerPrefixBeamSearchDecoder::Decode(
       LogSoftmax(p_logit, vocab_size, static_cast<int32_t>(num));
       log_probs->assign(p_logit, p_logit + num * vocab_size);
     };
-    DecodeTransducerFrames(search, fusion_.Scorers(), first_frame + num_frames,
+    DecodeTransducerFrames(search, fusion_->Scorers(), first_frame + num_frames,
                            run_model);
 
     TransducerPrefixHypothesis best = search->Best();
