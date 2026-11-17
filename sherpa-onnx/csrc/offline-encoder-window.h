@@ -31,10 +31,17 @@ struct OfflineEncoderWindowConfig {
   // Normalizations with fixed statistics are the same either way.
   std::string normalize = "window";
   // "center": a frame is the average of the windows that cover it, each
-  // weighted by 1 + the frame's distance from that window's nearer edge;
+  // weighted by (1 + distance from the nearer retained edge)^center_power;
   // "cut": a frame is taken from the window in which it is farthest from
   // an edge.
   std::string weight = "center";
+  // Exponent of the center weight: 0 is uniform, 1 is linear.
+  float center_power = 1;
+  // Context-only output frames per interior edge, or a fraction of each
+  // window's output length. At most one may be nonzero. Recording ends
+  // are retained; Finish rejects gaps left by insufficient overlap.
+  int32_t context_frames = 0;
+  float context_fraction = 0;
   // For CTC outputs, what "center" averages: "log", log probabilities (or
   // logits), renormalized afterwards; "prob", probabilities. A
   // transducer's encoder output is averaged as it is.
@@ -102,7 +109,7 @@ class WindowBlend {
   // model's scores over its vocabulary, made log probabilities on Finish.
   enum class Rows { kHidden, kScores };
 
-  // `config` gives weight and blend.
+  // `config` gives weight, blend and center/context controls.
   WindowBlend(int32_t num_frames, int32_t dim, Rows rows,
               const OfflineEncoderWindowConfig &config);
 
@@ -111,7 +118,7 @@ class WindowBlend {
   void Add(const float *rows, int32_t frames, int32_t offset);
 
   // Writes num_frames x dim blended rows to `out`. Returns false, writing
-  // nothing, if a frame is in no window.
+  // nothing, if a frame has no positive-weight contribution.
   bool Finish(float *out) const;
 
  private:
@@ -121,8 +128,13 @@ class WindowBlend {
   int32_t dim_;
   bool log_softmax_;
   Mode mode_;
+  float center_power_;
+  int32_t context_frames_;
+  float context_fraction_;
   std::vector<double> sum_;     // per frame and value
   std::vector<double> weight_;  // per frame
+  // Per-frame scaling keeps arbitrary finite powers from overflowing.
+  std::vector<double> log_scale_;
 };
 
 }  // namespace sherpa_onnx

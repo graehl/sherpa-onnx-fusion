@@ -8,6 +8,7 @@
 #include <array>
 #include <cmath>
 #include <functional>
+#include <limits>
 #include <memory>
 #include <random>
 #include <utility>
@@ -123,6 +124,104 @@ TEST(WindowBlend, ReportsAnUncoveredFrame) {
   blend.Add(a.data(), 2, 0);
   std::vector<float> out(3);
   EXPECT_FALSE(blend.Finish(out.data()));
+}
+
+TEST(WindowBlend, CenterPowerIncludesUniformAndSharpWeights) {
+  const std::vector<float> a(6, 0), b(6, 1);
+  for (float power : {0.0f, 0.5f, 1.0f, 2.0f, 1000.0f}) {
+    auto config = WindowConfig("center", "log");
+    config.center_power = power;
+    WindowBlend blend(8, 1, WindowBlend::Rows::kHidden, config);
+    blend.Add(a.data(), 6, 0);
+    blend.Add(b.data(), 6, 2);
+    std::vector<float> out(8);
+    ASSERT_TRUE(blend.Finish(out.data()));
+    const double expected = power > 100 ? 0 : 1 / (1 + std::pow(3, power));
+    EXPECT_NEAR(out[2], expected, 1e-6) << power;
+    EXPECT_NEAR(out[5], 1 - expected, 1e-6) << power;
+    EXPECT_EQ(out.front(), 0);
+    EXPECT_EQ(out.back(), 1);
+  }
+}
+
+TEST(WindowBlend, ContextEdgesAreExcludedAndRecordingEndsRetained) {
+  std::vector<float> a(6, 0), b(6, 1);
+  a.back() = b.front() = std::numeric_limits<float>::quiet_NaN();
+  for (bool fraction : {false, true}) {
+    auto config = WindowConfig("center", "log");
+    config.context_frames = fraction ? 0 : 1;
+    config.context_fraction = fraction ? 0.2f : 0;
+    config.center_power = 0;
+    WindowBlend blend(8, 1, WindowBlend::Rows::kHidden, config);
+    blend.Add(a.data(), 6, 0);
+    blend.Add(b.data(), 6, 2);
+    std::vector<float> out(8);
+    ASSERT_TRUE(blend.Finish(out.data()));
+    EXPECT_EQ(out, (std::vector<float>{0, 0, 0, 0.5, 0.5, 1, 1, 1}));
+  }
+}
+
+TEST(WindowBlend, ContextCannotLeaveHolesOrDiscardASingleWindow) {
+  auto config = WindowConfig("center", "log");
+  config.context_frames = 3;
+  std::vector<float> rows(6, 1), out(8, -9);
+  WindowBlend blend(8, 1, WindowBlend::Rows::kHidden, config);
+  blend.Add(rows.data(), 6, 0);
+  blend.Add(rows.data(), 6, 2);
+  EXPECT_FALSE(blend.Finish(out.data()));
+  EXPECT_EQ(out, std::vector<float>(8, -9));
+  WindowBlend single(6, 1, WindowBlend::Rows::kHidden, config);
+  single.Add(rows.data(), 6, 0);
+  ASSERT_TRUE(single.Finish(out.data()));
+  EXPECT_TRUE(std::all_of(out.begin(), out.begin() + 6,
+                          [](float x) { return x == 1; }));
+}
+
+TEST(WindowBlend, PoweredProbabilityAverageIsNormalizedAndOrderIndependent) {
+  for (float power : {0.0f, 0.5f, 2.0f, 1000.0f}) {
+    auto config = WindowConfig("center", "prob");
+    config.center_power = power;
+    config.context_frames = 1;
+    std::vector<float> a, b;
+    for (int i = 0; i < 6; ++i) {
+      a.insert(a.end(), {std::log(0.9f), std::log(0.1f)});
+      b.insert(b.end(), {std::log(0.5f), std::log(0.5f)});
+    }
+    WindowBlend forward(8, 2, WindowBlend::Rows::kScores, config);
+    WindowBlend reverse(8, 2, WindowBlend::Rows::kScores, config);
+    forward.Add(a.data(), 6, 0);
+    forward.Add(b.data(), 6, 2);
+    reverse.Add(b.data(), 6, 2);
+    reverse.Add(a.data(), 6, 0);
+    std::vector<float> x(16), y(16);
+    ASSERT_TRUE(forward.Finish(x.data()));
+    ASSERT_TRUE(reverse.Finish(y.data()));
+    for (int i = 0; i < 16; ++i) EXPECT_NEAR(x[i], y[i], 1e-6);
+    for (int i = 0; i < 8; ++i)
+      EXPECT_NEAR(std::exp(x[2 * i]) + std::exp(x[2 * i + 1]), 1, 1e-6);
+    const double ratio = power > 100 ? 0 : 1 / (1 + std::pow(2, power));
+    EXPECT_NEAR(std::exp(x[6]), 0.9 * (1 - ratio) + 0.5 * ratio, 1e-6);
+  }
+}
+
+TEST(OfflineEncoderWindowConfig, RejectsInvalidCenterControls) {
+  OfflineEncoderWindowConfig config;
+  EXPECT_TRUE(config.Validate());
+  config.center_power = std::numeric_limits<float>::infinity();
+  EXPECT_FALSE(config.Validate());
+  config.center_power = -1;
+  EXPECT_FALSE(config.Validate());
+  config.center_power = 0;
+  EXPECT_TRUE(config.Validate());
+  config.context_fraction = 0.5;
+  EXPECT_FALSE(config.Validate());
+  config.context_fraction = 0.1;
+  config.context_frames = 1;
+  EXPECT_FALSE(config.Validate());
+  config.context_frames = 0;
+  EXPECT_TRUE(config.Validate());
+  config.weight = "cut";
+  EXPECT_FALSE(config.Validate());
 }
 
 TEST(EvenWindowStarts, RetainsEdgeLossCoverageThroughSlackAndAlignment) {
