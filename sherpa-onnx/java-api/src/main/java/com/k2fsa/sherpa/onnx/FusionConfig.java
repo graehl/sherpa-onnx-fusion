@@ -9,6 +9,9 @@ public class FusionConfig {
     private final String lengthBonusUnit;  // "token" or "word"
     private final String ctcAlignment;  // "sum" or "max"
     private final int tokenCandidates;
+    // A hypothesis survives a frame only within this score of the best;
+    // 0 or less: no limit.
+    private final float scoreBeam;
 
     private FusionConfig(Builder builder) {
         this.scorers = builder.scorers;
@@ -16,6 +19,7 @@ public class FusionConfig {
         this.lengthBonusUnit = builder.lengthBonusUnit;
         this.ctcAlignment = builder.ctcAlignment;
         this.tokenCandidates = builder.tokenCandidates;
+        this.scoreBeam = builder.scoreBeam;
     }
 
     public static Builder builder() {
@@ -42,12 +46,17 @@ public class FusionConfig {
         return tokenCandidates;
     }
 
+    public float getScoreBeam() {
+        return scoreBeam;
+    }
+
     public static class Builder {
         private ScorerConfig[] scorers = new ScorerConfig[0];
         private float lengthBonus = 0.0f;
         private String lengthBonusUnit = "token";
         private String ctcAlignment = "sum";
         private int tokenCandidates = 8;
+        private float scoreBeam = 12.0f;
 
         public FusionConfig build() {
             return new FusionConfig(this);
@@ -75,6 +84,11 @@ public class FusionConfig {
 
         public Builder setTokenCandidates(int tokenCandidates) {
             this.tokenCandidates = tokenCandidates;
+            return this;
+        }
+
+        public Builder setScoreBeam(float scoreBeam) {
+            this.scoreBeam = scoreBeam;
             return this;
         }
     }

@@ -158,6 +158,10 @@ type FusionConfig struct {
 	LengthBonusUnit string         // What LengthBonus counts: token (default) or word
 	CtcAlignment    string         // CTC models: score an output by sum (default) or max alignment
 	TokenCandidates int            // Most probable tokens per frame that may extend a hypothesis. 0: 8
+
+	// A hypothesis survives a frame only within this score of the best.
+	// 0 means 12; a negative value means no limit.
+	ScoreBeam float32
 }
 
 func freeCString(p **C.char) {
@@ -189,6 +193,7 @@ func newCFusionConfig(config *FusionConfig, c *C.struct_SherpaOnnxFusionConfig) 
 	c.length_bonus_unit = C.CString(config.LengthBonusUnit)
 	c.ctc_alignment = C.CString(config.CtcAlignment)
 	c.token_candidates = C.int32_t(config.TokenCandidates)
+	c.score_beam = C.float(config.ScoreBeam)
 }
 
 func freeCFusionConfig(c *C.struct_SherpaOnnxFusionConfig) {

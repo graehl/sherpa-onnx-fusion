@@ -252,6 +252,7 @@ SherpaOnnxFusionConfig GetFusionConfig(Napi::Object obj) {
   SHERPA_ONNX_ASSIGN_ATTR_STR(length_bonus_unit, lengthBonusUnit);
   SHERPA_ONNX_ASSIGN_ATTR_STR(ctc_alignment, ctcAlignment);
   SHERPA_ONNX_ASSIGN_ATTR_INT32(token_candidates, tokenCandidates);
+  SHERPA_ONNX_ASSIGN_ATTR_FLOAT(score_beam, scoreBeam);
 
   return c;
 }

@@ -442,6 +442,8 @@
  * @property {string} [ctcAlignment] - CTC models: 'sum' (default) or 'max'.
  * @property {number} [tokenCandidates] - Most probable tokens per frame that
  *   may extend a hypothesis. Default 8.
+ * @property {number} [scoreBeam] - A hypothesis survives a frame only within
+ *   this score of the best. Default 12; a negative value means no limit.
  */
 
 /**

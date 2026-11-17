@@ -20,4 +20,7 @@ data class FusionConfig(
     var lengthBonusUnit: String = "token", // "token" or "word"
     var ctcAlignment: String = "sum", // "sum" or "max"
     var tokenCandidates: Int = 8,
+    // A hypothesis survives a frame only within this score of the best;
+    // 0 or less: no limit.
+    var scoreBeam: Float = 12.0f,
 )

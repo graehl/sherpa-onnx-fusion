@@ -28,4 +28,5 @@ pub struct FusionConfig {
     pub length_bonus_unit: *const c_char,
     pub ctc_alignment: *const c_char,
     pub token_candidates: i32,
+    pub score_beam: c_float,
 }

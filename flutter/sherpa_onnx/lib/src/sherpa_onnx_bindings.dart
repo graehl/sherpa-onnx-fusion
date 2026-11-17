@@ -638,6 +638,9 @@ final class SherpaOnnxFusionConfig extends Struct {
 
   @Int32()
   external int tokenCandidates;
+
+  @Float()
+  external double scoreBeam;
 }
 
 final class SherpaOnnxOfflineCtcFstDecoderConfig extends Struct {

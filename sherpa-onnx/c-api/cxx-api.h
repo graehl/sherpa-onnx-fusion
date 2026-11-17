@@ -208,6 +208,9 @@ struct FusionConfig {
   std::string ctc_alignment = "sum";
   /** Most probable tokens per frame that may extend a hypothesis. */
   int32_t token_candidates = 8;
+  /** A hypothesis survives a frame only within this score of the best.
+   * Negative: no limit. */
+  float score_beam = 12.0f;
 };
 
 /**

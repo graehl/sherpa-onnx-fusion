@@ -82,6 +82,7 @@ class FusionConfig {
     this.lengthBonusUnit = 'token',
     this.ctcAlignment = 'sum',
     this.tokenCandidates = 8,
+    this.scoreBeam = 12.0,
   });
 
   factory FusionConfig.fromJson(Map<String, dynamic> json) {
@@ -94,12 +95,13 @@ class FusionConfig {
       lengthBonusUnit: json['lengthBonusUnit'] as String? ?? 'token',
       ctcAlignment: json['ctcAlignment'] as String? ?? 'sum',
       tokenCandidates: json['tokenCandidates'] as int? ?? 8,
+      scoreBeam: (json['scoreBeam'] as num?)?.toDouble() ?? 12.0,
     );
   }
 
   @override
   String toString() {
-    return 'FusionConfig(scorers: $scorers, lengthBonus: $lengthBonus, lengthBonusUnit: $lengthBonusUnit, ctcAlignment: $ctcAlignment, tokenCandidates: $tokenCandidates)';
+    return 'FusionConfig(scorers: $scorers, lengthBonus: $lengthBonus, lengthBonusUnit: $lengthBonusUnit, ctcAlignment: $ctcAlignment, tokenCandidates: $tokenCandidates, scoreBeam: $scoreBeam)';
   }
 
   Map<String, dynamic> toJson() => {
@@ -108,6 +110,7 @@ class FusionConfig {
         'lengthBonusUnit': lengthBonusUnit,
         'ctcAlignment': ctcAlignment,
         'tokenCandidates': tokenCandidates,
+        'scoreBeam': scoreBeam,
       };
 
   /// Scorers fused with independent weights.
@@ -124,4 +127,8 @@ class FusionConfig {
 
   /// Most probable tokens per frame that may extend a hypothesis.
   final int tokenCandidates;
+
+  /// A hypothesis survives a frame only within this score of the best.
+  /// Negative: no limit. 0 means 12; use `optionsJson` to set 0.
+  final double scoreBeam;
 }
