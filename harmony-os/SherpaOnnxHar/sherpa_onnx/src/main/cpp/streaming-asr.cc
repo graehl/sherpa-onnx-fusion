@@ -258,6 +258,8 @@ SherpaOnnxFusionConfig GetFusionConfig(Napi::Object obj) {
   SHERPA_ONNX_ASSIGN_ATTR_BOOL(length_normalize, lengthNormalize);
   SHERPA_ONNX_ASSIGN_ATTR_BOOL(modified_beam_search_rules,
                                modifiedBeamSearchRules);
+  SHERPA_ONNX_ASSIGN_ATTR_STR(ctc_prior, ctcPrior);
+  SHERPA_ONNX_ASSIGN_ATTR_FLOAT(ctc_prior_weight, ctcPriorWeight);
 
   return c;
 }
@@ -278,6 +280,7 @@ void FreeFusionConfig(const SherpaOnnxFusionConfig &c) {
   SHERPA_ONNX_DELETE_C_STR(c.length_bonus_unit);
   SHERPA_ONNX_DELETE_C_STR(c.ctc_alignment);
   SHERPA_ONNX_DELETE_C_STR(c.scorer_text_case);
+  SHERPA_ONNX_DELETE_C_STR(c.ctc_prior);
 }
 
 static Napi::External<SherpaOnnxOnlineRecognizer> CreateOnlineRecognizerWrapper(

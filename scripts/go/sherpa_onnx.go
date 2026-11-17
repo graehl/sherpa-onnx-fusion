@@ -178,6 +178,12 @@ type FusionConfig struct {
 	// Stateless-decoder transducers, 1: search as modified_beam_search does,
 	// so that its results are reproduced, with or without scorers.
 	ModifiedBeamSearchRules int
+
+	// CTC models: a text file of "token-id log-prior" lines. Each listed
+	// token other than blank has CtcPriorWeight times its log prior
+	// subtracted from its log probability in every frame.
+	CtcPrior       string
+	CtcPriorWeight float32 // Weight of CtcPrior. 0 means 1
 }
 
 func freeCString(p **C.char) {
@@ -214,6 +220,8 @@ func newCFusionConfig(config *FusionConfig, c *C.struct_SherpaOnnxFusionConfig) 
 	c.scorer_text_case = C.CString(config.ScorerTextCase)
 	c.length_normalize = C.int32_t(config.LengthNormalize)
 	c.modified_beam_search_rules = C.int32_t(config.ModifiedBeamSearchRules)
+	c.ctc_prior = C.CString(config.CtcPrior)
+	c.ctc_prior_weight = C.float(config.CtcPriorWeight)
 }
 
 func freeCFusionConfig(c *C.struct_SherpaOnnxFusionConfig) {
@@ -230,6 +238,7 @@ func freeCFusionConfig(c *C.struct_SherpaOnnxFusionConfig) {
 	freeCString(&c.length_bonus_unit)
 	freeCString(&c.ctc_alignment)
 	freeCString(&c.scorer_text_case)
+	freeCString(&c.ctc_prior)
 }
 
 // Configuration for the online/streaming recognizer.

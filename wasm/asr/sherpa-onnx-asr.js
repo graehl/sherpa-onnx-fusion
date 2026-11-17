@@ -516,16 +516,20 @@ function initSherpaOnnxFusionConfig(config, Module) {
   const ctcAlignmentLen = Module.lengthBytesUTF8(config.ctcAlignment || '') + 1;
   const scorerTextCaseLen =
       Module.lengthBytesUTF8(config.scorerTextCase || '') + 1;
-  const buffer =
-      Module._malloc(lengthBonusUnitLen + ctcAlignmentLen + scorerTextCaseLen);
+  const ctcPriorLen = Module.lengthBytesUTF8(config.ctcPrior || '') + 1;
+  const buffer = Module._malloc(
+      lengthBonusUnitLen + ctcAlignmentLen + scorerTextCaseLen + ctcPriorLen);
   Module.stringToUTF8(config.lengthBonusUnit || '', buffer, lengthBonusUnitLen);
   Module.stringToUTF8(
       config.ctcAlignment || '', buffer + lengthBonusUnitLen, ctcAlignmentLen);
   Module.stringToUTF8(
       config.scorerTextCase || '',
       buffer + lengthBonusUnitLen + ctcAlignmentLen, scorerTextCaseLen);
+  const ctcPriorPtr =
+      buffer + lengthBonusUnitLen + ctcAlignmentLen + scorerTextCaseLen;
+  Module.stringToUTF8(config.ctcPrior || '', ctcPriorPtr, ctcPriorLen);
 
-  const len = 10 * 4;
+  const len = 12 * 4;
   const ptr = Module._malloc(len);
 
   let offset = 0;
@@ -559,6 +563,12 @@ function initSherpaOnnxFusionConfig(config, Module) {
   offset += 4;
 
   Module.setValue(ptr + offset, config.modifiedBeamSearchRules ? 1 : 0, 'i32');
+  offset += 4;
+
+  Module.setValue(ptr + offset, ctcPriorPtr, 'i8*');
+  offset += 4;
+
+  Module.setValue(ptr + offset, config.ctcPriorWeight || 0, 'float');
   offset += 4;
 
   return {ptr: ptr, len: len, buffer: buffer, scorers: scorers};

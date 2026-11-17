@@ -455,6 +455,11 @@
  * @property {boolean|number} [modifiedBeamSearchRules] - Stateless-decoder
  *   transducers, true: search as modified_beam_search does, so that its
  *   results are reproduced, with or without scorers.
+ * @property {string} [ctcPrior] - CTC models: a text file of
+ *   "token-id log-prior" lines. Each listed token other than blank has
+ *   ctcPriorWeight times its log prior subtracted from its log probability
+ *   in every frame.
+ * @property {number} [ctcPriorWeight] - Weight of ctcPrior. Default 1.
  */
 
 /**

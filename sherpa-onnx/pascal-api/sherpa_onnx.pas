@@ -344,6 +344,10 @@ type
     LengthNormalize: Boolean;
     { Stateless-decoder transducers: search as modified_beam_search does. }
     ModifiedBeamSearchRules: Boolean;
+    { CTC models: a file of 'token-id log-prior' lines; each prior is
+      subtracted CtcPriorWeight times from its token's log probability. }
+    CtcPrior: AnsiString;
+    CtcPriorWeight: Single;
     function ToString: AnsiString;
     class operator Initialize({$IFDEF FPC}var{$ELSE}out{$ENDIF} Dest: TSherpaOnnxFusionConfig);
   end;
@@ -1107,6 +1111,8 @@ type
     ScorerTextCase: PAnsiChar;
     LengthNormalize: cint32;
     ModifiedBeamSearchRules: cint32;
+    CtcPrior: PAnsiChar;
+    CtcPriorWeight: cfloat;
   end;
 
   SherpaOnnxOnlineRecognizerConfig = record
@@ -2116,6 +2122,8 @@ begin
   Result.ScorerTextCase := PAnsiChar(Config.ScorerTextCase);
   Result.LengthNormalize := Ord(Config.LengthNormalize);
   Result.ModifiedBeamSearchRules := Ord(Config.ModifiedBeamSearchRules);
+  Result.CtcPrior := PAnsiChar(Config.CtcPrior);
+  Result.CtcPriorWeight := Config.CtcPriorWeight;
 end;
 
 constructor TSherpaOnnxOnlineRecognizer.Create(Config: TSherpaOnnxOnlineRecognizerConfig);
@@ -3102,6 +3110,7 @@ begin
   Dest.ScorerTextCase := 'keep';
   Dest.LengthNormalize := False;
   Dest.ModifiedBeamSearchRules := False;
+  Dest.CtcPriorWeight := 1;
 end;
 
 function TSherpaOnnxScorerConfig.ToString: AnsiString;
@@ -3131,10 +3140,12 @@ begin
   Result := Format('TSherpaOnnxFusionConfig(Scorers := %s, ' +
     'LengthBonus := %.3f, LengthBonusUnit := %s, CtcAlignment := %s, ' +
     'TokenCandidates := %d, ScoreBeam := %.3f, ScorerTextCase := %s, ' +
-    'LengthNormalize := %s, ModifiedBeamSearchRules := %s)',
+    'LengthNormalize := %s, ModifiedBeamSearchRules := %s, ' +
+    'CtcPrior := %s, CtcPriorWeight := %.3f)',
     [ScorersStr, Self.LengthBonus, Self.LengthBonusUnit, Self.CtcAlignment,
      Self.TokenCandidates, Self.ScoreBeam, Self.ScorerTextCase,
-     Self.LengthNormalize.ToString, Self.ModifiedBeamSearchRules.ToString]);
+     Self.LengthNormalize.ToString, Self.ModifiedBeamSearchRules.ToString,
+     Self.CtcPrior, Self.CtcPriorWeight]);
 end;
 
 constructor TSherpaOnnxCircularBuffer.Create(Capacity: Integer);

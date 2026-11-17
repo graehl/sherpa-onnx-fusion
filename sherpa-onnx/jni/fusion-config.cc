@@ -111,6 +111,8 @@ FusionConfig GetFusionConfig(JNIEnv *env, jobject fusion, bool *ok) {
   SHERPA_ONNX_JNI_READ_BOOL(ans.length_normalize, lengthNormalize, cls, fusion);
   SHERPA_ONNX_JNI_READ_BOOL(ans.modified_beam_search_rules,
                             modifiedBeamSearchRules, cls, fusion);
+  SHERPA_ONNX_JNI_READ_STRING(ans.ctc_prior, ctcPrior, cls, fusion);
+  SHERPA_ONNX_JNI_READ_FLOAT(ans.ctc_prior_weight, ctcPriorWeight, cls, fusion);
 
   env->DeleteLocalRef(cls);
   *ok = true;

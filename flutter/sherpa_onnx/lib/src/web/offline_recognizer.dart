@@ -196,6 +196,8 @@ JSObject _buildFusionConfig(FusionConfig fusion) {
   jsFusion['scorerTextCase'] = fusion.scorerTextCase.toJS;
   jsFusion['lengthNormalize'] = fusion.lengthNormalize.toJS;
   jsFusion['modifiedBeamSearchRules'] = fusion.modifiedBeamSearchRules.toJS;
+  jsFusion['ctcPrior'] = fusion.ctcPrior.toJS;
+  jsFusion['ctcPriorWeight'] = fusion.ctcPriorWeight.toJS;
   return jsFusion;
 }
 

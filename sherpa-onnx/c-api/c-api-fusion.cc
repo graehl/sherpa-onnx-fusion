@@ -59,6 +59,8 @@ FusionConfig GetFusionConfig(const SherpaOnnxFusionConfig &c) {
   SetIfGiven(c.scorer_text_case, &f.scorer_text_case);
   f.length_normalize = c.length_normalize != 0;
   f.modified_beam_search_rules = c.modified_beam_search_rules != 0;
+  SetIfGiven(c.ctc_prior, &f.ctc_prior);
+  if (c.ctc_prior_weight != 0) f.ctc_prior_weight = c.ctc_prior_weight;
   return f;
 }
 
