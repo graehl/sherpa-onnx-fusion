@@ -16,9 +16,8 @@ out:
 - **Model families beyond three.** It runs a zipformer CTC model, a
   zipformer transducer and a NeMo Parakeet TDT, all small English ones.
   w2v-BERT CTC, Whisper and the rest are not in it.
-- **Scorers on the transducers.** The zipformer transducer runs with the
-  n-gram model; neither transducer runs with an LSTM, and the TDT runs with
-  no scorer.
+- **Scorers on the transducers.** Both transducers run with the n-gram
+  model (the TDT only with encoder windows); neither runs with an LSTM.
 - **A real LSTM.** The default run uses a 1.6 MB character LSTM trained
   for 15 minutes as a test fixture
   ([graehl/sherpa-onnx-fusion-test-lm](https://huggingface.co/graehl/sherpa-onnx-fusion-test-lm)).
