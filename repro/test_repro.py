@@ -164,12 +164,15 @@ class ReproTests(unittest.TestCase):
         ]
         output = check_parallel.Output(rows, "", 0)
         configurations = {"prefix search": [], "prefix search + character LSTM": []}
+        effects = (
+            check_parallel.Effect("prefix search + character LSTM", "prefix search"),
+        )
         with (
             mock.patch.object(check_parallel, "run_program", return_value=output),
             contextlib.redirect_stdout(io.StringIO()),
         ):
             failures = check_parallel.check(
-                pathlib.Path("unused"), "test", [], paths, configurations
+                pathlib.Path("unused"), "test", [], paths, configurations, effects
             )
         self.assertEqual(failures, 1)
         changed = check_parallel.Output(
@@ -186,7 +189,7 @@ class ReproTests(unittest.TestCase):
             contextlib.redirect_stdout(io.StringIO()),
         ):
             failures = check_parallel.check(
-                pathlib.Path("unused"), "test", [], paths, configurations
+                pathlib.Path("unused"), "test", [], paths, configurations, effects
             )
         self.assertEqual(failures, 0)
 

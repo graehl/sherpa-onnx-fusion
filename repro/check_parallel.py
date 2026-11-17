@@ -24,7 +24,17 @@ The search configurations are greedy search, upstream's beam search for the
 transducers, the prefix search, the prefix search with a small n-gram model
 written by this script (when the build has KenLM), the prefix search with a
 tiny pinned character LSTM made for this check, and with --lstm-model also an
-onnx-rnn scorer over the CTC recognizer's tokens. Only pinned public archives
+onnx-rnn scorer over the CTC recognizer's tokens. The prefix search also runs
+with max-alignment CTC, a narrow beam, no score limit, and, for the zipformer
+transducer, modified_beam_search's rules; and greedy search and the n-gram
+search run with the encoder in 4 s windows, blended by center weight, cut,
+probability (CTC), per-utterance normalization, and uniform weights with
+context-only edges.
+
+Some configurations must also have an effect on the shipped recordings at one
+thread: the character LSTM and most window settings must change some text,
+the narrow beam must on the TDT model, and modified_beam_search's rules must
+give upstream's beam search's texts exactly. Only pinned public archives
 are downloaded, about 600 MB in all; --offline skips, successfully, whatever
 has not been fetched.
 """
@@ -45,11 +55,34 @@ RECORDINGS_DIR = "sherpa-onnx-zipformer-ctc-en-2023-10-02/test_wavs"
 
 
 @dataclasses.dataclass(frozen=True)
+class Effect:
+    """What one configuration's one-thread texts must be against another's
+    on the shipped recordings: different (an option that must change some
+    word) or the same (a decoder that must be reproduced)."""
+
+    configuration: str
+    baseline: str
+    same: bool = False
+
+
+@dataclasses.dataclass(frozen=True)
 class Recognizer:
     name: str
     artifact: str
     flags: tuple[str, ...]  # {dir} is the artifact's directory
     searches: tuple[str, ...]  # names from search_configurations
+    effects: tuple[Effect, ...] = ()
+
+
+# Encoder windows short enough that every shipped recording is cut.
+WINDOWS = ["--encoder.window.seconds=4", "--encoder.window.overlap=1"]
+WINDOWED_SEARCHES = (
+    "greedy, 4 s windows",
+    "greedy, 4 s windows, cut",
+    "greedy, 4 s windows, normalized per utterance",
+    "greedy, 4 s windows, uniform with context edges",
+    "prefix search + n-gram, 4 s windows",
+)
 
 
 _ZIPFORMER = "{dir}/sherpa-onnx-zipformer-small-en-2023-06-26"
@@ -65,9 +98,22 @@ RECOGNIZERS = (
         (
             "greedy",
             "prefix search",
+            "prefix search, max alignment",
+            "prefix search, narrow beam",
+            "prefix search, no score limit",
             "prefix search + n-gram",
             "prefix search + character LSTM",
             "prefix search + n-gram + token LSTM",
+            "greedy, 4 s windows, probability blend",
+        )
+        + WINDOWED_SEARCHES,
+        (
+            # The pinned fixture must change some words of the recordings.
+            Effect("prefix search + character LSTM", "prefix search"),
+            Effect("greedy, 4 s windows", "greedy"),
+            Effect("greedy, 4 s windows, cut", "greedy"),
+            Effect("greedy, 4 s windows, probability blend", "greedy"),
+            Effect("greedy, 4 s windows, uniform with context edges", "greedy"),
         ),
     ),
     Recognizer(
@@ -79,7 +125,23 @@ RECOGNIZERS = (
             f"--joiner={_ZIPFORMER}/joiner-epoch-99-avg-1.int8.onnx",
             f"--tokens={_ZIPFORMER}/tokens.txt",
         ),
-        ("greedy", "upstream beam search", "prefix search", "prefix search + n-gram"),
+        (
+            "greedy",
+            "upstream beam search",
+            "prefix search",
+            "prefix search, modified_beam_search rules",
+            "prefix search, narrow beam",
+            "prefix search, no score limit",
+            "prefix search + n-gram",
+        )
+        + WINDOWED_SEARCHES,
+        (
+            Effect(
+                "prefix search, modified_beam_search rules",
+                "upstream beam search",
+                same=True,
+            ),
+        ),
     ),
     Recognizer(
         "Parakeet TDT",
@@ -91,7 +153,20 @@ RECOGNIZERS = (
             f"--tokens={_TDT}/tokens.txt",
             "--model-type=nemo_transducer",
         ),
-        ("greedy", "upstream beam search", "prefix search"),
+        (
+            "greedy",
+            "upstream beam search",
+            "prefix search",
+            "prefix search, narrow beam",
+            "prefix search, no score limit",
+        )
+        + WINDOWED_SEARCHES,
+        (
+            Effect("prefix search, narrow beam", "prefix search"),
+            Effect("greedy, 4 s windows", "greedy"),
+            Effect("greedy, 4 s windows, cut", "greedy"),
+            Effect("greedy, 4 s windows, normalized per utterance", "greedy"),
+        ),
     ),
 )
 # A tiny character LSTM made for this check; it is not a usable language
@@ -212,11 +287,31 @@ def search_configurations(
         f"--scorer.0.model={arpa}",
         "--scorer.0.weight=0.3",
     ]
+    greedy = ["--decoding-method=greedy_search"]
+    prefix = ["--decoding-method=prefix_beam_search"]
     configurations = {
-        "greedy": ["--decoding-method=greedy_search"],
+        "greedy": greedy,
         "upstream beam search": ["--decoding-method=modified_beam_search"],
-        "prefix search": ["--decoding-method=prefix_beam_search"],
+        "prefix search": prefix,
+        "prefix search, max alignment": prefix + ["--ctc-alignment=max"],
+        "prefix search, narrow beam": prefix
+        + ["--max-active-paths=2", "--token-candidates=2", "--score-beam=3"],
+        "prefix search, no score limit": prefix + ["--score-beam=0"],
+        "prefix search, modified_beam_search rules": prefix
+        + ["--modified-beam-search-rules=true"],
         "prefix search + n-gram": kenlm,
+        "greedy, 4 s windows": greedy + WINDOWS,
+        "greedy, 4 s windows, cut": greedy + WINDOWS + ["--encoder.window.weight=cut"],
+        "greedy, 4 s windows, probability blend": greedy
+        + WINDOWS
+        + ["--encoder.window.blend=prob"],
+        "greedy, 4 s windows, normalized per utterance": greedy
+        + WINDOWS
+        + ["--encoder.window.normalize=utterance"],
+        "greedy, 4 s windows, uniform with context edges": greedy
+        + WINDOWS
+        + ["--encoder.window.center-power=0", "--encoder.window.context-frames=4"],
+        "prefix search + n-gram, 4 s windows": kenlm + WINDOWS,
     }
     if char_lstm:
         extra = json.dumps({"vocab": str(char_lstm[1]), "vocab-encoding": "hex"})
@@ -226,7 +321,6 @@ def search_configurations(
             "--scorer.0.unit=char",
             f"--scorer.0.model={char_lstm[0]}",
             f"--scorer.0.extra={extra}",
-            # The pinned fixture must change some words of the shipped recordings.
             "--scorer.0.weight=1.0",
         ]
     if lstm_model:
@@ -239,17 +333,33 @@ def search_configurations(
     return configurations
 
 
+def effect_problem(effect: Effect, one_thread: dict[str, list[str | None]]) -> str:
+    """Why the effect does not hold, or "" if it does."""
+    baseline = one_thread.get(effect.baseline)
+    if baseline is None:
+        return f"its baseline '{effect.baseline}' did not run"
+    differing = sum(
+        a != b for a, b in zip(one_thread[effect.configuration], baseline)
+    )
+    if effect.same and differing:
+        return f"{differing} texts differ from '{effect.baseline}'"
+    if not effect.same and not differing:
+        return f"no text differs from '{effect.baseline}'"
+    return ""
+
+
 def check(
     binary: pathlib.Path,
     label: str,
     recognizer: list[str],
     paths: list[str],
     configurations: dict[str, list[str]],
+    effects: tuple[Effect, ...] = (),
 ) -> int:
     """Runs one recognizer through every configuration and mode; returns the
     number of failures."""
     failures = 0
-    baseline = None
+    one_thread: dict[str, list[str | None]] = {}
     for name, search in configurations.items():
         configuration = name
         name = f"{label}, {name}"
@@ -262,13 +372,17 @@ def check(
             print(f"[check] FAIL {name}, 1 thread: {problems[0]}")
             failures += 1
             continue
-        if configuration == "prefix search":
-            baseline = texts(reference)
-        elif configuration == "prefix search + character LSTM" and (
-            baseline is None or texts(reference) == baseline
-        ):
-            print(f"[check] FAIL {name}: pinned LSTM has no verified output effect")
-            failures += 1
+        one_thread[configuration] = texts(reference)
+        for effect in effects:
+            if effect.configuration != configuration:
+                continue
+            problem = effect_problem(effect, one_thread)
+            if problem:
+                print(f"[check] FAIL {name}: {problem}")
+                failures += 1
+            else:
+                relation = "same as" if effect.same else "differs from"
+                print(f"[check] ok   {name}: {relation} '{effect.baseline}'")
         runs = [(mode, args, True) for mode, args in MODES.items()]
         runs.append(("batches of 4 (rows only)", BATCHED, False))
         for mode, args, compare_text in runs:
@@ -351,7 +465,10 @@ def main() -> None:
                 for name in recognizer.searches
                 if name in available
             }
-            failures += check(binary, recognizer.name, flags, paths, configurations)
+            effects = tuple(e for e in recognizer.effects if e.configuration in configurations)
+            failures += check(
+                binary, recognizer.name, flags, paths, configurations, effects
+            )
     if failures:
         sys.exit(f"[check] {failures} failed")
     print("[check] all passed")

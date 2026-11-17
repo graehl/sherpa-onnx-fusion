@@ -116,9 +116,20 @@ transducer implementations are covered as well as CTC:
 
 | Recognizer | Search configurations |
 |---|---|
-| zipformer CTC | greedy; prefix search; with a small n-gram model the script writes; with a tiny character LSTM |
-| zipformer transducer (small English) | greedy; upstream's beam search; prefix search; with the n-gram model |
-| NeMo Parakeet TDT (110M English) | greedy; upstream's beam search; prefix search |
+| zipformer CTC | greedy; prefix search, also with max alignment, a narrow beam and no score limit; with a small n-gram model the script writes; with a tiny character LSTM |
+| zipformer transducer (small English) | greedy; upstream's beam search; prefix search, also with modified_beam_search's rules, a narrow beam and no score limit; with the n-gram model |
+| NeMo Parakeet TDT (110M English) | greedy; upstream's beam search; prefix search, also with a narrow beam and no score limit |
+
+Each recognizer also runs greedy search and the n-gram search with the
+encoder in 4 s windows ([chunked encoding](../topics/chunked-encoding.md)):
+blended by center weight, cut, normalized per utterance, and with uniform
+weights and context-only edges, and for CTC with probabilities averaged.
+
+Where an option must change the output of the shipped recordings, the
+check also requires that at one thread: the character LSTM and the window
+settings on CTC and on the TDT model, and the narrow beam on the TDT model.
+modified_beam_search's rules must give upstream's beam search's texts
+exactly.
 
 ```bash
 mise run check                                # against ../build
