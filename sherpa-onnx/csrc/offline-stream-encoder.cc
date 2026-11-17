@@ -181,7 +181,7 @@ void OfflineStreamEncoder::Encode(OfflineStream **ss, int32_t n) const {
     max_frames = PaddedLength(max_frames);
     const auto batch = static_cast<int64_t>(end - first);
     std::array<int64_t, 3> shape = {batch, max_frames, feat_dim};
-    Ort::Value x;
+    Ort::Value x{nullptr};
     if (batch == 1 && max_frames == segments[first].num_frames) {
       x = Ort::Value::CreateTensor(memory_info, segments[first].features.data(),
                                    segments[first].features.size(),
