@@ -244,6 +244,9 @@ export class FusionConfig {
   public lengthNormalize: boolean = false;
   // Stateless-decoder transducers: search as modified_beam_search does
   public modifiedBeamSearchRules: boolean = false;
+  // CTC models: a file of "token-id log-prior" lines subtracted per frame
+  public ctcPrior: string = '';
+  public ctcPriorWeight: number = 1.0;
 }
 
 export class OfflineRecognizerConfig {

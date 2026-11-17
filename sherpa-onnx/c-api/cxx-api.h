@@ -222,6 +222,11 @@ struct FusionConfig {
   /** Stateless-decoder transducers: search as `"modified_beam_search"`
    * does, so that its results are reproduced. */
   bool modified_beam_search_rules = false;
+  /** CTC models: a file of `token-id log-prior` lines, each prior
+   * subtracted `ctc_prior_weight` times from its token's log probability. */
+  std::string ctc_prior;
+  /** Weight of `ctc_prior`. */
+  float ctc_prior_weight = 1.0f;
 };
 
 /**

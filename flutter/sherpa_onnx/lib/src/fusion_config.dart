@@ -93,6 +93,8 @@ class FusionConfig {
     this.scorerTextCase = 'keep',
     this.lengthNormalize = false,
     this.modifiedBeamSearchRules = false,
+    this.ctcPrior = '',
+    this.ctcPriorWeight = 1.0,
   });
 
   factory FusionConfig.fromJson(Map<String, dynamic> json) {
@@ -110,12 +112,14 @@ class FusionConfig {
       lengthNormalize: json['lengthNormalize'] as bool? ?? false,
       modifiedBeamSearchRules:
           json['modifiedBeamSearchRules'] as bool? ?? false,
+      ctcPrior: json['ctcPrior'] as String? ?? '',
+      ctcPriorWeight: (json['ctcPriorWeight'] as num?)?.toDouble() ?? 1.0,
     );
   }
 
   @override
   String toString() {
-    return 'FusionConfig(scorers: $scorers, lengthBonus: $lengthBonus, lengthBonusUnit: $lengthBonusUnit, ctcAlignment: $ctcAlignment, tokenCandidates: $tokenCandidates, scoreBeam: $scoreBeam, scorerTextCase: $scorerTextCase, lengthNormalize: $lengthNormalize, modifiedBeamSearchRules: $modifiedBeamSearchRules)';
+    return 'FusionConfig(scorers: $scorers, lengthBonus: $lengthBonus, lengthBonusUnit: $lengthBonusUnit, ctcAlignment: $ctcAlignment, tokenCandidates: $tokenCandidates, scoreBeam: $scoreBeam, scorerTextCase: $scorerTextCase, lengthNormalize: $lengthNormalize, modifiedBeamSearchRules: $modifiedBeamSearchRules, ctcPrior: $ctcPrior, ctcPriorWeight: $ctcPriorWeight)';
   }
 
   Map<String, dynamic> toJson() => {
@@ -128,6 +132,8 @@ class FusionConfig {
         'scorerTextCase': scorerTextCase,
         'lengthNormalize': lengthNormalize,
         'modifiedBeamSearchRules': modifiedBeamSearchRules,
+        'ctcPrior': ctcPrior,
+        'ctcPriorWeight': ctcPriorWeight,
       };
 
   /// Scorers fused with independent weights.
@@ -160,4 +166,12 @@ class FusionConfig {
   /// Stateless-decoder transducers: search as `modified_beam_search` does,
   /// so that its results are reproduced, with or without scorers.
   final bool modifiedBeamSearchRules;
+
+  /// CTC models: a text file of `token-id log-prior` lines. Each listed
+  /// token other than blank has [ctcPriorWeight] times its log prior
+  /// subtracted from its log probability in every frame.
+  final String ctcPrior;
+
+  /// Weight of [ctcPrior].
+  final double ctcPriorWeight;
 }

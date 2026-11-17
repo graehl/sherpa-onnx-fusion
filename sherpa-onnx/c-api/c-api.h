@@ -392,6 +392,14 @@ typedef struct SherpaOnnxFusionConfig {
    * does, so that its results are reproduced, with or without scorers.
    */
   int32_t modified_beam_search_rules;
+  /**
+   * CTC models: a text file of "token-id log-prior" lines. Each listed
+   * token other than blank has @c ctc_prior_weight times its log prior
+   * subtracted from its log probability in every frame.
+   */
+  const char *ctc_prior;
+  /** Weight of @c ctc_prior. 0 means 1. */
+  float ctc_prior_weight;
 } SherpaOnnxFusionConfig;
 
 /**

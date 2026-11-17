@@ -106,6 +106,12 @@ pub struct FusionConfig {
     /// Stateless-decoder transducers: search as `modified_beam_search` does,
     /// so that its results are reproduced, with or without scorers.
     pub modified_beam_search_rules: bool,
+    /// CTC models: a text file of `token-id log-prior` lines. Each listed
+    /// token other than blank has `ctc_prior_weight` times its log prior
+    /// subtracted from its log probability in every frame.
+    pub ctc_prior: Option<String>,
+    /// Weight of `ctc_prior`.
+    pub ctc_prior_weight: f32,
 }
 
 impl Default for FusionConfig {
@@ -120,6 +126,8 @@ impl Default for FusionConfig {
             scorer_text_case: Some("keep".into()),
             length_normalize: false,
             modified_beam_search_rules: false,
+            ctc_prior: None,
+            ctc_prior_weight: 1.0,
         }
     }
 }
@@ -156,6 +164,8 @@ impl FusionConfig {
             scorer_text_case: to_c_ptr(&self.scorer_text_case, cstrings),
             length_normalize: self.length_normalize as i32,
             modified_beam_search_rules: self.modified_beam_search_rules as i32,
+            ctc_prior: to_c_ptr(&self.ctc_prior, cstrings),
+            ctc_prior_weight: self.ctc_prior_weight,
         }
     }
 }

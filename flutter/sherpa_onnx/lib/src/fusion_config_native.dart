@@ -37,10 +37,13 @@ void fillFusionConfig(SherpaOnnxFusionConfig c, FusionConfig config) {
   c.scorerTextCase = config.scorerTextCase.toNativeUtf8();
   c.lengthNormalize = config.lengthNormalize ? 1 : 0;
   c.modifiedBeamSearchRules = config.modifiedBeamSearchRules ? 1 : 0;
+  c.ctcPrior = config.ctcPrior.toNativeUtf8();
+  c.ctcPriorWeight = config.ctcPriorWeight;
 }
 
 /// Free what [fillFusionConfig] allocated in [c].
 void freeFusionConfig(SherpaOnnxFusionConfig c) {
+  calloc.free(c.ctcPrior);
   calloc.free(c.scorerTextCase);
   calloc.free(c.ctcAlignment);
   calloc.free(c.lengthBonusUnit);

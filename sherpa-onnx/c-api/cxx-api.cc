@@ -109,6 +109,8 @@ static SherpaOnnxFusionConfig Convert(
   c.scorer_text_case = config.scorer_text_case.c_str();
   c.length_normalize = config.length_normalize;
   c.modified_beam_search_rules = config.modified_beam_search_rules;
+  c.ctc_prior = config.ctc_prior.c_str();
+  c.ctc_prior_weight = config.ctc_prior_weight;
   return c;
 }
 

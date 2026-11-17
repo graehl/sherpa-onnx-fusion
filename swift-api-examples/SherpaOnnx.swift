@@ -241,7 +241,9 @@ public func sherpaOnnxFusionConfig(
   scoreBeam: Float = 12,
   scorerTextCase: String = "keep",
   lengthNormalize: Bool = false,
-  modifiedBeamSearchRules: Bool = false
+  modifiedBeamSearchRules: Bool = false,
+  ctcPrior: String = "",
+  ctcPriorWeight: Float = 1
 ) -> SherpaOnnxFusionConfig {
   return SherpaOnnxFusionConfig(
     scorers: UnsafePointer(scorers?.pointer),
@@ -253,7 +255,9 @@ public func sherpaOnnxFusionConfig(
     score_beam: scoreBeam,
     scorer_text_case: toCPointer(scorerTextCase),
     length_normalize: lengthNormalize ? 1 : 0,
-    modified_beam_search_rules: modifiedBeamSearchRules ? 1 : 0)
+    modified_beam_search_rules: modifiedBeamSearchRules ? 1 : 0,
+    ctc_prior: toCPointer(ctcPrior),
+    ctc_prior_weight: ctcPriorWeight)
 }
 
 public func sherpaOnnxOnlineRecognizerConfig(

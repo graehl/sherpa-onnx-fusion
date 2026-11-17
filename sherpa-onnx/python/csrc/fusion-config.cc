@@ -69,6 +69,12 @@ Args:
   modified_beam_search_rules:
     Stateless-decoder transducers: search as ``modified_beam_search``
     does, so that its results are reproduced, with or without scorers.
+  ctc_prior:
+    A label-prior correction: a file of ``token-id log-prior`` lines. Each
+    listed token other than blank has ``ctc_prior_weight`` times its log
+    prior subtracted from its log probability in every frame.
+  ctc_prior_weight:
+    The weight of ``ctc_prior``.
 )doc";
 
 static void PybindScorerConfig(py::module *m) {
@@ -131,7 +137,8 @@ void PybindFusionConfig(py::module *m) {
                        const std::string &ctc_alignment,
                        int32_t token_candidates, float score_beam,
                        const std::string &scorer_text_case,
-                       bool length_normalize, bool modified_beam_search_rules) {
+                       bool length_normalize, bool modified_beam_search_rules,
+                       const std::string &ctc_prior, float ctc_prior_weight) {
              PyClass f;
              f.scorers = scorers;
              f.length_bonus = length_bonus;
@@ -142,6 +149,8 @@ void PybindFusionConfig(py::module *m) {
              f.scorer_text_case = scorer_text_case;
              f.length_normalize = length_normalize;
              f.modified_beam_search_rules = modified_beam_search_rules;
+             f.ctc_prior = ctc_prior;
+             f.ctc_prior_weight = ctc_prior_weight;
              return f;
            }),
            py::arg("scorers") = std::vector<ScorerOptions>{},
@@ -150,7 +159,9 @@ void PybindFusionConfig(py::module *m) {
            py::arg("ctc_alignment") = "sum", py::arg("token_candidates") = 8,
            py::arg("score_beam") = 12.0, py::arg("scorer_text_case") = "keep",
            py::arg("length_normalize") = false,
-           py::arg("modified_beam_search_rules") = false, kFusionConfigInitDoc)
+           py::arg("modified_beam_search_rules") = false,
+           py::arg("ctc_prior") = "", py::arg("ctc_prior_weight") = 1.0,
+           kFusionConfigInitDoc)
       .def_readwrite("scorers", &PyClass::scorers)
       .def_readwrite("length_bonus", &PyClass::length_bonus)
       .def_readwrite("length_bonus_unit", &PyClass::length_bonus_unit)
@@ -161,6 +172,8 @@ void PybindFusionConfig(py::module *m) {
       .def_readwrite("length_normalize", &PyClass::length_normalize)
       .def_readwrite("modified_beam_search_rules",
                      &PyClass::modified_beam_search_rules)
+      .def_readwrite("ctc_prior", &PyClass::ctc_prior)
+      .def_readwrite("ctc_prior_weight", &PyClass::ctc_prior_weight)
       .def("validate", &PyClass::Validate)
       .def("__str__", &PyClass::ToString);
 }

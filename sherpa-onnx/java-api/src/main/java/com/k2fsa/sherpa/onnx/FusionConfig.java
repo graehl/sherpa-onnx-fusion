@@ -20,6 +20,11 @@ public class FusionConfig {
     // Stateless-decoder transducers: search as modified_beam_search does, so
     // that its results are reproduced, with or without scorers.
     private final boolean modifiedBeamSearchRules;
+    // CTC models: a text file of "token-id log-prior" lines. Each listed
+    // token other than blank has ctcPriorWeight times its log prior
+    // subtracted from its log probability in every frame.
+    private final String ctcPrior;
+    private final float ctcPriorWeight;
 
     private FusionConfig(Builder builder) {
         this.scorers = builder.scorers;
@@ -31,6 +36,8 @@ public class FusionConfig {
         this.scorerTextCase = builder.scorerTextCase;
         this.lengthNormalize = builder.lengthNormalize;
         this.modifiedBeamSearchRules = builder.modifiedBeamSearchRules;
+        this.ctcPrior = builder.ctcPrior;
+        this.ctcPriorWeight = builder.ctcPriorWeight;
     }
 
     public static Builder builder() {
@@ -73,6 +80,14 @@ public class FusionConfig {
         return modifiedBeamSearchRules;
     }
 
+    public String getCtcPrior() {
+        return ctcPrior;
+    }
+
+    public float getCtcPriorWeight() {
+        return ctcPriorWeight;
+    }
+
     public static class Builder {
         private ScorerConfig[] scorers = new ScorerConfig[0];
         private float lengthBonus = 0.0f;
@@ -83,6 +98,8 @@ public class FusionConfig {
         private String scorerTextCase = "keep";
         private boolean lengthNormalize = false;
         private boolean modifiedBeamSearchRules = false;
+        private String ctcPrior = "";
+        private float ctcPriorWeight = 1.0f;
 
         public FusionConfig build() {
             return new FusionConfig(this);
@@ -130,6 +147,16 @@ public class FusionConfig {
 
         public Builder setModifiedBeamSearchRules(boolean modifiedBeamSearchRules) {
             this.modifiedBeamSearchRules = modifiedBeamSearchRules;
+            return this;
+        }
+
+        public Builder setCtcPrior(String ctcPrior) {
+            this.ctcPrior = ctcPrior;
+            return this;
+        }
+
+        public Builder setCtcPriorWeight(float ctcPriorWeight) {
+            this.ctcPriorWeight = ctcPriorWeight;
             return this;
         }
     }

@@ -23,6 +23,8 @@ namespace SherpaOnnx
             ScorerTextCase = "keep";
             LengthNormalize = 0;
             ModifiedBeamSearchRules = 0;
+            CtcPrior = "";
+            CtcPriorWeight = 1.0F;
         }
 
         /// <summary>
@@ -78,6 +80,16 @@ namespace SherpaOnnx
         /// modified_beam_search does, so that its results are reproduced.
         /// </summary>
         public int ModifiedBeamSearchRules;
+
+        /// <summary>
+        /// CTC models: a text file of "token-id log-prior" lines. Each listed
+        /// token other than blank has CtcPriorWeight times its log prior
+        /// subtracted from its log probability in every frame.
+        /// </summary>
+        [MarshalAs(UnmanagedType.LPStr)]
+        public string CtcPrior;
+
+        public float CtcPriorWeight;
     }
 
     /// Copies a ScorerConfig[] into native memory for FusionConfig.Scorers.

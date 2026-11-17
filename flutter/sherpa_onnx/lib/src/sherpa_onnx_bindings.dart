@@ -654,6 +654,11 @@ final class SherpaOnnxFusionConfig extends Struct {
 
   @Int32()
   external int modifiedBeamSearchRules;
+
+  external Pointer<Utf8> ctcPrior;
+
+  @Float()
+  external double ctcPriorWeight;
 }
 
 final class SherpaOnnxOfflineCtcFstDecoderConfig extends Struct {
