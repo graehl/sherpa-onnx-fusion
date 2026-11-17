@@ -264,12 +264,13 @@ class OfflineRecognizerCtcImpl : public OfflineRecognizerImpl {
       for (OfflineStream *s : todo) {
         auto t = ForwardStream(s);
         if (!t.empty()) {
-          KeepEncoderOutput(&s, 1, t);
+          KeepEncoderOutput(&s, 1, std::move(t));
         }
       }
     } else if (!todo.empty()) {
       auto t = ForwardStreams(todo.data(), static_cast<int32_t>(todo.size()));
-      KeepEncoderOutput(todo.data(), static_cast<int32_t>(todo.size()), t);
+      KeepEncoderOutput(todo.data(), static_cast<int32_t>(todo.size()),
+                        std::move(t));
     }
   }
 
@@ -527,24 +528,13 @@ class OfflineRecognizerCtcImpl : public OfflineRecognizerImpl {
     return config_.model_config.omnilingual.model.empty() ? 10 : 20;
   }
 
-  // Moves each stream's valid frames of the model output "t" for "ss" into
-  // that stream.
+  // Gives each of the n streams its item of the model output "t", which they
+  // then share.
   static void KeepEncoderOutput(OfflineStream **ss, int32_t n,
-                                const std::vector<Ort::Value> &t) {
-    std::vector<int64_t> shape = t[0].GetTensorTypeAndShapeInfo().GetShape();
-    auto max_frames = static_cast<int32_t>(shape[1]);
-    auto dim = static_cast<int32_t>(shape[2]);
-    const float *p = t[0].GetTensorData<float>();
-    // The model's lengths are int64; see OfflineCtcModel::Forward.
-    const int64_t *length = t[1].GetTensorData<int64_t>();
-    for (int32_t i = 0; i != n; ++i) {
-      auto num_frames = static_cast<int32_t>(length[i]);
-      const float *begin = p + static_cast<size_t>(i) * max_frames * dim;
-      ss[i]->SetEncoderOutput(
-          std::vector<float>(begin,
-                             begin + static_cast<size_t>(num_frames) * dim),
-          num_frames);
-    }
+                                std::vector<Ort::Value> t) {
+    auto batch =
+        std::make_shared<const EncoderOutputBatch>(std::move(t[0]), t[1]);
+    for (int32_t i = 0; i != n; ++i) ss[i]->SetEncoderOutput(batch, i);
   }
 
   // Searches streams that EncodeStreams has processed. One it gave an empty
@@ -562,7 +552,7 @@ class OfflineRecognizerCtcImpl : public OfflineRecognizerImpl {
 
     auto batch = static_cast<int32_t>(encoded.size());
     auto t = TakeEncoderOutputs(encoded.data(), batch, model_->Allocator());
-    auto results = decoder_->Decode(std::move(t[0]), std::move(t[1]));
+    auto results = decoder_->Decode(std::move(t.values), std::move(t.lengths));
 
     for (int32_t i = 0; i != batch; ++i) {
       auto r = Convert(results[i], symbol_table_, FrameShiftMs(),

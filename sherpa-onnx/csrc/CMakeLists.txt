@@ -18,6 +18,7 @@ set(sources
   context-graph.cc
   ctc-inflight-decoder.cc
   ctc-prefix-search.cc
+  encoder-output.cc
   endpoint.cc
   fa-feature-extractor.cc
   fa-lexicon.cc

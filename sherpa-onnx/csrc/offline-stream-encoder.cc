@@ -8,6 +8,7 @@
 #include <array>
 #include <cmath>
 #include <cstdlib>
+#include <memory>
 #include <numeric>
 #include <utility>
 #include <vector>
@@ -30,29 +31,6 @@ struct Segment {
   std::vector<float> features;
   int32_t num_frames;
 };
-
-// An encoder call's output, (N, T', D), and the valid frames of each item.
-struct Output {
-  std::vector<Ort::Value> values;
-  int32_t max_frames = 0;
-  int32_t dim = 0;
-  const float *Row(int32_t item) const {
-    return values[0].GetTensorData<float>() +
-           static_cast<size_t>(item) * max_frames * dim;
-  }
-  int32_t Frames(int32_t item) const {
-    return static_cast<int32_t>(values[1].GetTensorData<int64_t>()[item]);
-  }
-};
-
-Output MakeOutput(std::vector<Ort::Value> values) {
-  Output out;
-  auto shape = values[0].GetTensorTypeAndShapeInfo().GetShape();
-  out.max_frames = static_cast<int32_t>(shape[1]);
-  out.dim = static_cast<int32_t>(shape[2]);
-  out.values = std::move(values);
-  return out;
-}
 
 }  // namespace
 
@@ -189,7 +167,7 @@ void OfflineStreamEncoder::Encode(OfflineStream **ss, int32_t n) const {
   // Each segment's encoder call and its item in that call.
   auto memory_info =
       Ort::MemoryInfo::CreateCpu(OrtDeviceAllocator, OrtMemTypeDefault);
-  std::vector<Output> outputs;
+  std::vector<std::shared_ptr<const EncoderOutputBatch>> outputs;
   std::vector<std::pair<int32_t, int32_t>> where(segments.size());
   // Runs segments [first, end) in one call, padded to the allowed length
   // that holds their longest.
@@ -226,8 +204,9 @@ void OfflineStreamEncoder::Encode(OfflineStream **ss, int32_t n) const {
       where[k] = {static_cast<int32_t>(outputs.size()),
                   static_cast<int32_t>(k - first)};
     }
+    auto out = adapter_.encode(std::move(x), std::move(x_length));
     outputs.push_back(
-        MakeOutput(adapter_.encode(std::move(x), std::move(x_length))));
+        std::make_shared<EncoderOutputBatch>(std::move(out[0]), out[1]));
   };
   if (adapter_.batch) {
     run(0, segments.size());
@@ -242,20 +221,17 @@ void OfflineStreamEncoder::Encode(OfflineStream **ss, int32_t n) const {
       ++end;
     }
     OfflineStream *stream = todo[segments[first].stream];
-    const Output &out0 = outputs[where[first].first];
-    const int32_t dim = out0.dim;
+    const int32_t dim = outputs[where[first].first]->Dim();
     if (end == first + 1) {
-      const float *row = out0.Row(where[first].second);
-      const int32_t frames = out0.Frames(where[first].second);
-      stream->SetEncoderOutput(
-          std::vector<float>(row, row + static_cast<size_t>(frames) * dim),
-          frames);
+      // A whole utterance: the stream shares its call's output.
+      stream->SetEncoderOutput(outputs[where[first].first],
+                               where[first].second);
       first = end;
       continue;
     }
     int32_t total = 0;
     for (size_t k = first; k != end; ++k) {
-      const int32_t frames = outputs[where[k].first].Frames(where[k].second);
+      const int32_t frames = outputs[where[k].first]->Frames(where[k].second);
       // A window's output must be on the grid its start is aligned to; the
       // margin allows for frames a convolutional front end loses at edges.
       if (std::abs(frames * grid - segments[k].num_frames) >
@@ -270,7 +246,7 @@ void OfflineStreamEncoder::Encode(OfflineStream **ss, int32_t n) const {
     }
     WindowBlend blend(total, dim, adapter_.rows, config_);
     for (size_t k = first; k != end; ++k) {
-      const Output &out = outputs[where[k].first];
+      const EncoderOutputBatch &out = *outputs[where[k].first];
       blend.Add(out.Row(where[k].second), out.Frames(where[k].second),
                 segments[k].start / grid);
     }
@@ -281,7 +257,8 @@ void OfflineStreamEncoder::Encode(OfflineStream **ss, int32_t n) const {
           "--encoder.window.overlap");
       SHERPA_ONNX_EXIT(-1);
     }
-    stream->SetEncoderOutput(std::move(values), total);
+    stream->SetEncoderOutput(
+        std::make_shared<EncoderOutputBatch>(std::move(values), total, dim), 0);
     first = end;
   }
 }
@@ -291,41 +268,53 @@ bool AnyHasEncoderOutput(OfflineStream **ss, int32_t n) {
                      [](OfflineStream *s) { return s->HasEncoderOutput(); });
 }
 
-std::vector<Ort::Value> TakeEncoderOutputs(OfflineStream **ss, int32_t n,
-                                           OrtAllocator *allocator) {
-  std::vector<std::vector<float>> outputs(n);
+TakenEncoderOutputs TakeEncoderOutputs(OfflineStream **ss, int32_t n,
+                                       OrtAllocator *allocator) {
+  TakenEncoderOutputs ans;
+  std::vector<std::shared_ptr<const EncoderOutputBatch>> batch(n);
+  std::vector<int32_t> item(n);
   std::vector<int64_t> lengths(n);
+  bool one_run = n > 0;  // consecutive items of one batch, in order
   for (int32_t i = 0; i != n; ++i) {
-    int32_t num_frames = 0;
-    outputs[i] = ss[i]->TakeEncoderOutput(&num_frames);
-    lengths[i] = num_frames;
-  }
-  int64_t max_frames =
-      n ? *std::max_element(lengths.begin(), lengths.end()) : 0;
-  int64_t dim = 0;
-  for (int32_t i = 0; i != n && dim == 0; ++i) {
-    if (lengths[i] > 0) dim = outputs[i].size() / lengths[i];
-  }
-
-  std::array<int64_t, 3> shape = {n, max_frames, dim};
-  Ort::Value out =
-      Ort::Value::CreateTensor<float>(allocator, shape.data(), shape.size());
-  float *p = out.GetTensorMutableData<float>();
-  const size_t stride = static_cast<size_t>(max_frames) * dim;
-  std::fill(p, p + n * stride, 0.0f);
-  for (int32_t i = 0; i != n; ++i) {
-    std::copy(outputs[i].begin(), outputs[i].end(), p + i * stride);
+    batch[i] = ss[i]->TakeEncoderOutput(&item[i]);
+    lengths[i] = batch[i]->Frames(item[i]);
+    one_run = one_run && batch[i] == batch[0] && item[i] == item[0] + i;
   }
 
   std::array<int64_t, 1> length_shape = {n};
-  Ort::Value out_length = Ort::Value::CreateTensor<int64_t>(
+  ans.lengths = Ort::Value::CreateTensor<int64_t>(
       allocator, length_shape.data(), length_shape.size());
   std::copy(lengths.begin(), lengths.end(),
-            out_length.GetTensorMutableData<int64_t>());
+            ans.lengths.GetTensorMutableData<int64_t>());
+  if (n == 0) return ans;
 
-  std::vector<Ort::Value> ans;
-  ans.push_back(std::move(out));
-  ans.push_back(std::move(out_length));
+  const int64_t dim = batch[0]->Dim();
+  if (one_run) {
+    // A view of the batch's own rows: the decoders read only each item's
+    // valid frames.
+    const EncoderOutputBatch &b = *batch[0];
+    std::array<int64_t, 3> shape = {n, b.MaxFrames(), dim};
+    auto memory_info =
+        Ort::MemoryInfo::CreateCpu(OrtDeviceAllocator, OrtMemTypeDefault);
+    ans.values = Ort::Value::CreateTensor(
+        memory_info, const_cast<float *>(b.Row(item[0])),
+        static_cast<size_t>(n) * b.MaxFrames() * dim, shape.data(),
+        shape.size());
+    ans.batches.push_back(std::move(batch[0]));
+    return ans;
+  }
+
+  const int64_t max_frames = *std::max_element(lengths.begin(), lengths.end());
+  std::array<int64_t, 3> shape = {n, max_frames, dim};
+  ans.values =
+      Ort::Value::CreateTensor<float>(allocator, shape.data(), shape.size());
+  float *p = ans.values.GetTensorMutableData<float>();
+  const size_t stride = static_cast<size_t>(max_frames) * dim;
+  std::fill(p, p + n * stride, 0.0f);
+  for (int32_t i = 0; i != n; ++i) {
+    const float *row = batch[i]->Row(item[i]);
+    std::copy(row, row + lengths[i] * dim, p + i * stride);
+  }
   return ans;
 }
 

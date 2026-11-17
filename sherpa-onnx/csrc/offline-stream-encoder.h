@@ -7,9 +7,11 @@
 
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <vector>
 
 #include "onnxruntime_cxx_api.h"  // NOLINT
+#include "sherpa-onnx/csrc/encoder-output.h"
 #include "sherpa-onnx/csrc/features.h"
 #include "sherpa-onnx/csrc/offline-encoder-window.h"
 #include "sherpa-onnx/csrc/offline-stream.h"
@@ -98,11 +100,22 @@ void MoveStreamNormalizationToEncoder(const OfflineEncoderConfig &config,
 // Whether any of the n streams holds an encoder output.
 bool AnyHasEncoderOutput(OfflineStream **ss, int32_t n);
 
-// Moves the encoder output each of the n streams holds into one tensor
-// (n, T, D), zero padded, and returns it with the streams' frame counts,
-// int64 (n).
-std::vector<Ort::Value> TakeEncoderOutputs(OfflineStream **ss, int32_t n,
-                                           OrtAllocator *allocator);
+// The n streams' encoder outputs as one search input: values (n, T, D) and
+// the streams' frame counts, int64 (n). When the streams hold consecutive
+// items of one batch, in order, values is a view of that batch and nothing
+// is copied; otherwise the items are copied into one zero-padded tensor,
+// which lets a search batch be chosen apart from the encoder's. "batches"
+// keeps what values may view alive; keep the whole struct until the search
+// that reads it returns.
+struct TakenEncoderOutputs {
+  Ort::Value values{nullptr};
+  Ort::Value lengths{nullptr};
+  std::vector<std::shared_ptr<const EncoderOutputBatch>> batches;
+};
+
+// Moves the encoder output each of the n streams holds into a search input.
+TakenEncoderOutputs TakeEncoderOutputs(OfflineStream **ss, int32_t n,
+                                       OrtAllocator *allocator);
 
 }  // namespace sherpa_onnx
 

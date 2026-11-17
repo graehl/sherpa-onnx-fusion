@@ -239,7 +239,7 @@ class OfflineRecognizerTransducerImpl : public OfflineRecognizerImpl {
     if (encoder_->Active() || AnyHasEncoderOutput(ss, n)) {
       encoder_->Encode(ss, n);
       auto t = TakeEncoderOutputs(ss, n, model_->Allocator());
-      DecodeEncoderOutput(ss, n, std::move(t[0]), std::move(t[1]));
+      DecodeEncoderOutput(ss, n, std::move(t.values), std::move(t.lengths));
       return;
     }
 

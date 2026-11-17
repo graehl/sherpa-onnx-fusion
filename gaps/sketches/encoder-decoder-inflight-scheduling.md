@@ -105,17 +105,11 @@ becomes part of that choice (graehl, 2026-11-17).
 
 ## Handing the encoder output over by reference
 
-What a stream keeps differs by family only in what the tensor holds: for
-CTC the log probabilities, which are all the search needs; for the
-zipformer and NeMo transducers the encoder frames, which the search feeds
-to the joiner. Either way `SetEncoderOutput` copies the stream's rows out
-of the batch's output into the stream. A stream could instead hold a
-reference to the batch's whole output, its row and its valid length, the
-copy made only when a later step needs contiguous rows. On the CPU the
-search's own calls (an LSTM step, a transducer's joiner) have no
-measurable shape-change cost, so this only saves the copy; on a GPU it is
-what keeps the output where the search can use it, and the search's calls
-would want the fixed widths of
+Built: a stream shares its encoder call's output
+([bulk decoding](../../topics/bulk-decoding.md#encoder-output-kept-by-reference)).
+What remains is the GPU: the output is a host tensor, so a search whose
+own calls (an LSTM step, a transducer's joiner) run on a GPU still copies
+it there, and those calls would want the fixed widths of
 [the fusion sketches](../../topics/beam-search-and-scorer-fusion.sketches.md#fixed-width-scorer-steps).
 
 ## Completion evidence
