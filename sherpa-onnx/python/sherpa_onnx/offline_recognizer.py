@@ -2151,3 +2151,30 @@ class OfflineRecognizer(object):
                 print(s.result.text)
         """
         self.recognizer.decode_streams(ss)
+
+    def encode_stream(self, s: OfflineStream):
+        """Run the model for a stream ahead of :meth:`decode_stream`.
+
+        :meth:`decode_stream` then only searches. Optional: decoding runs
+        the model for a stream that was not encoded. It does nothing for a
+        model family that does not separate the two steps (every family
+        except CTC, the zipformer transducer and NeMo transducers).
+
+        Args:
+          s:
+            An :class:`OfflineStream` that has already been fed audio.
+        """
+        self.recognizer.encode_stream(s)
+
+    def encode_streams(self, ss: List[OfflineStream]):
+        """Run the model for a list of streams ahead of decoding them.
+
+        The streams encoded together and the streams decoded together
+        need not be the same.
+
+        Args:
+          ss:
+            A list of :class:`OfflineStream` instances that have already
+            been fed audio.
+        """
+        self.recognizer.encode_streams(ss)

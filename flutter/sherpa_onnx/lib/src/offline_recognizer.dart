@@ -422,6 +422,48 @@ class OfflineRecognizer {
     SherpaOnnxBindings.decodeOfflineStream?.call(ptr, stream.ptr);
   }
 
+  /// Run the model for [stream] ahead of decoding it.
+  ///
+  /// Optional: a later [decode] then only searches, and runs the model itself
+  /// for a stream that was not encoded. Does nothing for a model family that
+  /// does not separate the two steps.
+  void encode(OfflineStream stream) {
+    if (SherpaOnnxBindings.encodeOfflineStream == null) {
+      throw Exception("Please initialize sherpa-onnx first");
+    }
+
+    if (ptr == nullptr || stream.ptr == nullptr) {
+      return;
+    }
+
+    SherpaOnnxBindings.encodeOfflineStream?.call(ptr, stream.ptr);
+  }
+
+  /// Run the model for [streams] in one batch ahead of decoding; see
+  /// [encode]. The streams may then be decoded one at a time.
+  void encodeStreams(List<OfflineStream> streams) {
+    if (SherpaOnnxBindings.encodeMultipleOfflineStreams == null) {
+      throw Exception("Please initialize sherpa-onnx first");
+    }
+
+    if (ptr == nullptr || streams.isEmpty) {
+      return;
+    }
+
+    final p = calloc<Pointer<SherpaOnnxOfflineStream>>(streams.length);
+    for (var i = 0; i < streams.length; ++i) {
+      p[i] = streams[i].ptr;
+    }
+
+    SherpaOnnxBindings.encodeMultipleOfflineStreams?.call(
+      ptr,
+      p,
+      streams.length,
+    );
+
+    calloc.free(p);
+  }
+
   /// Fetch the current recognition result for [stream].
   OfflineRecognizerResult getResult(OfflineStream stream) {
     if (SherpaOnnxBindings.getOfflineStreamResultAsJson == null) {

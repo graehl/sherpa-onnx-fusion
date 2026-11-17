@@ -126,6 +126,27 @@ Args:
     A list of OfflineStream instances to decode.
 )doc";
 
+static constexpr const char *kEncodeStreamDoc = R"doc(
+Run the model for a stream ahead of decoding it; ``decode_stream`` then
+only searches. Optional: decoding runs the model for a stream that was not
+encoded. Does nothing for a model family that does not separate the two
+steps (every family except CTC, the zipformer transducer and NeMo
+transducers).
+
+Args:
+  s:
+    The stream to encode, after ``accept_waveform``.
+)doc";
+
+static constexpr const char *kEncodeStreamsDoc = R"doc(
+Run the model for a list of streams ahead of decoding them. The streams
+encoded together and those decoded together need not be the same.
+
+Args:
+  ss:
+    A list of OfflineStream instances to encode.
+)doc";
+
 static constexpr const char *kSetConfigDoc = R"doc(
 Update the recognizer configuration at runtime.
 
@@ -224,6 +245,20 @@ void PybindOfflineRecognizer(py::module *m) {
             self.DecodeStreams(ss.data(), ss.size());
           },
           py::arg("ss"), kDecodeStreamsDoc,
+          py::call_guard<py::gil_scoped_release>())
+      .def(
+          "encode_stream",
+          [](const PyClass &self, OfflineStream *s) {
+            self.EncodeStreams(&s, 1);
+          },
+          py::arg("s"), kEncodeStreamDoc,
+          py::call_guard<py::gil_scoped_release>())
+      .def(
+          "encode_streams",
+          [](const PyClass &self, std::vector<OfflineStream *> ss) {
+            self.EncodeStreams(ss.data(), ss.size());
+          },
+          py::arg("ss"), kEncodeStreamsDoc,
           py::call_guard<py::gil_scoped_release>());
 }
 

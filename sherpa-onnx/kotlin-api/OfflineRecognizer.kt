@@ -237,6 +237,13 @@ class OfflineRecognizer(
 
     fun decode(stream: OfflineStream) = decode(ptr, stream.ptr)
 
+    // Runs the model ahead of decode(), which then only searches. Optional:
+    // decode() runs the model itself for a stream not encoded yet.
+    fun encode(stream: OfflineStream) = encode(ptr, stream.ptr)
+
+    fun encode(streams: Array<OfflineStream>) =
+        encodeStreams(ptr, LongArray(streams.size) { streams[it].ptr })
+
     fun setConfig(config: OfflineRecognizerConfig) = setConfig(ptr, config)
 
     private external fun delete(ptr: Long)
@@ -257,6 +264,10 @@ class OfflineRecognizer(
     ): Long
 
     private external fun decode(ptr: Long, streamPtr: Long)
+
+    private external fun encode(ptr: Long, streamPtr: Long)
+
+    private external fun encodeStreams(ptr: Long, streamPtrs: LongArray)
 
     private external fun getResult(streamPtr: Long): OfflineRecognizerResult
 

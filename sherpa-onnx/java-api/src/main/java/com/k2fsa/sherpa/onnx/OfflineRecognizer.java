@@ -37,6 +37,20 @@ public class OfflineRecognizer {
         decodeStreams(ptr, streamPtrs);
     }
 
+    // Runs the model ahead of decode(), which then only searches. Optional:
+    // decode() runs the model itself for a stream not encoded yet.
+    public void encode(OfflineStream s) {
+        encode(ptr, s.getPtr());
+    }
+
+    public void encode(OfflineStream[] ss) {
+        long[] streamPtrs = new long[ss.length];
+        for (int i = 0; i < ss.length; ++i) {
+            streamPtrs[i] = ss[i].getPtr();
+        }
+        encodeStreams(ptr, streamPtrs);
+    }
+
     public OfflineStream createStream() {
         long p = createStream(ptr);
         return new OfflineStream(p);
@@ -78,6 +92,10 @@ public class OfflineRecognizer {
     private native void setConfig(long ptr, OfflineRecognizerConfig config);
 
     private native void decodeStreams(long ptr, long[] streamPtrs);
+
+    private native void encode(long ptr, long streamPtr);
+
+    private native void encodeStreams(long ptr, long[] streamPtrs);
 
     private native OfflineRecognizerResult getResult(long streamPtr);
 }

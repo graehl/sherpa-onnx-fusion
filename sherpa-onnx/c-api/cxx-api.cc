@@ -493,6 +493,23 @@ void OfflineRecognizer::Decode(const OfflineStream *ss, int32_t n) const {
   SherpaOnnxDecodeMultipleOfflineStreams(p_, streams.data(), n);
 }
 
+void OfflineRecognizer::Encode(const OfflineStream *s) const {
+  SherpaOnnxEncodeOfflineStream(p_, s->Get());
+}
+
+void OfflineRecognizer::Encode(const OfflineStream *ss, int32_t n) const {
+  if (n <= 0) {
+    return;
+  }
+
+  std::vector<const SherpaOnnxOfflineStream *> streams(n);
+  for (int32_t i = 0; i != n; ++i) {
+    streams[i] = ss[i].Get();
+  }
+
+  SherpaOnnxEncodeMultipleOfflineStreams(p_, streams.data(), n);
+}
+
 OfflineRecognizerResult OfflineRecognizer::GetResult(
     const OfflineStream *s) const {
   auto r = SherpaOnnxGetOfflineStreamResult(s->Get());

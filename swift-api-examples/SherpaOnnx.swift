@@ -907,6 +907,24 @@ public class SherpaOnnxOfflineRecognizer {
     SherpaOnnxDecodeOfflineStream(recognizer, stream.stream)
   }
 
+  /// Run the model for a stream ahead of decode(stream:), which then only
+  /// searches. Does nothing for a model family that does not separate the
+  /// two steps.
+  public func encode(stream: SherpaOnnxOfflineStreamWrapper) {
+    SherpaOnnxEncodeOfflineStream(recognizer, stream.stream)
+  }
+
+  /// Run the model for several streams in one batch ahead of decoding.
+  public func encode(streams: [SherpaOnnxOfflineStreamWrapper]) {
+    var handles: [OpaquePointer?] = streams.map { $0.stream }
+    withExtendedLifetime(streams) {
+      handles.withUnsafeMutableBufferPointer { buf in
+        SherpaOnnxEncodeMultipleOfflineStreams(
+          recognizer, buf.baseAddress, Int32(buf.count))
+      }
+    }
+  }
+
   public func getResult(stream: SherpaOnnxOfflineStreamWrapper) -> SherpaOnnxOfflineRecognitionResult {
     guard let resultPtr = SherpaOnnxGetOfflineStreamResult(stream.stream) else {
       fatalError("Failed to get offline recognition result")

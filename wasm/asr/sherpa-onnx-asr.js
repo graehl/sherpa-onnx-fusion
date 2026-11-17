@@ -2035,6 +2035,29 @@ class OfflineRecognizer {
     this.Module._SherpaOnnxDecodeOfflineStream(this.handle, stream.handle);
   }
 
+  /**
+   * Run the model for a stream ahead of decoding it. Optional: a later
+   * decode() then only searches.
+   * @param stream {OfflineStream}
+   */
+  encode(stream) {
+    this.Module._SherpaOnnxEncodeOfflineStream(this.handle, stream.handle);
+  }
+
+  /**
+   * Run the model for several streams in one batch ahead of decoding them.
+   * @param streams {OfflineStream[]}
+   */
+  encodeStreams(streams) {
+    const n = streams.length;
+    const ptr = this.Module._malloc(n * 4);
+    for (let i = 0; i < n; ++i) {
+      this.Module.setValue(ptr + i * 4, streams[i].handle, 'i8*');
+    }
+    this.Module._SherpaOnnxEncodeMultipleOfflineStreams(this.handle, ptr, n);
+    this.Module._free(ptr);
+  }
+
   getResult(stream) {
     const r =
         this.Module._SherpaOnnxGetOfflineStreamResultAsJson(stream.handle);

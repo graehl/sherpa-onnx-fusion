@@ -30,6 +30,8 @@ export const offlineStreamSetOption: (handle: object, key: string, value: string
 export const offlineStreamGetOption: (handle: object, key: string) => string;
 export const offlineStreamHasOption: (handle: object, key: string) => boolean;
 export const decodeOfflineStream: (handle: object, streamHandle: object) => void;
+export const encodeOfflineStream: (handle: object, streamHandle: object) => void;
+export const encodeMultipleOfflineStreams: (handle: object, streamHandles: object[]) => void;
 export const getOfflineStreamResultAsJson: (streamHandle: object) => string;
 
 export const createOnlineRecognizer: (config: object, mgr?: object) => object;

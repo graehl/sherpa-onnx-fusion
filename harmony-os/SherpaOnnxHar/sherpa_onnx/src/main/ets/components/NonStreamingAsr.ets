@@ -6,6 +6,8 @@ import {
   createOfflineRecognizer,
   createOfflineStream,
   decodeOfflineStream,
+  encodeMultipleOfflineStreams,
+  encodeOfflineStream,
   getOfflineStreamResultAsJson,
   offlineRecognizerSetConfig,
 } from 'libsherpa_onnx.so';
@@ -292,6 +294,18 @@ export class OfflineRecognizer {
 
   decode(stream: OfflineStream) {
     decodeOfflineStream(this.handle, stream.handle);
+  }
+
+  // Run the model for a stream ahead of decoding it. Optional: a later
+  // decode() then only searches.
+  encode(stream: OfflineStream) {
+    encodeOfflineStream(this.handle, stream.handle);
+  }
+
+  // Run the model for several streams in one batch ahead of decoding them
+  encodeStreams(streams: OfflineStream[]) {
+    const handles: object[] = streams.map((s: OfflineStream): object => s.handle);
+    encodeMultipleOfflineStreams(this.handle, handles);
   }
 
   getResult(stream: OfflineStream): OfflineRecognizerResult {

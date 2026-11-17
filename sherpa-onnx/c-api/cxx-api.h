@@ -878,6 +878,15 @@ class SHERPA_ONNX_API OfflineRecognizer
   /** @brief Decode multiple offline streams in parallel. */
   void Decode(const OfflineStream *ss, int32_t n) const;
 
+  /** @brief Run the model for one stream ahead of Decode(), which then only
+   * searches. Does nothing for a model family that does not separate the
+   * two steps. */
+  void Encode(const OfflineStream *s) const;
+
+  /** @brief Run the model for several streams in one batch ahead of
+   * Decode(). */
+  void Encode(const OfflineStream *ss, int32_t n) const;
+
   /** @brief Return the copied recognition result for one stream. */
   OfflineRecognizerResult GetResult(const OfflineStream *s) const;
 
