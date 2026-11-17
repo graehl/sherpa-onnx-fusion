@@ -14,6 +14,19 @@ the same decoder. Binding that class directly would expose an
 implementation detail, tie the interface to CTC, and leave the model run
 to the caller.
 
+**What exists:** `CtcInflightDecoder::Step` is already the operation
+wanted, an advance of every ready utterance by a bounded unit of work
+(`steps_per_utterance` frames) after which some may be complete and
+released, freeing room to admit new ones; it is unit-tested only. The
+recognizers batch narrower: the utterances of one decode call are searched
+together for CTC (`DecodeFramesTogether`) and one after another for
+transducers ([transducer search batching](sketches/transducer-search-batching.md)).
+Streaming recognizers follow the same pattern as `Step` in public: streams
+join and finish independently, and each call advances the ready ones by a
+chunk. Keeping a batch full by admitting new utterances as others finish,
+rather than shrinking its width, also suits the cost of a change of shape
+on a GPU ([GPU decode cost](gpu-decode-cost-outside-the-model.md)).
+
 **Intended scope:** one public API for every decoder that can keep
 independent per-utterance search state between calls, not only CTC: the
 CTC prefix search, the transducer and NeMo RNN-T/TDT prefix searches, and

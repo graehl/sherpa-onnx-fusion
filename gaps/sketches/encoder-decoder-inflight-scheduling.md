@@ -83,6 +83,41 @@ ambitions. Known pulls, none measured:
 - The shape-change cost favours long runs of one width and length, which
   is the opposite of taking utterances as they come.
 
+## Search batches apart from model batches
+
+The API already lets them differ: `EncodeStreams` and `DecodeStreams` take
+any sets of streams. `sherpa-onnx-offline-parallel` does not use that: with
+or without `--decode-threads`, a search batch is exactly the model's batch
+of `--batch-size`. They should eventually be chosen apart (graehl,
+2026-11-17). The model's batch is set by padding and, on a GPU, by the cost
+of a change of shape; the search's by how many utterances' scorer steps
+share a call, where wider is cheaper per hypothesis and costs nothing in
+padding. A model batch split into one or more search calls needs no
+stitching, copy or care for lifetimes: each search call reads rows of an
+output that outlives it. Only gathering several model batches into one
+search call needs a copy or a reference count per allocation, so the
+first step is a driver option for search calls of at most one model
+batch. The search may also want its own pool of threads, as
+`--decode-threads` already gives it; once any of its computation (a
+scorer's step, a transducer's joiner) runs on a GPU while the search
+itself stays on the CPU, which threads may touch which device's memory
+becomes part of that choice (graehl, 2026-11-17).
+
+## Handing the encoder output over by reference
+
+What a stream keeps differs by family only in what the tensor holds: for
+CTC the log probabilities, which are all the search needs; for the
+zipformer and NeMo transducers the encoder frames, which the search feeds
+to the joiner. Either way `SetEncoderOutput` copies the stream's rows out
+of the batch's output into the stream. A stream could instead hold a
+reference to the batch's whole output, its row and its valid length, the
+copy made only when a later step needs contiguous rows. On the CPU the
+search's own calls (an LSTM step, a transducer's joiner) have no
+measurable shape-change cost, so this only saves the copy; on a GPU it is
+what keeps the output where the search can use it, and the search's calls
+would want the fixed widths of
+[the fusion sketches](../../topics/beam-search-and-scorer-fusion.sketches.md#fixed-width-scorer-steps).
+
 ## Completion evidence
 
 Demonstrate consecutive utterances with uninterrupted capture while earlier

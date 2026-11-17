@@ -93,6 +93,31 @@ and 7.5 s on six at two recordings a batch, and batches of eight on four
 threads cut the summed time in the recognizer from about 40 s to 25.6 s
 (2026-11-15, one run each).
 
+## Fixed-width scorer steps
+
+A recurrent scorer's step runs on exactly the nodes one `Advance` or
+`Finish` needs (`RecurrentLmScorer::Compute`), so its batch width changes
+on nearly every call as pruning and frame content vary. On the CPU that
+costs nothing measurable. On a GPU a change of shape cost the encoder
+22–60 ms a call
+([GPU decode cost](../gaps/gpu-decode-cost-outside-the-model.md)), and a
+step is far cheaper than that, so a GPU scorer would mostly pay for shape
+changes; the step graph's own cost per change is not measured. With
+`--scorer.N.provider=cuda` the step runs on the GPU, but each node's
+recurrent state is a host vector, so every step also copies its parents'
+states to the device and its outputs back.
+
+The option (graehl, 2026-11-17): a fixed step width W. A call's nodes run
+in chunks of W, and the last chunk either is padded to W, so every call
+has one shape, or runs at its own width, which saves the padded compute
+when the remainder is small and pays one shape change. Padding rows are
+dummy states whose outputs are dropped. Measure first, on a GPU: one
+step's time against width, with and without alternating widths, then the
+search's time with W at a few values against unpadded. Off by default;
+only a GPU scorer needs it. The same applies to the transducer's decoder
+and joiner calls if their search moves to a GPU
+([transducer search batching](../gaps/sketches/transducer-search-batching.md)).
+
 ## Recovery by iterative widening
 
 Graehl's intended initial scorers will not fail through hard exclusions.
