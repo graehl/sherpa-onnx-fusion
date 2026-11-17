@@ -318,6 +318,15 @@
  *   in which it is farthest from an edge.
  * @property {string} [blend] - CTC models: what 'center' averages, 'log'
  *   (default) probabilities or 'prob'.
+ * @property {number} [centerPower] - Exponent of the 'center' weight,
+ *   (1 + distance from the nearer retained edge)^centerPower: 1 (default) is
+ *   linear, 0 uniform.
+ * @property {number} [contextFrames] - Context-only output frames per
+ *   interior window edge; they inform the window's other frames but are not
+ *   themselves kept.
+ * @property {number} [contextFraction] - The same as a fraction of each
+ *   window's output length. At most one of contextFrames and contextFraction
+ *   may be non-zero.
  */
 
 /**

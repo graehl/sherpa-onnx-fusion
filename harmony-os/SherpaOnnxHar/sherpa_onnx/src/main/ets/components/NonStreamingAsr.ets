@@ -185,6 +185,11 @@ export class OfflineEncoderWindowConfig {
   public normalize: string = 'window';  // 'window' or 'utterance'
   public weight: string = 'center';  // 'center' or 'cut'
   public blend: string = 'log';  // CTC models: 'log' or 'prob'
+  public centerPower: number = 1;  // exponent of the 'center' weight
+  // Context-only output frames per interior window edge, or the same as a
+  // fraction of the window's output length; at most one may be non-zero
+  public contextFrames: number = 0;
+  public contextFraction: number = 0;
 }
 
 // How an offline model's encoder runs

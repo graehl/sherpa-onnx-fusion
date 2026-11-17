@@ -695,6 +695,13 @@ struct OfflineEncoderWindowConfig {
   std::string weight = "center";
   /** CTC models: what `"center"` averages, `"log"` or `"prob"`. */
   std::string blend = "log";
+  /** Exponent of the `"center"` weight: 1 is linear. 0 means 1; use
+   * `options_json` for uniform weights. */
+  float center_power = 1;
+  /** Context-only output frames per interior window edge. */
+  int32_t context_frames = 0;
+  /** The same as a fraction of each window's output length. */
+  float context_fraction = 0;
 };
 
 /** @brief How an offline model's encoder runs. */

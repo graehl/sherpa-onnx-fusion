@@ -691,7 +691,10 @@ public func sherpaOnnxOfflineEncoderWindowConfig(
   slack: Float = 1,
   normalize: String = "window",
   weight: String = "center",
-  blend: String = "log"
+  blend: String = "log",
+  centerPower: Float = 1,
+  contextFrames: Int = 0,
+  contextFraction: Float = 0
 ) -> SherpaOnnxOfflineEncoderWindowConfig {
   return SherpaOnnxOfflineEncoderWindowConfig(
     seconds: seconds,
@@ -699,7 +702,10 @@ public func sherpaOnnxOfflineEncoderWindowConfig(
     slack: slack,
     normalize: toCPointer(normalize),
     weight: toCPointer(weight),
-    blend: toCPointer(blend))
+    blend: toCPointer(blend),
+    center_power: centerPower,
+    context_frames: Int32(contextFrames),
+    context_fraction: contextFraction)
 }
 
 /// How an offline model's encoder runs.

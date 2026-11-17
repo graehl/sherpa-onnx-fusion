@@ -19,6 +19,9 @@ namespace SherpaOnnx
             Normalize = "window";
             Weight = "center";
             Blend = "log";
+            CenterPower = 1.0F;
+            ContextFrames = 0;
+            ContextFraction = 0.0F;
         }
 
         /// <summary>
@@ -57,5 +60,24 @@ namespace SherpaOnnx
         /// </summary>
         [MarshalAs(UnmanagedType.LPStr)]
         public string Blend;
+
+        /// <summary>
+        /// Exponent of the "center" weight, (1 + distance from the nearer
+        /// retained edge)^CenterPower: 1 is linear. 0 means 1; set uniform
+        /// weights through OptionsJson.
+        /// </summary>
+        public float CenterPower;
+
+        /// <summary>
+        /// Context-only output frames per interior window edge; they inform
+        /// the window's other frames but are not themselves kept.
+        /// </summary>
+        public int ContextFrames;
+
+        /// <summary>
+        /// The same as a fraction of each window's output length. At most one
+        /// of ContextFrames and ContextFraction may be non-zero.
+        /// </summary>
+        public float ContextFraction;
     }
 }

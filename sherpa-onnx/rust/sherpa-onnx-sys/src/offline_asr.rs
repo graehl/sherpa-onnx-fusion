@@ -172,6 +172,9 @@ pub struct OfflineEncoderWindowConfig {
     pub normalize: *const c_char,
     pub weight: *const c_char,
     pub blend: *const c_char,
+    pub center_power: c_float,
+    pub context_frames: i32,
+    pub context_fraction: c_float,
 }
 
 #[repr(C)]

@@ -1482,7 +1482,7 @@ function initSherpaOnnxOfflineEncoderWindowConfig(config, Module) {
   Module.stringToUTF8(
       config.blend || '', buffer + normalizeLen + weightLen, blendLen);
 
-  const len = 6 * 4;
+  const len = 9 * 4;
   const ptr = Module._malloc(len);
 
   let offset = 0;
@@ -1503,6 +1503,15 @@ function initSherpaOnnxOfflineEncoderWindowConfig(config, Module) {
 
   Module.setValue(
       ptr + offset, buffer + normalizeLen + weightLen, 'i8*');  // blend
+  offset += 4;
+
+  Module.setValue(ptr + offset, config.centerPower || 0, 'float');
+  offset += 4;
+
+  Module.setValue(ptr + offset, config.contextFrames || 0, 'i32');
+  offset += 4;
+
+  Module.setValue(ptr + offset, config.contextFraction || 0, 'float');
   offset += 4;
 
   return {buffer: buffer, ptr: ptr, len: len};

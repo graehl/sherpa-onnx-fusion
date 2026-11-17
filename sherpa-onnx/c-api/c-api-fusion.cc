@@ -74,6 +74,9 @@ OfflineEncoderConfig GetOfflineEncoderConfig(
   SetIfGiven(c.window.normalize, &w.normalize);
   SetIfGiven(c.window.weight, &w.weight);
   SetIfGiven(c.window.blend, &w.blend);
+  if (c.window.center_power != 0) w.center_power = c.window.center_power;
+  w.context_frames = c.window.context_frames;
+  w.context_fraction = c.window.context_fraction;
   SetIfGiven(c.lengths, &e.lengths);
   e.pad_to = c.pad_to;
   return e;

@@ -19,6 +19,15 @@ public class OfflineEncoderWindowConfig {
     private final String weight;
     // CTC models: what "center" averages, "log" probabilities or "prob".
     private final String blend;
+    // Exponent of the "center" weight, (1 + distance from the nearer
+    // retained edge)^centerPower: 1 is linear, 0 uniform.
+    private final float centerPower;
+    // Context-only output frames per interior window edge; they inform the
+    // window's other frames but are not themselves kept.
+    private final int contextFrames;
+    // The same as a fraction of each window's output length. At most one of
+    // contextFrames and contextFraction may be non-zero.
+    private final float contextFraction;
 
     private OfflineEncoderWindowConfig(Builder builder) {
         this.seconds = builder.seconds;
@@ -27,6 +36,9 @@ public class OfflineEncoderWindowConfig {
         this.normalize = builder.normalize;
         this.weight = builder.weight;
         this.blend = builder.blend;
+        this.centerPower = builder.centerPower;
+        this.contextFrames = builder.contextFrames;
+        this.contextFraction = builder.contextFraction;
     }
 
     public static Builder builder() {
@@ -57,6 +69,18 @@ public class OfflineEncoderWindowConfig {
         return blend;
     }
 
+    public float getCenterPower() {
+        return centerPower;
+    }
+
+    public int getContextFrames() {
+        return contextFrames;
+    }
+
+    public float getContextFraction() {
+        return contextFraction;
+    }
+
     public static class Builder {
         private float seconds = 0.0f;
         private float overlap = 3.0f;
@@ -64,6 +88,9 @@ public class OfflineEncoderWindowConfig {
         private String normalize = "window";
         private String weight = "center";
         private String blend = "log";
+        private float centerPower = 1.0f;
+        private int contextFrames = 0;
+        private float contextFraction = 0.0f;
 
         public OfflineEncoderWindowConfig build() {
             return new OfflineEncoderWindowConfig(this);
@@ -96,6 +123,21 @@ public class OfflineEncoderWindowConfig {
 
         public Builder setBlend(String blend) {
             this.blend = blend;
+            return this;
+        }
+
+        public Builder setCenterPower(float centerPower) {
+            this.centerPower = centerPower;
+            return this;
+        }
+
+        public Builder setContextFrames(int contextFrames) {
+            this.contextFrames = contextFrames;
+            return this;
+        }
+
+        public Builder setContextFraction(float contextFraction) {
+            this.contextFraction = contextFraction;
             return this;
         }
     }

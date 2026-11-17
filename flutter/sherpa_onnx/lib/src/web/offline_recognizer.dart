@@ -360,6 +360,9 @@ JSObject _buildModelConfig(OfflineModelConfig model) {
   window['normalize'] = w.normalize.toJS;
   window['weight'] = w.weight.toJS;
   window['blend'] = w.blend.toJS;
+  window['centerPower'] = w.centerPower.toJS;
+  window['contextFrames'] = w.contextFrames.toJS;
+  window['contextFraction'] = w.contextFraction.toJS;
   final encoder = JSObject();
   encoder['window'] = window;
   encoder['lengths'] = model.encoder.lengths.toJS;

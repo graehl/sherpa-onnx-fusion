@@ -599,6 +599,15 @@ final class SherpaOnnxOfflineEncoderWindowConfig extends Struct {
   external Pointer<Utf8> normalize;
   external Pointer<Utf8> weight;
   external Pointer<Utf8> blend;
+
+  @Float()
+  external double centerPower;
+
+  @Int32()
+  external int contextFrames;
+
+  @Float()
+  external double contextFraction;
 }
 
 final class SherpaOnnxOfflineEncoderConfig extends Struct {

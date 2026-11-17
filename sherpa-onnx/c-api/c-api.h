@@ -1182,6 +1182,21 @@ typedef struct SherpaOnnxOfflineEncoderWindowConfig {
    * "prob".
    */
   const char *blend;
+  /**
+   * Exponent of the "center" weight, (1 + distance from the nearer
+   * retained edge)^center_power: 1 is linear, 0 uniform. 0 here means 1.
+   */
+  float center_power;
+  /**
+   * Context-only output frames per interior window edge; they inform the
+   * window's other frames but are not themselves kept.
+   */
+  int32_t context_frames;
+  /**
+   * The same as a fraction of each window's output length. At most one of
+   * @c context_frames and @c context_fraction may be non-zero.
+   */
+  float context_fraction;
 } SherpaOnnxOfflineEncoderWindowConfig;
 
 /** @brief How an offline model's encoder runs. */

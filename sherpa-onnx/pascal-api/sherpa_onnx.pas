@@ -571,6 +571,12 @@ type
     Normalize: AnsiString; { 'window' or 'utterance' }
     Weight: AnsiString; { 'center' or 'cut' }
     Blend: AnsiString; { CTC models: 'log' or 'prob' }
+    { Exponent of the 'center' weight: 1 is linear. 0 means 1. }
+    CenterPower: Single;
+    { Context-only output frames per interior window edge. }
+    ContextFrames: Integer;
+    { The same as a fraction of each window's output length. }
+    ContextFraction: Single;
     function ToString: AnsiString;
     class operator Initialize({$IFDEF FPC}var{$ELSE}out{$ENDIF} Dest: TSherpaOnnxOfflineEncoderWindowConfig);
   end;
@@ -1278,6 +1284,9 @@ type
     Normalize: PAnsiChar;
     Weight: PAnsiChar;
     Blend: PAnsiChar;
+    CenterPower: cfloat;
+    ContextFrames: cint32;
+    ContextFraction: cfloat;
   end;
   SherpaOnnxOfflineEncoderConfig = record
     Window: SherpaOnnxOfflineEncoderWindowConfig;
@@ -2695,6 +2704,9 @@ begin
   C.ModelConfig.Encoder.Window.Normalize := PAnsiChar(Config.ModelConfig.Encoder.Window.Normalize);
   C.ModelConfig.Encoder.Window.Weight := PAnsiChar(Config.ModelConfig.Encoder.Window.Weight);
   C.ModelConfig.Encoder.Window.Blend := PAnsiChar(Config.ModelConfig.Encoder.Window.Blend);
+  C.ModelConfig.Encoder.Window.CenterPower := Config.ModelConfig.Encoder.Window.CenterPower;
+  C.ModelConfig.Encoder.Window.ContextFrames := Config.ModelConfig.Encoder.Window.ContextFrames;
+  C.ModelConfig.Encoder.Window.ContextFraction := Config.ModelConfig.Encoder.Window.ContextFraction;
   C.ModelConfig.Encoder.Lengths := PAnsiChar(Config.ModelConfig.Encoder.Lengths);
   C.ModelConfig.Encoder.PadTo := Config.ModelConfig.Encoder.PadTo;
 
@@ -3158,15 +3170,19 @@ begin
   Dest.Normalize := 'window';
   Dest.Weight := 'center';
   Dest.Blend := 'log';
+  Dest.CenterPower := 1;
+  Dest.ContextFrames := 0;
+  Dest.ContextFraction := 0;
 end;
 
 function TSherpaOnnxOfflineEncoderWindowConfig.ToString: AnsiString;
 begin
   Result := Format('TSherpaOnnxOfflineEncoderWindowConfig(Seconds := %.3f, ' +
     'Overlap := %.3f, Slack := %.3f, Normalize := %s, Weight := %s, ' +
-    'Blend := %s)',
+    'Blend := %s, CenterPower := %.3f, ContextFrames := %d, ' +
+    'ContextFraction := %.3f)',
     [Self.Seconds, Self.Overlap, Self.Slack, Self.Normalize, Self.Weight,
-     Self.Blend]);
+     Self.Blend, Self.CenterPower, Self.ContextFrames, Self.ContextFraction]);
 end;
 
 function TSherpaOnnxOfflineEncoderConfig.ToString: AnsiString;

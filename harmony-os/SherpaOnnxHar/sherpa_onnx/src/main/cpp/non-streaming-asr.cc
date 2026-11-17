@@ -371,6 +371,9 @@ static SherpaOnnxOfflineEncoderWindowConfig GetOfflineEncoderWindowConfig(
   SHERPA_ONNX_ASSIGN_ATTR_STR(normalize, normalize);
   SHERPA_ONNX_ASSIGN_ATTR_STR(weight, weight);
   SHERPA_ONNX_ASSIGN_ATTR_STR(blend, blend);
+  SHERPA_ONNX_ASSIGN_ATTR_FLOAT(center_power, centerPower);
+  SHERPA_ONNX_ASSIGN_ATTR_INT32(context_frames, contextFrames);
+  SHERPA_ONNX_ASSIGN_ATTR_FLOAT(context_fraction, contextFraction);
 
   return c;
 }
