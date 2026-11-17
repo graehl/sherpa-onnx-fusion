@@ -95,6 +95,39 @@ This is follow-up design, not a defect in the initial chunked-encoding
 contract. The current generic encoder sends all expanded windows from one
 utterance batch in one call; it does not yet bound or repack that expansion.
 
+## Confident sections before overlapping windows
+
+User-directed (graehl, 2026-11-17): a sufficiently long, confident silence
+may first divide a long recording into independent sections. Those are
+hard boundaries: no encoder window may cross them. Apply overlapping
+windows only within a section that is long enough to need them, keeping
+original recording offsets for results and timestamps. Define the silence
+confidence and minimum duration separately from the encoder length cap.
+
+The no-overlap baseline solves a different segmentation problem: each
+piece must fit its length cap, so it chooses a quiet boundary when it can
+and makes a hard cut even without silence when necessary. It should not
+be represented by fixed no-overlap tiling. A comparison need not force
+identical segmentation on methods with different constraints; it must
+state those constraints and score the same complete recordings.
+
+Overlap need not make middle frames run twice. The existing
+`--encoder.window.overlap` option sets an absolute duration independently
+of the window length; smaller values can reduce repeated computation
+on long inputs, subject to the current four-output-frame coverage floor.
+An automatic policy that varies overlap with recording or section length
+would be additional work. Measure quality first, and total compute before
+claiming that overlap is as efficient as hard splitting.
+
+Overlap and weighting are separate decisions. Equal weights across all
+covering windows give uniform averaging; center averaging instead weights
+each frame by its distance from the window edge. The latter is believed
+to be better with suitable parameters, not established as universally
+better. Compare both on the same windows before attributing a gain to
+center weights. The generic encoder currently exposes `center` and `cut`,
+not uniform averaging; `cut` selects one window's frame and is not the
+uniform-average condition.
+
 ## How to measure
 
 ### Diarization-guided window placement
