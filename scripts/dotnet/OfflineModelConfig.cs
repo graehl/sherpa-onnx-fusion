@@ -37,6 +37,7 @@ namespace SherpaOnnx
             Qwen3Asr = new OfflineQwen3AsrModelConfig();
             CohereTranscribe = new OfflineCohereTranscribeModelConfig();
             W2vBertCtc = "";
+            LitertDispatchDir = "";
         }
         public OfflineTransducerModelConfig Transducer;
         public OfflineParaformerModelConfig Paraformer;
@@ -83,5 +84,10 @@ namespace SherpaOnnx
         /// Path to a w2v-BERT 2.0 CTC model exported from transformers.
         [MarshalAs(UnmanagedType.LPStr)]
         public string W2vBertCtc;
+
+        /// Where LiteRT finds its accelerator library, used with a .tflite
+        /// model and provider "npu".
+        [MarshalAs(UnmanagedType.LPStr)]
+        public string LitertDispatchDir;
     }
 }

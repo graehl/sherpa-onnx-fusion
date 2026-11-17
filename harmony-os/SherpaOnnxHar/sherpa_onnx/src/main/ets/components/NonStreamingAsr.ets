@@ -204,6 +204,8 @@ export class OfflineModelConfig {
   public fireRedAsrCtc: OfflineFireRedAsrCtcModelConfig = new OfflineFireRedAsrCtcModelConfig();
   // Path to a w2v-BERT 2.0 CTC model exported from transformers
   public w2vBertCtc: string = '';
+  // Where LiteRT finds its accelerator library (.tflite model, provider 'npu')
+  public litertDispatchDir: string = '';
 }
 
 export class OfflineLMConfig {

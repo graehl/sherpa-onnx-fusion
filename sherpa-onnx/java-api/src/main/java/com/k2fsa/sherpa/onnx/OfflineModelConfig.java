@@ -31,6 +31,9 @@ public class OfflineModelConfig {
     private final String bpeVocab;
     // Path to a w2v-BERT 2.0 CTC model exported from transformers.
     private final String w2vBertCtc;
+    // Where LiteRT finds its accelerator library, for a .tflite model run
+    // with provider "npu".
+    private final String litertDispatchDir;
 
     private OfflineModelConfig(Builder builder) {
         this.transducer = builder.transducer;
@@ -59,6 +62,7 @@ public class OfflineModelConfig {
         this.modelingUnit = builder.modelingUnit;
         this.bpeVocab = builder.bpeVocab;
         this.w2vBertCtc = builder.w2vBertCtc;
+        this.litertDispatchDir = builder.litertDispatchDir;
     }
 
     public static Builder builder() {
@@ -169,6 +173,10 @@ public class OfflineModelConfig {
         return w2vBertCtc;
     }
 
+    public String getLitertDispatchDir() {
+        return litertDispatchDir;
+    }
+
     public static class Builder {
         private OfflineParaformerModelConfig paraformer = OfflineParaformerModelConfig.builder().build();
         private OfflineTransducerModelConfig transducer = OfflineTransducerModelConfig.builder().build();
@@ -197,6 +205,7 @@ public class OfflineModelConfig {
         private String modelingUnit = "cjkchar";
         private String bpeVocab = "";
         private String w2vBertCtc = "";
+        private String litertDispatchDir = "";
 
         public OfflineModelConfig build() {
             return new OfflineModelConfig(this);
@@ -329,6 +338,11 @@ public class OfflineModelConfig {
 
         public Builder setW2vBertCtc(String w2vBertCtc) {
             this.w2vBertCtc = w2vBertCtc;
+            return this;
+        }
+
+        public Builder setLitertDispatchDir(String litertDispatchDir) {
+            this.litertDispatchDir = litertDispatchDir;
             return this;
         }
     }

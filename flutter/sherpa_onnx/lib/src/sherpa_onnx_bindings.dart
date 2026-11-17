@@ -581,6 +581,7 @@ final class SherpaOnnxOfflineModelConfig extends Struct {
   external SherpaOnnxOfflineCohereTranscribeModelConfig cohereTranscribe;
 
   external Pointer<Utf8> w2vBertCtc;
+  external Pointer<Utf8> litertDispatchDir;
 }
 
 final class SherpaOnnxOfflineRecognizerConfig extends Struct {

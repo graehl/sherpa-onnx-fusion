@@ -1221,6 +1221,12 @@ typedef struct SherpaOnnxOfflineModelConfig {
   SherpaOnnxOfflineCohereTranscribeModelConfig cohere_transcribe;
   /** Path to a w2v-BERT 2.0 CTC model exported from transformers. */
   const char *w2v_bert_ctc;
+  /**
+   * Where LiteRT finds its accelerator library, used with a .tflite model
+   * and provider "npu"; for a Pixel, the directory holding
+   * libLiteRtDispatch_GoogleTensor.so.
+   */
+  const char *litert_dispatch_dir;
 } SherpaOnnxOfflineModelConfig;
 
 /**

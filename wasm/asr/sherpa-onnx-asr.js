@@ -1671,7 +1671,7 @@ function initSherpaOnnxOfflineModelConfig(config, Module) {
       tdnn.len + 8 * 4 + senseVoice.len + moonshine.len + fireRedAsr.len +
       dolphin.len + zipformerCtc.len + canary.len + wenetCtc.len +
       omnilingual.len + medasr.len + funasrNano.len + fireRedAsrCtc.len +
-      qwen3Asr.len + cohereTranscribe.len + 1 * 4;
+      qwen3Asr.len + cohereTranscribe.len + 2 * 4;
 
   const ptr = Module._malloc(len);
 
@@ -1699,9 +1699,11 @@ function initSherpaOnnxOfflineModelConfig(config, Module) {
   const teleSpeechCtcLen =
       Module.lengthBytesUTF8(config.teleSpeechCtc || '') + 1;
   const w2vBertCtcLen = Module.lengthBytesUTF8(config.w2vBertCtc || '') + 1;
+  const litertDispatchDirLen =
+      Module.lengthBytesUTF8(config.litertDispatchDir || '') + 1;
 
   const bufferLen = tokensLen + providerLen + modelTypeLen + modelingUnitLen +
-      bpeVocabLen + teleSpeechCtcLen + w2vBertCtcLen;
+      bpeVocabLen + teleSpeechCtcLen + w2vBertCtcLen + litertDispatchDirLen;
 
   const buffer = Module._malloc(bufferLen);
 
@@ -1729,6 +1731,12 @@ function initSherpaOnnxOfflineModelConfig(config, Module) {
   const w2vBertCtcPtr = buffer + offset;
   Module.stringToUTF8(config.w2vBertCtc || '', w2vBertCtcPtr, w2vBertCtcLen);
   offset += w2vBertCtcLen;
+
+  const litertDispatchDirPtr = buffer + offset;
+  Module.stringToUTF8(
+      config.litertDispatchDir || '', litertDispatchDirPtr,
+      litertDispatchDirLen);
+  offset += litertDispatchDirLen;
 
   offset =
       transducer.len + paraformer.len + nemoCtc.len + whisper.len + tdnn.len;
@@ -1806,6 +1814,9 @@ function initSherpaOnnxOfflineModelConfig(config, Module) {
   offset += cohereTranscribe.len;
 
   Module.setValue(ptr + offset, w2vBertCtcPtr, 'i8*');
+  offset += 4;
+
+  Module.setValue(ptr + offset, litertDispatchDirPtr, 'i8*');
   offset += 4;
 
   return {

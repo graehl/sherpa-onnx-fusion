@@ -170,6 +170,9 @@ data class OfflineModelConfig(
     var bpeVocab: String = "",
     // Path to a w2v-BERT 2.0 CTC model exported from transformers.
     var w2vBertCtc: String = "",
+    // Where LiteRT finds its accelerator library, for a .tflite model run
+    // with provider "npu".
+    var litertDispatchDir: String = "",
 )
 
 data class OfflineCtcFstDecoderConfig(

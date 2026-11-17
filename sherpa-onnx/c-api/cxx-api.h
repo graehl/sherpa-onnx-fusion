@@ -741,6 +741,9 @@ struct OfflineModelConfig {
   OfflineCohereTranscribeModelConfig cohere_transcribe;
   /** w2v-BERT 2.0 CTC model file. */
   std::string w2v_bert_ctc;
+  /** Where LiteRT finds its accelerator library, for a .tflite model run
+   * with provider `"npu"`. */
+  std::string litert_dispatch_dir;
 };
 
 /** @brief Optional language-model rescoring configuration for offline ASR. */

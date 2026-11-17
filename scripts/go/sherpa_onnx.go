@@ -734,6 +734,11 @@ type OfflineModelConfig struct {
 	TeleSpeechCtc string // Optional.
 
 	W2vBertCtc string // Path to a w2v-BERT 2.0 CTC model exported from transformers
+
+	// Where LiteRT finds its accelerator library, used with a .tflite model
+	// and provider npu; for a Pixel, the directory holding
+	// libLiteRtDispatch_GoogleTensor.so.
+	LitertDispatchDir string
 }
 
 // Configuration for the offline/non-streaming recognizer.
@@ -886,6 +891,7 @@ func newCOfflineRecognizerConfig(config *OfflineRecognizerConfig) *C.struct_Sher
 	c.model_config.telespeech_ctc = C.CString(config.ModelConfig.TeleSpeechCtc)
 
 	c.model_config.w2v_bert_ctc = C.CString(config.ModelConfig.W2vBertCtc)
+	c.model_config.litert_dispatch_dir = C.CString(config.ModelConfig.LitertDispatchDir)
 
 	c.lm_config.model = C.CString(config.LmConfig.Model)
 	c.lm_config.scale = C.float(config.LmConfig.Scale)
@@ -966,6 +972,7 @@ func freeCOfflineRecognizerConfig(c *C.struct_SherpaOnnxOfflineRecognizerConfig)
 		&c.model_config.bpe_vocab,
 		&c.model_config.telespeech_ctc,
 		&c.model_config.w2v_bert_ctc,
+		&c.model_config.litert_dispatch_dir,
 		&c.lm_config.model,
 		&c.decoding_method,
 		&c.hotwords_file,

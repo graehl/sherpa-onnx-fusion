@@ -634,6 +634,7 @@ class OfflineModelConfig {
     this.bpeVocab = '',
     this.telespeechCtc = '',
     this.w2vBertCtc = '',
+    this.litertDispatchDir = '',
   });
 
   factory OfflineModelConfig.fromJson(Map<String, dynamic> json) {
@@ -737,12 +738,13 @@ class OfflineModelConfig {
       bpeVocab: json['bpeVocab'] as String? ?? '',
       telespeechCtc: json['telespeechCtc'] as String? ?? '',
       w2vBertCtc: json['w2vBertCtc'] as String? ?? '',
+      litertDispatchDir: json['litertDispatchDir'] as String? ?? '',
     );
   }
 
   @override
   String toString() {
-    return 'OfflineModelConfig(transducer: $transducer, paraformer: $paraformer, nemoCtc: $nemoCtc, whisper: $whisper, tdnn: $tdnn, senseVoice: $senseVoice, moonshine: $moonshine, fireRedAsr: $fireRedAsr, dolphin: $dolphin, zipformerCtc: $zipformerCtc, canary: $canary, wenetCtc: $wenetCtc, omnilingual: $omnilingual, medasr: $medasr, funasrNano: $funasrNano, fireRedAsrCtc: $fireRedAsrCtc, qwen3Asr: $qwen3Asr, cohereTranscribe: $cohereTranscribe, tokens: $tokens, numThreads: $numThreads, debug: $debug, provider: $provider, modelType: $modelType, modelingUnit: $modelingUnit, bpeVocab: $bpeVocab, telespeechCtc: $telespeechCtc, w2vBertCtc: $w2vBertCtc)';
+    return 'OfflineModelConfig(transducer: $transducer, paraformer: $paraformer, nemoCtc: $nemoCtc, whisper: $whisper, tdnn: $tdnn, senseVoice: $senseVoice, moonshine: $moonshine, fireRedAsr: $fireRedAsr, dolphin: $dolphin, zipformerCtc: $zipformerCtc, canary: $canary, wenetCtc: $wenetCtc, omnilingual: $omnilingual, medasr: $medasr, funasrNano: $funasrNano, fireRedAsrCtc: $fireRedAsrCtc, qwen3Asr: $qwen3Asr, cohereTranscribe: $cohereTranscribe, tokens: $tokens, numThreads: $numThreads, debug: $debug, provider: $provider, modelType: $modelType, modelingUnit: $modelingUnit, bpeVocab: $bpeVocab, telespeechCtc: $telespeechCtc, w2vBertCtc: $w2vBertCtc, litertDispatchDir: $litertDispatchDir)';
   }
 
   Map<String, dynamic> toJson() => {
@@ -773,6 +775,7 @@ class OfflineModelConfig {
     'bpeVocab': bpeVocab,
     'telespeechCtc': telespeechCtc,
     'w2vBertCtc': w2vBertCtc,
+    'litertDispatchDir': litertDispatchDir,
   };
 
   final OfflineTransducerModelConfig transducer;
@@ -805,6 +808,11 @@ class OfflineModelConfig {
 
   /// Path to a w2v-BERT 2.0 CTC model exported from transformers.
   final String w2vBertCtc;
+
+  /// Where LiteRT finds its accelerator library, used with a .tflite model
+  /// and provider `npu`; for a Pixel, the directory holding
+  /// libLiteRtDispatch_GoogleTensor.so.
+  final String litertDispatchDir;
 }
 
 /// Top-level configuration for [OfflineRecognizer].
