@@ -80,6 +80,20 @@ condition starts a fresh process, so timing includes first-call overhead
 and is diagnostic rather than a warmed serving benchmark. Eight talks do
 not establish significance across speakers or recording types.
 
+`--segmentation silence-split --windows 20,15,10` supplies the hard-split
+baseline. Before each duration cap it searches the preceding 3 s on a
+20 ms grid for the quietest 200 ms mean-square audio region, cutting at
+its center. It retains every sample exactly once, without overlap. All
+pieces from a talk are encoded in one batch, independently searched,
+and their transcripts concatenated in source order. This is a
+silence-favoring energy heuristic, not a VAD or diarizer; when there is
+no silence it still picks the quietest region. Saved cuts are sample
+offsets. `split_seconds` includes preparing and writing the piece WAVs;
+the CLI's `decode_seconds` excludes that preparation. The comparison
+tests overlap plus joining before search together, not center averaging
+in isolation. Run the splitter checks with the recipe's dependencies:
+`uv run --with numpy --with pyarrow --with soundfile --with rapidfuzz python -m unittest discover -s repro -p test_encoder_windows.py`.
+
 ### Other claims
 
 Add its downloads under `[artifacts.<name>]` with a URL and SHA-256, then a

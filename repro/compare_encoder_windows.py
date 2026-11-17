@@ -1,6 +1,6 @@
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["pyarrow", "soundfile", "rapidfuzz"]
+# dependencies = ["numpy", "pyarrow", "soundfile", "rapidfuzz"]
 # ///
 """Compare encoder window lengths on reconstructed TED-LIUM validation talks."""
 
@@ -15,6 +15,7 @@ import time
 import sys
 
 import pyarrow.parquet as pq
+import numpy as np
 import soundfile as sf
 from rapidfuzz.distance import Levenshtein
 from repro_claims import file_sha256, words
@@ -28,11 +29,44 @@ def transcript_words(text: str) -> list[str]:
     return words(text)
 
 
+def silence_split_files(
+    wav: Path, seconds: int, directory: Path
+) -> tuple[list[str], list[int]]:
+    """Hard cuts at the quietest 200 ms in the last 3 s before each cap."""
+    audio, rate = sf.read(wav)
+    if audio.ndim != 1:
+        raise ValueError("Silence splitting requires mono audio")
+    cap = int(seconds * rate)
+    radius = int(0.1 * rate)
+    step = max(1, int(0.02 * rate))
+    cumulative = np.concatenate(([0.0], np.cumsum(audio * audio, dtype=np.float64)))
+    cuts = [0]
+    while len(audio) - cuts[-1] > cap:
+        latest = cuts[-1] + cap
+        candidates = np.arange(latest - 3 * rate, latest + 1, step)
+        left = candidates - radius
+        right = np.minimum(candidates + radius, len(audio))
+        energy = (cumulative[right] - cumulative[left]) / (right - left)
+        cut = int(candidates[np.argmin(energy)])
+        cuts.append(cut)
+    cuts.append(len(audio))
+    directory.mkdir()
+    files = []
+    for index, (start, end) in enumerate(zip(cuts, cuts[1:])):
+        piece = directory / f"{index:04d}.wav"
+        sf.write(piece, audio[start:end], rate, subtype="PCM_16")
+        files.append(str(piece))
+    return files, cuts
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", choices=["ctc", "transducer"], default="ctc")
     parser.add_argument("--limit", type=int, default=8)
     parser.add_argument("--windows", default="20,15,10,0")
+    parser.add_argument(
+        "--segmentation", choices=["overlap", "silence-split"], default="overlap"
+    )
     parser.add_argument(
         "--data", type=Path, required=True, help="Pinned validation parquet"
     )
@@ -54,6 +88,8 @@ def main() -> None:
         parser.error(
             "Positive --limit and windows of 0 or greater than 3 seconds required"
         )
+    if args.segmentation == "silence-split" and 0 in windows:
+        parser.error("Silence splitting needs positive window lengths")
     outdir = args.output.resolve()
     outdir.mkdir(parents=True, exist_ok=False)
     rows = pq.read_table(args.data).to_pylist()
@@ -103,6 +139,13 @@ def main() -> None:
         for window in windows:
             stem = outdir / f"{row['id']}-w{window}"
             result = stem.with_suffix(".json")
+            split_start = time.monotonic()
+            files, cuts = ([row["wav"]], [])
+            if args.segmentation == "silence-split":
+                files, cuts = silence_split_files(
+                    Path(row["wav"]), window, stem.with_suffix(".pieces")
+                )
+            split_seconds = time.monotonic() - split_start
             command = [
                 str(args.binary.resolve()),
                 "--print-args=false",
@@ -111,10 +154,10 @@ def main() -> None:
                 f"--provider={args.provider}",
                 "--num-threads=2",
                 "--decoding-method=greedy_search",
-                f"--encoder.window.seconds={window}",
+                f"--encoder.window.seconds={window if args.segmentation == 'overlap' else 0}",
                 "--encoder.window.overlap=3",
                 "--encoder.window.slack=1",
-                row["wav"],
+                *files,
             ]
             print(
                 f"[decode] {args.model} {row['id']} {row['seconds']:.1f}s window={window}",
@@ -135,6 +178,9 @@ def main() -> None:
             record = dict(
                 id=row["id"],
                 window=window,
+                segmentation=args.segmentation,
+                cuts_samples=cuts,
+                split_seconds=split_seconds,
                 seconds=row["seconds"],
                 command=command,
                 exit=code,
@@ -144,16 +190,18 @@ def main() -> None:
             if code == 0:
                 stdout = stem.with_suffix(".out").read_text()
                 stderr = stem.with_suffix(".err").read_text()
-                match = re.search(
+                matches = re.findall(
                     r'^\{.*"text": "((?:[^"\\]|\\.)*)"', stdout, re.MULTILINE
                 )
                 elapsed = re.search(r"Elapsed seconds: ([0-9.]+)", stderr)
-                if not match or not elapsed:
+                if len(matches) != len(files) or not elapsed:
                     raise RuntimeError(f"Missing output or timing in {stem}")
-                hypothesis = json.loads('"' + match.group(1) + '"')
+                pieces = [json.loads('"' + match + '"') for match in matches]
+                hypothesis = " ".join(pieces)
                 reference_words = transcript_words(row["reference"])
                 record.update(
                     hypothesis=hypothesis,
+                    piece_hypotheses=pieces,
                     reference=row["reference"],
                     errors=Levenshtein.distance(
                         reference_words, transcript_words(hypothesis)
@@ -168,7 +216,14 @@ def main() -> None:
                     {
                         k: v
                         for k, v in record.items()
-                        if k not in ["command", "hypothesis", "reference"]
+                        if k
+                        not in [
+                            "command",
+                            "hypothesis",
+                            "reference",
+                            "piece_hypotheses",
+                            "cuts_samples",
+                        ]
                     }
                 ),
                 flush=True,
