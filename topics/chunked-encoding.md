@@ -116,9 +116,10 @@ error for a transducer.
 
 ## Choices that are open
 
-No setting here has been tuned or compared on a test set. The defaults
-reproduce the scheme the LiteRT backend first used; they are a
-starting point, not a finding. Each of these could credibly win:
+The generic encoder's settings have not been compared on a test set.
+The defaults reproduce the scheme the LiteRT backend first used;
+the Lao comparison below covers that backend on one model. Each of
+these choices remains open across model families:
 
 - **Normalization scope.** It matters only for a model that normalizes
   features with statistics of its own input: w2v-BERT's per-utterance
@@ -237,6 +238,71 @@ w2v-BERT CTC model and the same three files, the binary before the
 shared facility and the one after gave byte-identical results by
 default and with `--litert-window=10:3:1`, and
 `--encoder.window.seconds=10` gave the same bytes as that alias.
+
+### Lao quality and real-time factor
+
+Measurements from 2026-11-15/16 on 405 FLEURS Lao test clips, using the
+same private 600M w2v-BERT CTC student. ER2 is the promoted Lao
+character-based error metric used for this evaluation, not plain WER;
+lower is better. The model and scoring recipe are not published here,
+so these figures are deployment evidence, not a public reproduction
+recipe. The fused
+decode uses a character 8-gram, beam 32, LM weight 0.3 and bonus 1.
+These are batch-1 results from the standalone phone driver, not a
+quality evaluation of the fork's generic encoder.
+
+| Encoding path | Greedy ER2 | With 8-gram ER2 | Warm fixture RTF, with 8-gram | Test-pass RTF, with 8-gram |
+|---|---:|---:|---:|---:|
+| Phone ONNX CPU, int8, 20 s pause pieces | 14.89 | 12.34 | — | — |
+| Pixel 11 LiteRT TPU, bf16, 20 s pause pieces | 14.43 | 12.07 | 0.091 | 0.106 |
+| Pixel 11 LiteRT TPU, bf16, overlapping 10 s windows | 14.52 | 12.01 | 0.062 | 0.075 |
+| Pixel 11 LiteRT TPU, bf16, overlapping 5 s windows | 15.20 | 12.39 | 0.051 | 0.062 |
+| Pixel 11 LiteRT TPU, int8 feed-forward layers, 10 s windows | — | 12.11 | 0.085 | 0.092 |
+| Pixel 11 LiteRT TPU, int8 feed-forward layers, 5 s windows | 15.23 | 12.47 | — | — |
+| Host PyTorch bf16, whole clips | — | 11.93 | — | — |
+
+RTF is decode seconds divided by audio seconds, including features,
+encoding and search. Warm fixture timing uses 2/5/10/20/30 s Lao clips
+(67 s total), one warm-up and the median of three runs, USB powered,
+after at least 60 s idle and with skin temperature at most 28 °C.
+Test-pass timing has no warm-up per clip. Dashes mean no matching
+timing is supplied here; the CPU quality row was run on an S22+, so it
+does not provide a same-device speed comparison with the Pixel 11.
+
+The pause-piece baseline cuts at pauses with a 20 s target and searches
+each piece separately. It uses 5, 10 and 20 s graphs, choosing the
+shortest that holds each piece. The 10 s windows use 5 and 10 s graphs,
+3 s overlap and 1 s slack; the 5 s windows use a 5 s graph, 2 s overlap
+and 1 s slack. Both normalize per window and blend with center weights.
+
+The bf16 TPU 20 s pause-piece row scores 0.27 points below int8 ONNX
+with the LM (paired
+bootstrap, 10,000 resamples; 95% interval for TPU minus ONNX:
+−0.44 to −0.11; Holm-adjusted p = 0.002). Precision and execution paths
+differ, so this does not isolate a runtime effect. Against 20 s pieces,
+10 s windows change ER2 by −0.06 (95% interval −0.21 to +0.09), while
+5 s windows change it by +0.31 (+0.00 to +0.62); neither window
+comparison is significant after the recorded multiple-comparison
+correction. These data do not establish equivalence.
+
+Batch 2 has executed fully on the Pixel TPU, but a matched batch-1
+versus batch-2 quality comparison remains unmeasured. It needs identical
+features, physical lengths, windows, stitching and decoding on both
+widths, with a float ONNX reference. The table does not measure a
+batching penalty or the isolated benefit of silence anchoring.
+
+The int8 TPU rows quantize weights and activations in the feed-forward
+layers (about two thirds of the weights), calibrated on 32 FLEURS Lao
+validation clips; the rest stays bf16. This is mixed precision, not a
+fully int8 encoder. At 10 s it changes ER2 by +0.10 against bf16
+(95% interval −0.04 to +0.23) and is slower. At 5 s it changes ER2 by
++0.08 (−0.06 to +0.22); the table-free encoder call takes 0.090 s
+against 0.110 s for table-free bf16, but that is not an end-to-end RTF.
+Table-free graphs compute the position term rather than storing its
+table. The 5 s encoder speedup does not imply an end-to-end speedup at
+10 s. Weight-only
+int8 was also tried: its 5 s encoder call took 0.603 s, slower than
+bf16, because weights were dequantized on each call.
 
 ## Not done
 
