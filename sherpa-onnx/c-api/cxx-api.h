@@ -276,6 +276,11 @@ struct OnlineRecognizerConfig {
   std::string hotwords_buf;
   /** Optional homophone replacement configuration. */
   HomophoneReplacerConfig hr;
+  /** Scorers and search settings for `"prefix_beam_search"`. */
+  FusionConfig fusion;
+  /** Optional JSON object of options applied after every other field; see
+   * SherpaOnnxOnlineRecognizerConfig::options_json. */
+  std::string options_json;
 };
 
 /** @brief Current streaming ASR result copied into C++ containers. */

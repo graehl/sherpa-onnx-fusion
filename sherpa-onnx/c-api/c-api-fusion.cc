@@ -62,4 +62,9 @@ bool ApplyCOptionsJson(const SherpaOnnxOfflineRecognizerConfig *c,
   return ApplyJson(c, config);
 }
 
+bool ApplyCOptionsJson(const SherpaOnnxOnlineRecognizerConfig *c,
+                       OnlineRecognizerConfig *config) {
+  return ApplyJson(c, config);
+}
+
 }  // namespace sherpa_onnx

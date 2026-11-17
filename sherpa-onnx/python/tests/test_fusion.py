@@ -97,5 +97,48 @@ class TestOfflineFusion(unittest.TestCase):
         self.assertIn("options_json", str(e.exception))
 
 
+STREAMING_DIR = (
+    _models / "streaming-zipformer-en/sherpa-onnx-streaming-zipformer-en-2023-06-26"
+)
+_chunk = "epoch-99-avg-1-chunk-16-left-128"
+
+
+@unittest.skipUnless(
+    have(STREAMING_DIR / "tokens.txt", STREAMING_DIR / f"encoder-{_chunk}.int8.onnx"),
+    f"needs {STREAMING_DIR}",
+)
+class TestOnlineFusion(unittest.TestCase):
+    def decode(self, **kwargs) -> str:
+        recognizer = sherpa_onnx.OnlineRecognizer.from_transducer(
+            tokens=str(STREAMING_DIR / "tokens.txt"),
+            encoder=str(STREAMING_DIR / f"encoder-{_chunk}.int8.onnx"),
+            decoder=str(STREAMING_DIR / f"decoder-{_chunk}.onnx"),
+            joiner=str(STREAMING_DIR / f"joiner-{_chunk}.int8.onnx"),
+            num_threads=2,
+            **kwargs,
+        )
+        samples, rate = read_wave(str(STREAMING_DIR / "test_wavs/0.wav"))
+        s = recognizer.create_stream()
+        s.accept_waveform(rate, samples)
+        s.accept_waveform(rate, [0.0] * int(0.66 * rate))
+        s.input_finished()
+        while recognizer.is_ready(s):
+            recognizer.decode_stream(s)
+        return recognizer.get_result(s)
+
+    def test_prefix_search_with_scorer(self):
+        greedy = self.decode()
+        self.assertTrue(greedy)
+        fusion = sherpa_onnx.FusionConfig(
+            scorers=[sherpa_onnx.ScorerConfig(type="kenlm", model=str(LM), weight=0.3)]
+        )
+        fused = self.decode(
+            decoding_method="prefix_beam_search",
+            fusion=fusion if LM.is_file() else None,
+            options_json='{"score-beam": 10}',
+        )
+        self.assertTrue(fused)
+
+
 if __name__ == "__main__":
     unittest.main()

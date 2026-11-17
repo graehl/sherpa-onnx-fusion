@@ -29,4 +29,9 @@ bool ApplyOptionsJson(const std::string &json_text,
   return ApplyToConfig(json_text, config, error);
 }
 
+bool ApplyOptionsJson(const std::string &json_text,
+                      OnlineRecognizerConfig *config, std::string *error) {
+  return ApplyToConfig(json_text, config, error);
+}
+
 }  // namespace sherpa_onnx

@@ -7,6 +7,7 @@
 
 #include "sherpa-onnx/csrc/fusion-config.h"
 #include "sherpa-onnx/csrc/offline-recognizer.h"
+#include "sherpa-onnx/csrc/online-recognizer.h"
 #include "sherpa-onnx/jni/common.h"
 
 namespace sherpa_onnx {
@@ -22,6 +23,8 @@ FusionConfig GetFusionConfig(JNIEnv *env, jobject fusion, bool *ok);
 // applied.
 bool ApplyOptionsJsonField(JNIEnv *env, jobject config,
                            OfflineRecognizerConfig *ans);
+bool ApplyOptionsJsonField(JNIEnv *env, jobject config,
+                           OnlineRecognizerConfig *ans);
 
 }  // namespace sherpa_onnx
 

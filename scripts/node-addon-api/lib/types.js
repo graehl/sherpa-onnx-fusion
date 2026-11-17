@@ -399,6 +399,9 @@
  * @property {string} [ruleFsts]
  * @property {string} [ruleFars]
  * @property {number} [blankPenalty]
+ * @property {FusionConfig} [fusion]
+ * @property {string} [optionsJson] - JSON object of command-line options
+ *   applied after every other field, as in OfflineRecognizerConfig.
  */
 
 /**

@@ -263,7 +263,9 @@ public func sherpaOnnxOnlineRecognizerConfig(
   blankPenalty: Float = 0.0,
   hotwordsBuf: String = "",
   hotwordsBufSize: Int = 0,
-  hr: SherpaOnnxHomophoneReplacerConfig = sherpaOnnxHomophoneReplacerConfig()
+  hr: SherpaOnnxHomophoneReplacerConfig = sherpaOnnxHomophoneReplacerConfig(),
+  fusion: SherpaOnnxFusionConfig = sherpaOnnxFusionConfig(),
+  optionsJson: String = ""
 ) -> SherpaOnnxOnlineRecognizerConfig {
   return SherpaOnnxOnlineRecognizerConfig(
     feat_config: featConfig,
@@ -282,7 +284,9 @@ public func sherpaOnnxOnlineRecognizerConfig(
     blank_penalty: blankPenalty,
     hotwords_buf: toCPointer(hotwordsBuf),
     hotwords_buf_size: Int32(hotwordsBufSize),
-    hr: hr
+    hr: hr,
+    fusion: fusion,
+    options_json: toCPointer(optionsJson)
   )
 }
 

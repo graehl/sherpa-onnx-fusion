@@ -752,6 +752,9 @@ final class SherpaOnnxOnlineRecognizerConfig extends Struct {
   @Int32()
   external int hotwordsBufSize;
   external SherpaOnnxHomophoneReplacerConfig hr;
+
+  external SherpaOnnxFusionConfig fusion;
+  external Pointer<Utf8> optionsJson;
 }
 
 final class SherpaOnnxSileroVadModelConfig extends Struct {

@@ -4,6 +4,7 @@ import 'dart:ffi';
 
 import 'package:ffi/ffi.dart';
 
+import './fusion_config_native.dart';
 import './online_recognizer_config.dart';
 import './online_stream.dart';
 import './sherpa_onnx_bindings.dart';
@@ -112,8 +113,13 @@ class OnlineRecognizer {
     c.ref.hr.lexicon = config.hr.lexicon.toNativeUtf8();
     c.ref.hr.ruleFsts = config.hr.ruleFsts.toNativeUtf8();
 
+    fillFusionConfig(c.ref.fusion, config.fusion);
+    c.ref.optionsJson = config.optionsJson.toNativeUtf8();
+
     final ptr = SherpaOnnxBindings.createOnlineRecognizer?.call(c) ?? nullptr;
 
+    calloc.free(c.ref.optionsJson);
+    freeFusionConfig(c.ref.fusion);
     calloc.free(c.ref.hr.lexicon);
     calloc.free(c.ref.hr.ruleFsts);
     calloc.free(c.ref.ruleFars);

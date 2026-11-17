@@ -578,8 +578,10 @@ function initSherpaOnnxOnlineRecognizerConfig(config, Module) {
   const ctcFstDecoder = initSherpaOnnxOnlineCtcFstDecoderConfig(
       config.ctcFstDecoderConfig, Module)
   const hr = initSherpaOnnxHomophoneReplacerConfig(config.hr, Module);
+  const fusion = initSherpaOnnxFusionConfig(config.fusion || {}, Module);
 
-  const len = feat.len + model.len + 8 * 4 + ctcFstDecoder.len + 5 * 4 + hr.len;
+  const len = feat.len + model.len + 8 * 4 + ctcFstDecoder.len + 5 * 4 +
+      hr.len + fusion.len + 1 * 4;
   const ptr = Module._malloc(len);
 
   let offset = 0;
@@ -595,8 +597,9 @@ function initSherpaOnnxOnlineRecognizerConfig(config, Module) {
   const ruleFstsFileLen = Module.lengthBytesUTF8(config.ruleFsts || '') + 1;
   const ruleFarsFileLen = Module.lengthBytesUTF8(config.ruleFars || '') + 1;
   const hotwordsBufLen = Module.lengthBytesUTF8(config.hotwordsBuf || '') + 1;
+  const optionsJsonLen = Module.lengthBytesUTF8(config.optionsJson || '') + 1;
   const bufferLen = decodingMethodLen + hotwordsFileLen + ruleFstsFileLen +
-      ruleFarsFileLen + hotwordsBufLen;
+      ruleFarsFileLen + hotwordsBufLen + optionsJsonLen;
   const buffer = Module._malloc(bufferLen);
 
   offset = 0;
@@ -617,6 +620,10 @@ function initSherpaOnnxOnlineRecognizerConfig(config, Module) {
   Module.stringToUTF8(
       config.hotwordsBuf || '', buffer + offset, hotwordsBufLen);
   offset += hotwordsBufLen;
+
+  Module.stringToUTF8(
+      config.optionsJson || '', buffer + offset, optionsJsonLen);
+  offset += optionsJsonLen;
 
   offset = feat.len + model.len;
   Module.setValue(ptr + offset, buffer, 'i8*');  // decoding method
@@ -671,6 +678,16 @@ function initSherpaOnnxOnlineRecognizerConfig(config, Module) {
   Module._CopyHeap(hr.ptr, hr.len, ptr + offset);
   offset += hr.len;
 
+  Module._CopyHeap(fusion.ptr, fusion.len, ptr + offset);
+  offset += fusion.len;
+
+  Module.setValue(
+      ptr + offset,
+      buffer + decodingMethodLen + hotwordsFileLen + ruleFstsFileLen +
+          ruleFarsFileLen + hotwordsBufLen,
+      'i8*');  // options_json
+  offset += 4;
+
   return {
     buffer: buffer,
     ptr: ptr,
@@ -679,6 +696,7 @@ function initSherpaOnnxOnlineRecognizerConfig(config, Module) {
     model: model,
     ctcFstDecoder: ctcFstDecoder,
     hr: hr,
+    fusion: fusion,
   };
 }
 

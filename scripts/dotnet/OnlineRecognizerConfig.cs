@@ -29,6 +29,8 @@ namespace SherpaOnnx
             HotwordsBuf = "";
             HotwordsBufSize = 0;
             Hr = new HomophoneReplacerConfig();
+            Fusion = new FusionConfig();
+            OptionsJson = "";
         }
         public FeatureConfig FeatConfig;
         public OnlineModelConfig ModelConfig;
@@ -82,5 +84,13 @@ namespace SherpaOnnx
         public int HotwordsBufSize;
 
         public HomophoneReplacerConfig Hr;
+
+        /// Scorers and search settings for prefix_beam_search.
+        public FusionConfig Fusion;
+
+        /// Optional JSON object of command-line options applied after every
+        /// other field, as in OfflineRecognizerConfig.OptionsJson.
+        [MarshalAs(UnmanagedType.LPStr)]
+        public string OptionsJson;
     }
 }

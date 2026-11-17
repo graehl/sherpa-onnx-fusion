@@ -19,6 +19,8 @@ public class OnlineRecognizerConfig {
     private final String ruleFsts;
     private final String ruleFars;
     private final float blankPenalty;
+    private final FusionConfig fusion;
+    private final String optionsJson;
 
     private OnlineRecognizerConfig(Builder builder) {
         this.featConfig = builder.featConfig;
@@ -35,6 +37,8 @@ public class OnlineRecognizerConfig {
         this.ruleFsts = builder.ruleFsts;
         this.ruleFars = builder.ruleFars;
         this.blankPenalty = builder.blankPenalty;
+        this.fusion = builder.fusion;
+        this.optionsJson = builder.optionsJson;
     }
 
     public static Builder builder() {
@@ -43,6 +47,14 @@ public class OnlineRecognizerConfig {
 
     public OnlineModelConfig getModelConfig() {
         return modelConfig;
+    }
+
+    public FusionConfig getFusion() {
+        return fusion;
+    }
+
+    public String getOptionsJson() {
+        return optionsJson;
     }
 
     public static class Builder {
@@ -60,6 +72,8 @@ public class OnlineRecognizerConfig {
         private String ruleFsts = "";
         private String ruleFars = "";
         private float blankPenalty = 0.0f;
+        private FusionConfig fusion = FusionConfig.builder().build();
+        private String optionsJson = "";
 
         public OnlineRecognizerConfig build() {
           return new OnlineRecognizerConfig(this);
@@ -132,6 +146,19 @@ public class OnlineRecognizerConfig {
 
         public Builder setBlankPenalty(float blankPenalty) {
             this.blankPenalty = blankPenalty;
+            return this;
+        }
+
+        public Builder setFusion(FusionConfig fusion) {
+            this.fusion = fusion;
+            return this;
+        }
+
+        // A JSON object of command-line options applied after every other
+        // field, as in OfflineRecognizerConfig. An error in it makes
+        // recognizer creation fail.
+        public Builder setOptionsJson(String optionsJson) {
+            this.optionsJson = optionsJson;
             return this;
         }
     }
