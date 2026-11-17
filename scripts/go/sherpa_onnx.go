@@ -162,6 +162,10 @@ type FusionConfig struct {
 	// A hypothesis survives a frame only within this score of the best.
 	// 0 means 12; a negative value means no limit.
 	ScoreBeam float32
+
+	// Case of the text character scorers are given: keep (default) or
+	// lower. The recognizer's output is unchanged.
+	ScorerTextCase string
 }
 
 func freeCString(p **C.char) {
@@ -194,6 +198,7 @@ func newCFusionConfig(config *FusionConfig, c *C.struct_SherpaOnnxFusionConfig) 
 	c.ctc_alignment = C.CString(config.CtcAlignment)
 	c.token_candidates = C.int32_t(config.TokenCandidates)
 	c.score_beam = C.float(config.ScoreBeam)
+	c.scorer_text_case = C.CString(config.ScorerTextCase)
 }
 
 func freeCFusionConfig(c *C.struct_SherpaOnnxFusionConfig) {
@@ -209,6 +214,7 @@ func freeCFusionConfig(c *C.struct_SherpaOnnxFusionConfig) {
 	}
 	freeCString(&c.length_bonus_unit)
 	freeCString(&c.ctc_alignment)
+	freeCString(&c.scorer_text_case)
 }
 
 // Configuration for the online/streaming recognizer.

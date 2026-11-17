@@ -57,6 +57,9 @@ Args:
   score_beam:
     A hypothesis survives a frame only within this score of the best.
     Zero or less means no limit.
+  scorer_text_case:
+    The case of the text character scorers are given: ``keep`` or
+    ``lower``. The recognizer's output is unchanged.
 )doc";
 
 static void PybindScorerConfig(py::module *m) {
@@ -115,7 +118,8 @@ void PybindFusionConfig(py::module *m) {
       .def(py::init([](const std::vector<ScorerOptions> &scorers,
                        float length_bonus, const std::string &length_bonus_unit,
                        const std::string &ctc_alignment,
-                       int32_t token_candidates, float score_beam) {
+                       int32_t token_candidates, float score_beam,
+                       const std::string &scorer_text_case) {
              PyClass f;
              f.scorers = scorers;
              f.length_bonus = length_bonus;
@@ -123,19 +127,22 @@ void PybindFusionConfig(py::module *m) {
              f.ctc_alignment = ctc_alignment;
              f.token_candidates = token_candidates;
              f.score_beam = score_beam;
+             f.scorer_text_case = scorer_text_case;
              return f;
            }),
            py::arg("scorers") = std::vector<ScorerOptions>{},
            py::arg("length_bonus") = 0.0,
            py::arg("length_bonus_unit") = "token",
            py::arg("ctc_alignment") = "sum", py::arg("token_candidates") = 8,
-           py::arg("score_beam") = 12.0, kFusionConfigInitDoc)
+           py::arg("score_beam") = 12.0, py::arg("scorer_text_case") = "keep",
+           kFusionConfigInitDoc)
       .def_readwrite("scorers", &PyClass::scorers)
       .def_readwrite("length_bonus", &PyClass::length_bonus)
       .def_readwrite("length_bonus_unit", &PyClass::length_bonus_unit)
       .def_readwrite("ctc_alignment", &PyClass::ctc_alignment)
       .def_readwrite("token_candidates", &PyClass::token_candidates)
       .def_readwrite("score_beam", &PyClass::score_beam)
+      .def_readwrite("scorer_text_case", &PyClass::scorer_text_case)
       .def("validate", &PyClass::Validate)
       .def("__str__", &PyClass::ToString);
 }

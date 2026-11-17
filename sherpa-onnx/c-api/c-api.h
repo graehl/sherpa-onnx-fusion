@@ -372,6 +372,11 @@ typedef struct SherpaOnnxFusionConfig {
    * 0 means 12; a negative value means no limit.
    */
   float score_beam;
+  /**
+   * Case of the text character scorers are given: "keep" (default) or
+   * "lower". The recognizer's output is unchanged.
+   */
+  const char *scorer_text_case;
 } SherpaOnnxFusionConfig;
 
 /**

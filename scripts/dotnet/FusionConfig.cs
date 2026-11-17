@@ -20,6 +20,7 @@ namespace SherpaOnnx
             CtcAlignment = "sum";
             TokenCandidates = 8;
             ScoreBeam = 12.0F;
+            ScorerTextCase = "keep";
         }
 
         /// <summary>
@@ -56,6 +57,13 @@ namespace SherpaOnnx
         /// Negative: no limit.
         /// </summary>
         public float ScoreBeam;
+
+        /// <summary>
+        /// Case of the text character scorers are given: "keep" or "lower".
+        /// The recognizer's output is unchanged.
+        /// </summary>
+        [MarshalAs(UnmanagedType.LPStr)]
+        public string ScorerTextCase;
     }
 
     /// Copies a ScorerConfig[] into native memory for FusionConfig.Scorers.

@@ -192,6 +192,7 @@ JSObject _buildFusionConfig(FusionConfig fusion) {
   jsFusion['ctcAlignment'] = fusion.ctcAlignment.toJS;
   jsFusion['tokenCandidates'] = fusion.tokenCandidates.toJS;
   jsFusion['scoreBeam'] = fusion.scoreBeam.toJS;
+  jsFusion['scorerTextCase'] = fusion.scorerTextCase.toJS;
   return jsFusion;
 }
 

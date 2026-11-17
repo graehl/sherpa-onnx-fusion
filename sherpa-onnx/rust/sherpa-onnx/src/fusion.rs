@@ -92,6 +92,9 @@ pub struct FusionConfig {
     /// A hypothesis survives a frame only within this score of the best.
     /// Negative: no limit.
     pub score_beam: f32,
+    /// Case of the text character scorers are given: `keep` or `lower`. The
+    /// recognizer's output is unchanged.
+    pub scorer_text_case: Option<String>,
 }
 
 impl Default for FusionConfig {
@@ -103,6 +106,7 @@ impl Default for FusionConfig {
             ctc_alignment: Some("sum".into()),
             token_candidates: 8,
             score_beam: 12.0,
+            scorer_text_case: Some("keep".into()),
         }
     }
 }
@@ -136,6 +140,7 @@ impl FusionConfig {
             ctc_alignment: to_c_ptr(&self.ctc_alignment, cstrings),
             token_candidates: self.token_candidates,
             score_beam: self.score_beam,
+            scorer_text_case: to_c_ptr(&self.scorer_text_case, cstrings),
         }
     }
 }
