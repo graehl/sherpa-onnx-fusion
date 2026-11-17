@@ -80,8 +80,10 @@ on public models except where noted; details and limits are in
 - Streaming TDT (the streaming NeMo model class here is RNN-T only).
 - Byte-BPE token tables, join-marker conventions the recognizer does not
   itself remove, and text normalization between recognizer and scorer.
-- The options in the language bindings
-  ([fork-wide bindings gap](../gaps/fork-feature-bindings.md)).
+- The multi-utterance decoder in a public API or the language bindings
+  ([inflight decoder API gap](../gaps/public-inflight-decoder-api.md)).
+  The options themselves are in every binding (FORK.md; what their checks
+  missed is in the [bindings gap](../gaps/fork-feature-bindings.md)).
 
 ### Scope across model families
 
@@ -846,7 +848,10 @@ model, or anything with the same contract. The interface is
   utterances, writing each child state and its raw natural-log score into
   caller arrays. `Finish` scores the end of input without invalidating
   states. A token of several units is advanced one unit per call, so a
-  neural scorer sees each step as one batch across the beam.
+  neural scorer sees each step as one batch across the beam. A scorer with
+  nothing to gain from the batch, such as KenLM's, derives from
+  `PerItemScorer` and writes `AdvanceOne` and `FinishOne`; decoders still
+  call the batch methods.
 - **What a scorer holds, and sharing.** A scorer holds its model and what
   follows from its options and from the decoder bound to it; none of that
   changes while decoding. A decoder binds itself once, when it is built,

@@ -1,62 +1,58 @@
 ---
 slug: fork-feature-bindings
 noticed: 2026-11-13
-where: fork additions in sherpa-onnx/csrc and all non-C++ language bindings
+where: sherpa-onnx/c-api and every language binding built on it or on the core
 ---
 
-# Language bindings for the fork's features
+# What the language bindings' checks did not cover
 
-**Gap:** The fork's new capabilities mostly have C++ and command-line
-interfaces only. Track every new fork feature here until its applicable
-language APIs expose it, or explicitly document why no binding is needed.
-This is a fork-wide inventory to complete, not a claim that every added
-behavior requires a new API: internal fixes and model behavior may already
-be reachable through existing bindings.
+**Gap:** Every binding exposes the fork's options (FORK.md): fusion and
+`options_json` on both recognizer configs, the w2v-BERT model, LiteRT and
+encoder-window settings, and encode methods, with `literal_zeros` letting
+bindings that fill in their own defaults send an exact 0. Each binding that
+can run here decoded a real model through its own API: prefix search
+matching greedy, a typed KenLM scorer, an `options_json` override that
+changed the transcript, a rejected option failing creation, encoder windows
+changing a word after encoding first, and a streaming transducer with a
+scorer. These were not run:
 
-Known omissions and surfaces to audit:
+- **Swift**: not compiled; checked by reading against `c-api.h`. With
+  `SWIFT_PACKAGE`, `Package.swift` pulls upstream's v2.0.1 binaries, whose
+  header lacks the new members, so a Swift package build fails until the
+  binaries are built from this fork.
+- **HarmonyOS ArkTS**: checked by reading. Its native code is the Node.js
+  addon's, which ran.
+- **WebAssembly**: the packer was checked against clang's wasm32 struct
+  layout with a fake heap, at every binding commit; nothing was built with
+  emscripten, so the exported encode functions were never linked.
+- **Flutter**: not built; the Dart FFI layer ran under the Dart SDK, and the
+  Flutter web wrapper was checked against the WebAssembly packer's keys by
+  reading.
+- **Android apps**: their Kotlin API files compiled with stub Android
+  classes; the apps were not built.
+- **w2v-BERT and LiteRT fields**: set and printed through bindings, never
+  run with such a model.
+- **Intermediate commits of the C-struct mirrors** were checked for layout
+  against that commit's `c-api.h`, not run.
 
-- Fusion configuration: `OfflineRecognizerConfig::fusion` and
-  `OnlineRecognizerConfig::fusion`, including scorer collections, weights,
-  length bonuses and prefix-search controls. The C and Python configuration
-  surfaces omit these members; selecting `prefix_beam_search` alone cannot
-  configure the scorers or nondefault search options.
-- Chunked encoding: `OfflineModelConfig::encoder`, including windowing,
-  normalization, blending, allowed lengths and padding.
-- LiteRT configuration: `litert_dispatch_dir`, `litert_window`, and access
-  to fixed-length models and signatures through each binding's model setup.
-- Separate encoding and search: `OfflineRecognizer::EncodeStreams` and
-  the lifecycle needed to consume its outputs through ordinary decoding.
-- Inflight decoding: determine the public API needed for admission,
-  progress, completion and cancellation; do not expose internal classes
-  merely to mirror C++ implementation details.
-- Bulk-driver capabilities: length sorting, batch limits, separate search
-  threads and attributable results. Distinguish reusable library controls
-  from CLI orchestration; an executable's output formatting does not itself
-  require a binding.
+Known sharp edges, documented where they bite:
 
-Use [FORK.md](../FORK.md) and the diff from upstream as the inventory,
-including future fork additions. Audit C, Python, JNI/Java/Kotlin, and
-the wrappers built on them, including Rust, Swift, .NET, Go, Node,
-Dart/Flutter, Pascal, HarmonyOS and WebAssembly. The list above does not
-certify that every binding has been inspected.
+- Go leaves `LiteralZeros` clear, so a 0 there is the default; with it set,
+  every numeric field must be filled in.
+- A C# `ScorerConfig` made without its constructor (`default`, a new array)
+  sends weight and threads 0 under `literal_zeros`.
 
-**Noticed while:** Wiring prefix search, then documenting encoder windows.
-User-directed scope expansion on 2026-11-17: cover all new fork features,
-rather than filing a separate gap for each option group.
+Also seen, upstream's and not fixed here: HarmonyOS's
+`OfflineModelConfig.telespeechCtc` does not match the `teleSpeechCtc` key
+its native code reads, and it has no `cohereTranscribe` field.
 
-**Fix sketch:** First build a feature-by-binding inventory with implemented,
-missing and not-applicable entries. Decide once how nested options and
-scorer collections cross the C boundary: typed structures, a JSON entry
-point using `ApplyJsonOptions`, or a combination. JSON remains a proposal,
-not a settled interface. Reuse core parsing and `Validate()` rather than
-duplicating configuration semantics in each wrapper; preserve public ABI
-and existing defaults. Configuration transport alone does not expose
-execution methods or lifecycle operations.
+Scoped out: the multi-utterance decoder (see
+[a public inflight decoder API](public-inflight-decoder-api.md)), and the
+bulk program's batching and threads, which are command-line orchestration.
 
-Close each applicable entry with a real binding-level check showing that
-nondefault options reach the core and affect execution, plus an example
-and consistent error propagation. Keep this gap until the inventory is
-complete and its omissions are resolved or explicitly scoped out.
+**Closure:** build Swift, HarmonyOS, WebAssembly and Flutter and run the
+check above in each, or record per language why it cannot be run.
 
 Contributing-model: fable-5.2
 Contributing-model: 6-Astra
+Contributing-model: opus-5.5

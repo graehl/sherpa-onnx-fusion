@@ -122,8 +122,15 @@ tokens, § Fusion on RNN-T and TDT, § Matching the existing decoders).
   reruns the English CTC comparisons above, and a check that threads,
   search threads and sorting do not change the bulk program's output.
 
-The options exist in the C++ configuration and command-line programs only;
-the language bindings do not expose them yet.
+Every language binding exposes these options: the C and C++ APIs, Python,
+Java and Kotlin, Go, Rust, C#, Pascal, Swift, Node.js, HarmonyOS,
+WebAssembly and Dart. Scorers and search settings are typed fields of a
+`fusion` config on both recognizer configs, the encoder and LiteRT
+settings and the w2v-BERT model are fields of the offline model config,
+and offline recognizers have encode methods beside their decode methods.
+Any command-line option can also be given as `options_json`, a JSON
+object applied after the typed fields. The multi-utterance decoder and the
+bulk program's scheduling have no binding.
 
 ## Known defect characterized, not fixed
 
@@ -141,7 +148,9 @@ present and prints a warning describing the correct result.
 - [Executable-driver infrastructure reuse](gaps/executable-driver-infrastructure.md).
 - [Typed collections of nested options](gaps/sketches/nested-option-collections.md),
   including multiple scorers and possible multiple-FST configuration.
-- [Language bindings for all fork features](gaps/fork-feature-bindings.md).
+- [What the language bindings' checks did not cover](gaps/fork-feature-bindings.md).
+- [A public inflight decoder API](gaps/public-inflight-decoder-api.md)
+  for every decoder that can keep utterances in flight.
 - [Static build aborts when a model loads (GCC 15)](gaps/static-onnxruntime-abort.md).
 - [Decoding several recordings in one call changes some transcripts](gaps/offline-batch-changes-transcripts.md).
 - [Encoder batches are formed without regard to length](gaps/encoder-batches-ignore-length.md).
