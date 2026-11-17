@@ -28,13 +28,16 @@ struct Node {
   int32_t unit = 0;  // The unit this node follows.
   bool computed = false;
   bool queued = false;
-  // After computing: each state tensor as [layers, hidden], and the
-  // log probabilities of every next unit.
-  std::vector<std::vector<float>> states;
-  std::vector<float> log_probs;
+  // After computing: this node's item of its step's result, which holds its
+  // recurrent state where the model runs and its log probabilities of every
+  // next unit. Shared with the other nodes of that step.
+  std::shared_ptr<const RecurrentLmStep::Result> result;
+  int32_t item = 0;
+
+  const float *LogProbs() const { return result->LogProbs(item); }
 };
 
-// One utterance's nodes. Freed nodes keep their buffers for reuse.
+// One utterance's nodes. Freed nodes are reused.
 struct NodePool : public ScorerUtterance {
   ~NodePool() override {
     g_live_nodes -= static_cast<int32_t>(nodes.size() - free_nodes.size());
@@ -78,6 +81,7 @@ void Unreference(Node *node) {
   while (node != nullptr && --node->references == 0) {
     Node *parent = node->parent;
     node->parent = nullptr;
+    node->result.reset();  // the step's result is freed with its last node
     node->pool->free_nodes.push_back(node);
     --g_live_nodes;
     node = parent;
@@ -110,8 +114,7 @@ class RecurrentLmScorer : public Scorer {
     std::vector<Node *> batch;
     Request(root, &batch);
     Compute(batch);
-    root_states_ = root->states;
-    root_log_probs_ = root->log_probs;
+    root_result_ = root->result;
     Unreference(root);
   }
 
@@ -124,8 +127,8 @@ class RecurrentLmScorer : public Scorer {
   void Start(ScorerUtterance *utterance, std::byte *state) override {
     Node *root = static_cast<NodePool *>(utterance)->New();
     root->unit = vocabulary_.boundary_id;
-    root->states = root_states_;
-    root->log_probs = root_log_probs_;
+    root->result = root_result_;
+    root->item = 0;
     root->computed = true;
     WriteNode(root, state);
   }
@@ -141,7 +144,7 @@ class RecurrentLmScorer : public Scorer {
       Node *parent = NodeOf(extensions[i].parent.bytes);
       int32_t unit = IdOf(extensions[i].unit);
       results[i].log_score =
-          std::max(vocabulary_.score_floor, parent->log_probs[unit]);
+          std::max(vocabulary_.score_floor, parent->LogProbs()[unit]);
       results[i].rejected = false;
 
       Node *child = parent->pool->New();
@@ -164,9 +167,9 @@ class RecurrentLmScorer : public Scorer {
     }
     Compute(batch);
     for (size_t i = 0; i != states.size; ++i) {
-      results[i].log_score =
-          std::max(vocabulary_.score_floor,
-                   NodeOf(states[i].bytes)->log_probs[vocabulary_.boundary_id]);
+      results[i].log_score = std::max(
+          vocabulary_.score_floor,
+          NodeOf(states[i].bytes)->LogProbs()[vocabulary_.boundary_id]);
       results[i].accepted = true;
     }
   }
@@ -194,44 +197,23 @@ class RecurrentLmScorer : public Scorer {
   // belongs to this call, so calls for different utterances can overlap.
   void Compute(const std::vector<Node *> &nodes) const {
     if (nodes.empty()) return;
-    const auto &shapes = step_->StateShapes();
     size_t batch = nodes.size();
     std::vector<int64_t> units(batch);
-    std::vector<std::vector<float>> states_in(shapes.size());
-    for (size_t k = 0; k != shapes.size(); ++k) {
-      states_in[k].assign(shapes[k].layers * batch * shapes[k].hidden, 0.0f);
-    }
+    std::vector<RecurrentLmStep::Parent> parents(batch);
     for (size_t i = 0; i != batch; ++i) {
       const Node *node = nodes[i];
       units[i] = node->unit;
-      if (node->parent == nullptr) continue;  // Steps from the zero state.
-      for (size_t k = 0; k != shapes.size(); ++k) {
-        size_t hidden = shapes[k].hidden;
-        for (int32_t layer = 0; layer != shapes[k].layers; ++layer) {
-          std::copy_n(node->parent->states[k].begin() + layer * hidden, hidden,
-                      states_in[k].begin() + (layer * batch + i) * hidden);
-        }
+      if (node->parent != nullptr) {  // else steps from the zero state
+        parents[i] = {node->parent->result.get(), node->parent->item};
       }
     }
 
-    const float *log_probs = nullptr;
-    std::vector<const float *> states_out;
-    auto outputs = step_->Run(units, states_in, &log_probs, &states_out);
-
-    size_t vocab_size = step_->VocabSize();
+    std::shared_ptr<const RecurrentLmStep::Result> result =
+        step_->Run(units, parents);
     for (size_t i = 0; i != batch; ++i) {
       Node *node = nodes[i];
-      node->log_probs.assign(log_probs + i * vocab_size,
-                             log_probs + (i + 1) * vocab_size);
-      node->states.resize(shapes.size());
-      for (size_t k = 0; k != shapes.size(); ++k) {
-        size_t hidden = shapes[k].hidden;
-        node->states[k].resize(shapes[k].layers * hidden);
-        for (int32_t layer = 0; layer != shapes[k].layers; ++layer) {
-          std::copy_n(states_out[k] + (layer * batch + i) * hidden, hidden,
-                      node->states[k].begin() + layer * hidden);
-        }
-      }
+      node->result = result;
+      node->item = static_cast<int32_t>(i);
       node->computed = true;
       node->queued = false;
     }
@@ -246,8 +228,8 @@ class RecurrentLmScorer : public Scorer {
   ScorerInfo info_;
   std::unique_ptr<RecurrentLmStep> step_;
   RecurrentLmVocabulary vocabulary_;
-  std::vector<std::vector<float>> root_states_;
-  std::vector<float> root_log_probs_;
+  // The node after the sentence boundary, shared by every utterance.
+  std::shared_ptr<const RecurrentLmStep::Result> root_result_;
 };
 
 }  // namespace

@@ -17,31 +17,38 @@ namespace sherpa_onnx {
 // One step of a recurrent language model over a batch: from each item's
 // previous unit and recurrent state to its next-unit log probabilities and
 // new state. An LSTM has two state tensors and a GRU one.
+//
+// A step's recurrent states stay where its model runs, in device memory for a
+// GPU, and are read only by later steps; the search needs, and the host
+// receives, only the log probabilities.
 class RecurrentLmStep {
  public:
-  struct StateShape {
-    int32_t layers = 0;
-    int32_t hidden = 0;
+  // The result of one Run for its batch.
+  class Result {
+   public:
+    virtual ~Result() = default;
+    // Item's log probabilities of every next unit, on the host; valid while
+    // the result lives.
+    virtual const float *LogProbs(int32_t item) const = 0;
+  };
+
+  // An item's state before a step: item `item` of an earlier result of the
+  // same step, or the zero state when `result` is null.
+  struct Parent {
+    const Result *result = nullptr;
+    int32_t item = 0;
   };
 
   virtual ~RecurrentLmStep() = default;
 
   virtual int32_t VocabSize() const = 0;
-  virtual const std::vector<StateShape> &StateShapes() const = 0;
 
-  // Owns the outputs of one Run.
-  struct Outputs {
-    virtual ~Outputs() = default;
-  };
-
-  // units[b] is each item's previous unit ID. states_in[k] holds state tensor
-  // k as [layers, batch, hidden]. On return *log_probs is [batch, vocab] and
-  // states_out[k] is [layers, batch, hidden]; both stay valid while the
-  // returned object lives. May be called from several threads at once.
-  virtual std::unique_ptr<Outputs> Run(
+  // units[b] is each item's previous unit ID and parents[b] its state; the
+  // parents' results stay alive for the call. May be called from several
+  // threads at once.
+  virtual std::shared_ptr<const Result> Run(
       const std::vector<int64_t> &units,
-      const std::vector<std::vector<float>> &states_in, const float **log_probs,
-      std::vector<const float *> *states_out) const = 0;
+      const std::vector<Parent> &parents) const = 0;
 };
 
 struct RecurrentLmVocabulary {

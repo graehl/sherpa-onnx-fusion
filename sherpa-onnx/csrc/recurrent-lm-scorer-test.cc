@@ -27,33 +27,51 @@ constexpr int32_t kVocab = 5;  // 0 boundary, 1 unknown, 2 'a', 3 'b', 4 space
 // layer, summed)), unnormalized, which is enough to check plumbing.
 class FakeStep : public RecurrentLmStep {
  public:
-  int32_t VocabSize() const override { return kVocab; }
-  const std::vector<StateShape> &StateShapes() const override {
-    return shapes_;
-  }
+  struct Shape {
+    int32_t layers;
+    int32_t hidden;
+  };
 
-  std::unique_ptr<Outputs> Run(
+  // Each state [layers, batch, hidden], and [batch, vocab] log probabilities.
+  struct FakeResult : public Result {
+    int32_t batch = 0;
+    std::vector<std::vector<float>> states;
+    std::vector<float> log_probs;
+    const float *LogProbs(int32_t item) const override {
+      return log_probs.data() + item * kVocab;
+    }
+  };
+
+  int32_t VocabSize() const override { return kVocab; }
+
+  std::shared_ptr<const Result> Run(
       const std::vector<int64_t> &units,
-      const std::vector<std::vector<float>> &states_in, const float **log_probs,
-      std::vector<const float *> *states_out) const override {
+      const std::vector<Parent> &parents) const override {
     size_t batch = units.size();
     {
       std::lock_guard<std::mutex> lock(mutex_);
       batch_sizes.push_back(static_cast<int32_t>(batch));
     }
-    auto outputs = std::make_unique<Tensors>();
-    std::vector<std::vector<float>> &out_ = outputs->states;
-    std::vector<float> &log_probs_ = outputs->log_probs;
+    auto result = std::make_shared<FakeResult>();
+    result->batch = static_cast<int32_t>(batch);
+    std::vector<std::vector<float>> &out_ = result->states;
+    std::vector<float> &log_probs_ = result->log_probs;
     out_.resize(shapes_.size());
     for (size_t k = 0; k != shapes_.size(); ++k) {
       int32_t layers = shapes_[k].layers, hidden = shapes_[k].hidden;
       out_[k].resize(layers * batch * hidden);
       for (int32_t layer = 0; layer != layers; ++layer) {
         for (size_t i = 0; i != batch; ++i) {
+          const auto *from = static_cast<const FakeResult *>(parents[i].result);
           for (int32_t h = 0; h != hidden; ++h) {
-            size_t at = (layer * batch + i) * hidden + h;
-            out_[k][at] = 0.5f * states_in[k][at] +
-                          (units[i] + 1) * 0.1f * (layer * hidden + h + 1);
+            float in = 0;
+            if (from != nullptr) {
+              in = from->states[k][(layer * from->batch + parents[i].item) *
+                                       hidden +
+                                   h];
+            }
+            out_[k][(layer * batch + i) * hidden + h] =
+                0.5f * in + (units[i] + 1) * 0.1f * (layer * hidden + h + 1);
           }
         }
       }
@@ -68,21 +86,13 @@ class FakeStep : public RecurrentLmStep {
         log_probs_[i * kVocab + v] = -0.3f * (v + 1) * (1 + sum);
       }
     }
-    *log_probs = log_probs_.data();
-    states_out->clear();
-    for (const auto &state : out_) states_out->push_back(state.data());
-    return outputs;
+    return result;
   }
 
   mutable std::vector<int32_t> batch_sizes;  // One entry per Run.
 
  private:
-  struct Tensors : public Outputs {
-    std::vector<std::vector<float>> states;
-    std::vector<float> log_probs;
-  };
-
-  std::vector<StateShape> shapes_ = {{2, 3}, {1, 2}};
+  std::vector<Shape> shapes_ = {{2, 3}, {1, 2}};
   mutable std::mutex mutex_;  // For batch_sizes.
 };
 
@@ -90,18 +100,13 @@ class FakeStep : public RecurrentLmStep {
 // next unit after "units" (model IDs), starting from the boundary.
 std::vector<float> ReferenceLogProbs(const std::vector<int32_t> &units) {
   FakeStep step;
-  std::vector<std::vector<float>> state = {std::vector<float>(6, 0.0f),
-                                           std::vector<float>(2, 0.0f)};
+  std::shared_ptr<const RecurrentLmStep::Result> state;  // the zero state
   std::vector<int32_t> history = {0};
   history.insert(history.end(), units.begin(), units.end());
   std::vector<float> result;
   for (int32_t unit : history) {
-    const float *log_probs;
-    std::vector<const float *> out;
-    auto outputs = step.Run({unit}, state, &log_probs, &out);
-    result.assign(log_probs, log_probs + kVocab);
-    state[0].assign(out[0], out[0] + 6);
-    state[1].assign(out[1], out[1] + 2);
+    state = step.Run({unit}, {{state.get(), 0}});
+    result.assign(state->LogProbs(0), state->LogProbs(0) + kVocab);
   }
   return result;
 }
