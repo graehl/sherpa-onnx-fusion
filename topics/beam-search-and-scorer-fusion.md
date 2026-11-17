@@ -1014,7 +1014,14 @@ model with icefall's LibriSpeech token LSTM (weight 0.3) gave the same 40
 transcripts as host-held states, on the CPU and with the LSTM on the GPU,
 nested gathers included; its real-time factor was 0.127 with the LSTM on
 the CPU and 0.020 on the GPU (RTX PRO 6000, one run each, 2026-11-17).
+With the recognizer on the GPU too and the batch size and threads swept,
+200 recordings decoded at RTF 0.0014 at best with the LSTM on the GPU and
+0.0112 with it on the CPU, 8.0 times faster
+([bulk decoding](bulk-decoding.md#throughput-with-an-lstm-on-one-gpu)).
 onnxruntime builds without the model editor keep states on the host.
+`"max-batch"` in the scorer's extra caps how many nodes one step takes,
+which bounds its memory on a small GPU; a wider call runs in chunks with
+the same results.
 Keep model execution separate from the search so later implementations can
 reuse model and scorer contracts where appropriate. Search on the same GPU
 as the models is deferred; see
