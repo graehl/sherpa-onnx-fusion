@@ -158,8 +158,15 @@ void OfflineStreamEncoder::Encode(OfflineStream **ss, int32_t n) const {
         const float *row = f.data() + static_cast<size_t>(t) * feat_dim;
         loudness[t] = std::accumulate(row, row + feat_dim, 0.0f);
       }
-      starts = EvenWindowStarts(num_frames, schedule_.window, schedule_,
-                                loudness, grid, kEdgeMarginFrames * grid);
+      // Neighbours must share the front end's edge loss and both windows'
+      // context-only frames, or some output frame is kept by neither.
+      const int32_t context = std::max(
+          config_.context_frames,
+          static_cast<int32_t>(schedule_.window / grid *
+                               static_cast<double>(config_.context_fraction)));
+      starts =
+          EvenWindowStarts(num_frames, schedule_.window, schedule_, loudness,
+                           grid, (kEdgeMarginFrames + 2 * context) * grid);
     }
     if (starts.size() == 1) {
       Normalize(f.data(), num_frames, feat_dim);
