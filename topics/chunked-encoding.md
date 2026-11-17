@@ -58,7 +58,7 @@ they have a trained chunk-and-cache protocol and do not use this.
 | `--encoder.window.normalize` | `window` | `window` or `utterance`: the frames over which a feature normalization that uses its input's statistics is computed |
 | `--encoder.window.weight` | `center` | `center` averages the windows covering a frame, each weighted by 1 + the frame's distance from that window's nearer edge; `cut` takes the frame from the window in which it is farthest from an edge |
 | `--encoder.window.center-power` | 1 | exponent of the center weight: 0 gives exactly uniform averaging, 0.5 flatter weights, 1 linear weights, 2 sharper weights; finite and nonnegative |
-| `--encoder.window.context-frames` | 0 | zero-weight output frames per interior window edge; context only, still encoded |
+| `--encoder.window.context-frames` | 0 | zero-weight output frames per interior window edge; context only, still encoded. Placement keeps neighbours overlapping by at least both windows' context frames plus the front end's four-frame edge loss, adding windows when it must |
 | `--encoder.window.context-fraction` | 0 | zero-weight fraction per interior edge of each window's valid output frames, rounded down; at least 0 and less than 0.5 |
 | `--encoder.window.blend` | `log` | CTC only: `log` averages log probabilities and renormalizes; `prob` averages probabilities |
 | `--encoder.lengths` | empty | comma-separated seconds: pad every encoder input to the shortest of these that holds it |
@@ -408,7 +408,5 @@ bf16, because weights were dequantized on each call.
 
 - Broader long-recording WER coverage, including untouched meetings and
   more model families; the eight-talk comparison above is exploratory.
-- Bindings for the options, tracked in the
-  [fork-wide bindings gap](../gaps/fork-feature-bindings.md).
 - Starting the search on finished windows before the whole utterance is
   encoded: [hybrid chunked streaming](../gaps/sketches/hybrid-chunked-streaming.md).

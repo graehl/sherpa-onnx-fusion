@@ -464,10 +464,7 @@ design for what does not.
   character scorer scores the text the recognizer would output for the
   tokens, except that no word boundary is scored before the first word or
   twice in a row. Join markers the recognizer does not remove itself
-  (`##`, `@@`) would be scored as written; no such model is supported. The
-  options exist in the C++ config and command line only; see
-  [the fork-wide bindings gap](../gaps/fork-feature-bindings.md).
-
+  (`##`, `@@`) would be scored as written; no such model is supported.
 - **Streaming recognizer**: the same method and options for streaming
   CTC models (`online-ctc-prefix-beam-search-decoder.h`). Each stream keeps
   its search across chunks and drops it at an endpoint; streams decoded in

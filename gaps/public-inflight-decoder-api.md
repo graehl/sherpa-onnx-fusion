@@ -39,7 +39,8 @@ utterance at a time.
   with errors returned rather than thrown across the boundary.
 
 The interface should not need to change when the model run later joins
-the inflight schedule.
+the inflight schedule
+([encoder-inclusive inflight scheduling](sketches/encoder-decoder-inflight-scheduling.md)).
 
 **Noticed while:** Adding language bindings for the fork's features;
 user-directed on 2026-11-17, scoped to all decoders that can do it.
