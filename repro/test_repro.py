@@ -178,7 +178,9 @@ class ReproTests(unittest.TestCase):
         changed = check_parallel.Output(
             [{**rows[0], "text": "different"}, rows[1]], "", 0
         )
-        runs_per_configuration = len(check_parallel.MODES) + 2
+        runs_per_configuration = (
+            1 + len(check_parallel.MODES) + len(check_parallel.ROWS_ONLY)
+        )
         with (
             mock.patch.object(
                 check_parallel,

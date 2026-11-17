@@ -17,8 +17,11 @@ against one thread:
 - a row for every input naming its file, in list order when that is asked
   for and each index once when rows are printed as they finish;
 - an error row for the unreadable file and for no other;
-- the same text as one thread, at one recording per batch, where batching
-  cannot change a model's output.
+- the same text as one thread, at one recording per model batch, where
+  batching cannot change a model's output; this includes search calls of
+  three recordings (--search-batch-size), which must not change it either.
+  Model batches of four, searched whole, in calls of two and in calls of
+  three, are checked for their rows.
 
 The search configurations are greedy search, upstream's beam search for the
 transducers, the prefix search, the prefix search with a small n-gram model
@@ -204,10 +207,32 @@ MODES: dict[str, list[str]] = {
         "--sort-by-length=true",
         "--decode-threads=2",
     ],
+    # The model runs one recording per call, as for the reference, and each
+    # search call takes three: sharing a search call must change no text.
+    "search calls of 3, 2 search threads": [
+        "--nj=2",
+        UNSORTED,
+        "--decode-threads=2",
+        "--search-batch-size=3",
+    ],
+    "search calls of 3, no search threads": [
+        "--nj=1",
+        UNSORTED,
+        "--search-batch-size=3",
+    ],
 }
-# Batches of several recordings may change a model's output, so this one is
-# checked for its rows only.
+# Batches of several recordings may change a model's output, so these are
+# checked for their rows only: model batches searched whole, split into
+# calls the search reads in place, and split with leftovers joining the
+# next batch.
 BATCHED = ["--nj=2", "--batch-size=4", "--sort-by-length=true", "--decode-threads=2"]
+ROWS_ONLY: dict[str, list[str]] = {
+    "batches of 4 (rows only)": BATCHED,
+    "batches of 4, search calls of 2 (rows only)": BATCHED
+    + ["--search-batch-size=2"],
+    "batches of 4, search calls of 3 (rows only)": BATCHED
+    + ["--search-batch-size=3"],
+}
 
 
 def write_arpa(path: pathlib.Path) -> None:
@@ -384,7 +409,7 @@ def check(
                 relation = "same as" if effect.same else "differs from"
                 print(f"[check] ok   {name}: {relation} '{effect.baseline}'")
         runs = [(mode, args, True) for mode, args in MODES.items()]
-        runs.append(("batches of 4 (rows only)", BATCHED, False))
+        runs += [(mode, args, False) for mode, args in ROWS_ONLY.items()]
         for mode, args, compare_text in runs:
             output = run_program(binary, recognizer + search + args)
             problems = row_problems(output, paths)

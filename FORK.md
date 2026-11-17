@@ -99,7 +99,8 @@ tokens, § Fusion on RNN-T and TDT, § Matching the existing decoders).
   (`--sort-by-length`) under a padded-audio limit (`--max-batch-seconds`);
   and, for CTC models and the zipformer and NeMo transducers, search
   threads sized apart from the threads that run the model
-  (`--decode-threads`). Scorers
+  (`--decode-threads`), and search calls sized apart from model batches
+  (`--search-batch-size`). Scorers
   are shared across threads. `sherpa-onnx-offline` itself still pads every
   file on its command line into one batch.
 - Batched decoding for w2v-BERT and omnilingual CTC exports that take

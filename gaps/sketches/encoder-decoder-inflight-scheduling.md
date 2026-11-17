@@ -85,23 +85,13 @@ ambitions. Known pulls, none measured:
 
 ## Search batches apart from model batches
 
-The API already lets them differ: `EncodeStreams` and `DecodeStreams` take
-any sets of streams. `sherpa-onnx-offline-parallel` does not use that: with
-or without `--decode-threads`, a search batch is exactly the model's batch
-of `--batch-size`. They should eventually be chosen apart (graehl,
-2026-11-17). The model's batch is set by padding and, on a GPU, by the cost
-of a change of shape; the search's by how many utterances' scorer steps
-share a call, where wider is cheaper per hypothesis and costs nothing in
-padding. A model batch split into one or more search calls needs no
-stitching, copy or care for lifetimes: each search call reads rows of an
-output that outlives it. Only gathering several model batches into one
-search call needs a copy or a reference count per allocation, so the
-first step is a driver option for search calls of at most one model
-batch. The search may also want its own pool of threads, as
-`--decode-threads` already gives it; once any of its computation (a
-scorer's step, a transducer's joiner) runs on a GPU while the search
-itself stays on the CPU, which threads may touch which device's memory
-becomes part of that choice (graehl, 2026-11-17).
+Built: `sherpa-onnx-offline-parallel --search-batch-size`
+([bulk decoding](../../topics/bulk-decoding.md#search-calls-apart-from-model-batches)).
+What remains is placement: the search has its own pool of threads
+(`--decode-threads`), and once any of its computation (a scorer's step, a
+transducer's joiner) runs on a GPU while the search itself stays on the
+CPU, which threads may touch which device's memory becomes part of
+choosing search calls (graehl, 2026-11-17).
 
 ## Handing the encoder output over by reference
 
