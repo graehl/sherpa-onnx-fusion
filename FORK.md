@@ -164,6 +164,7 @@ present and prints a warning describing the correct result.
 - [A table of the best demonstrated throughput per kind of model](gaps/sketches/throughput-table.md)
   (no rows yet: no timing has been taken on an idle machine).
 - [LSTM fusion lacks a result anyone can reproduce](gaps/public-lstm-fusion-evidence.md).
+- [A recurrent scorer's states stay on the host when it runs on a GPU](gaps/recurrent-scorer-states-on-host.md).
 - [Encoder-inclusive inflight scheduling](gaps/sketches/encoder-decoder-inflight-scheduling.md),
   deferred beyond the decoder's own inflight batching.
 - [Tuning fusion weights and bonuses from the search's own evidence](gaps/sketches/fusion-parameter-tuning.md).
