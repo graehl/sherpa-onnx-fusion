@@ -15,16 +15,16 @@ the fork's own terms in the [glossary](GLOSSARY.md).
 
 Word error rate in percent. Every recognizer here can be downloaded.
 
-| Recognizer, test set | Language model | Greedy | Best k2-fsa sherpa-onnx decoder, with LM | Prefix search, no LM | Prefix search, with LM | RTF greedy | RTF prefix search, no LM | RTF prefix search, with LM | RTF k2-fsa decoder, no LM | RTF k2-fsa decoder, with LM |
-|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Vietnamese Parakeet CTC 0.6B (NVIDIA, int8), FLEURS test, 857 clips * | character 8-gram | 9.27 | § | 9.09 | 6.30 | 0.030 | 0.028 | 0.030 | 0.030 | – |
-| English zipformer CTC, all 2,939 LibriSpeech test-other recordings ([recipe](repro/)) | published character 8-gram from the LibriSpeech LM text (16 MB) | 5.65 | 5.39 (k2-fsa's word-3-gram graph released with the model, 334 MB) | 5.65 | 5.11 | 0.015 | 0.015 | 0.016 | 0.015 | 0.019 |
-| the same, 600 of those recordings * | public LibriSpeech LSTM over its tokens (icefall's `rnn_lm`, 388 MB) | 5.63 | ¶ | 5.59 | 4.45 | 0.021 | 0.015 | 0.13 | 0.021 | – |
-| Vietnamese zipformer transducer (gipformer 1.5, 68M), FLEURS test, 857 clips * | 4-gram over the recognizer's tokens | 5.59 | ‖ | 5.49 | 5.23 | – | 0.021 | 0.021 | – | – |
-| the same * | LSTM over the recognizer's tokens (int8, 49 MB) | 5.59 | 5.21 (rescoring, with the fp32 model) | 5.49 | 4.89 | – | 0.021 | 0.028 | – | 0.049 |
-| English zipformer transducer, 600 LibriSpeech test-other recordings * | public LibriSpeech LSTM over its tokens (icefall's `rnn_lm`, 388 MB) | 4.65 | 4.38 (rescoring) | 4.60 (k2-fsa `modified_beam_search`, which it reproduces) | 4.20 | 0.059 ‡ | 0.063 ‡ | 0.51 ‡ | – | 0.13 ‡ |
-| GigaAM v3 RNN-T, FLEURS Russian test, 743 clips * | character 8-gram from Russian Wikipedia | 4.63 | # | 4.52 | 4.21 | 0.067 | 0.25 † | 0.22 | – | – |
-| Parakeet TDT 0.6B v3, FLEURS Russian test, 743 clips * | character 8-gram from Russian Wikipedia | 8.32 | # | 7.77 | 6.78 | 0.25 | 0.69 † | 0.22 | – | – |
+| Recognizer | Test set | Language model | Greedy | Best k2-fsa sherpa-onnx decoder, with LM | Prefix search, no LM | Prefix search, with LM | RTF greedy | RTF prefix search, no LM | RTF prefix search, with LM | RTF k2-fsa decoder, no LM | RTF k2-fsa decoder, with LM |
+|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Vietnamese Parakeet CTC 0.6B (NVIDIA, int8) * | FLEURS Vietnamese (857) | character 8-gram | 9.27 | § | 9.09 | 6.30 | 0.030 | 0.028 | 0.030 | 0.030 | – |
+| English zipformer CTC ([recipe](repro/)) | LibriSpeech test-other (2,939) | published character 8-gram from the LibriSpeech LM text (16 MB) | 5.65 | 5.39 (k2-fsa's word-3-gram graph released with the model, 334 MB) | 5.65 | 5.11 | 0.015 | 0.015 | 0.016 | 0.015 | 0.019 |
+| the same * | LibriSpeech test-other (600) | public LibriSpeech LSTM over its tokens (icefall's `rnn_lm`, 388 MB) | 5.63 | ¶ | 5.59 | 4.45 | 0.021 | 0.015 | 0.13 | 0.021 | – |
+| Vietnamese zipformer transducer (gipformer 1.5, 68M) * | FLEURS Vietnamese (857) | 4-gram over the recognizer's tokens | 5.59 | ‖ | 5.49 | 5.23 | – | 0.021 | 0.021 | – | – |
+| the same * | FLEURS Vietnamese (857) | LSTM over the recognizer's tokens (int8, 49 MB) | 5.59 | 5.21 (rescoring, with the fp32 model) | 5.49 | 4.89 | – | 0.021 | 0.028 | – | 0.049 |
+| English zipformer transducer * | LibriSpeech test-other (600) | public LibriSpeech LSTM over its tokens (icefall's `rnn_lm`, 388 MB) | 4.65 | 4.38 (rescoring) | 4.60 (k2-fsa `modified_beam_search`, which it reproduces) | 4.20 | 0.059 ‡ | 0.063 ‡ | 0.51 ‡ | – | 0.13 ‡ |
+| GigaAM v3 RNN-T * | FLEURS Russian (743) | character 8-gram from Russian Wikipedia | 4.63 | # | 4.52 | 4.21 | 0.067 | 0.25 † | 0.22 | – | – |
+| Parakeet TDT 0.6B v3 * | FLEURS Russian (743) | character 8-gram from Russian Wikipedia | 8.32 | # | 7.77 | 6.78 | 0.25 | 0.69 † | 0.22 | – | – |
 
 RTF is the recognizer's own decode seconds over audio seconds, summed over
 calls of one recording each, two threads per call, model loading
