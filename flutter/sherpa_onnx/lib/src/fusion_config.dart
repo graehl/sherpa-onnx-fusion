@@ -17,6 +17,7 @@ class ScorerConfig {
     this.provider = 'cpu',
     this.weight = 1.0,
     this.extra = '{}',
+    this.rescore = false,
   });
 
   factory ScorerConfig.fromJson(Map<String, dynamic> json) {
@@ -29,12 +30,13 @@ class ScorerConfig {
       provider: json['provider'] as String? ?? 'cpu',
       weight: (json['weight'] as num?)?.toDouble() ?? 1.0,
       extra: json['extra'] as String? ?? '{}',
+      rescore: json['rescore'] as bool? ?? false,
     );
   }
 
   @override
   String toString() {
-    return 'ScorerConfig(type: $type, model: $model, unit: $unit, space: $space, numThreads: $numThreads, provider: $provider, weight: $weight, extra: $extra)';
+    return 'ScorerConfig(type: $type, model: $model, unit: $unit, space: $space, numThreads: $numThreads, provider: $provider, weight: $weight, extra: $extra, rescore: $rescore)';
   }
 
   Map<String, dynamic> toJson() => {
@@ -46,6 +48,7 @@ class ScorerConfig {
         'provider': provider,
         'weight': weight,
         'extra': extra,
+        'rescore': rescore,
       };
 
   /// Registered scorer type: `kenlm` or `onnx-rnn`.
@@ -72,6 +75,10 @@ class ScorerConfig {
 
   /// JSON object of type-specific options.
   final String extra;
+
+  /// Apply the scorer only to the hypotheses that survive the search, as
+  /// n-best rescoring does, instead of during the search.
+  final bool rescore;
 }
 
 /// Settings for `decodingMethod: 'prefix_beam_search'`.

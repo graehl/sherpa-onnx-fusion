@@ -24,6 +24,7 @@ namespace SherpaOnnx
             Provider = "cpu";
             Weight = 1.0F;
             Extra = "{}";
+            Rescore = 0;
         }
 
         /// <summary>Registered scorer type: "kenlm" or "onnx-rnn".</summary>
@@ -58,5 +59,11 @@ namespace SherpaOnnx
         /// <summary>JSON object of type-specific options.</summary>
         [MarshalAs(UnmanagedType.LPStr)]
         public string Extra;
+
+        /// <summary>
+        /// Non-zero: apply the scorer only to the hypotheses that survive the
+        /// search, as n-best rescoring does, instead of during the search.
+        /// </summary>
+        public int Rescore;
     }
 }

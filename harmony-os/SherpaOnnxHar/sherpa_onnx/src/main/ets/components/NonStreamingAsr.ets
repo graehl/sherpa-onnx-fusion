@@ -224,6 +224,8 @@ export class ScorerConfig {
   public provider: string = 'cpu';
   public weight: number = 1.0;
   public extra: string = '{}';  // JSON object of type-specific options
+  // true: apply only to the hypotheses that survive the search (rescoring)
+  public rescore: boolean = false;
 }
 
 // Scorers and search settings for decodingMethod 'prefix_beam_search'

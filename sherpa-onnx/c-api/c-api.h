@@ -347,6 +347,11 @@ typedef struct SherpaOnnxScorerConfig {
   float weight;
   /** JSON object of type-specific options. NULL: "{}". */
   const char *extra;
+  /**
+   * Non-zero: apply the scorer only to the hypotheses that survive the
+   * search, as n-best rescoring does, instead of during the search.
+   */
+  int32_t rescore;
 } SherpaOnnxScorerConfig;
 
 /**

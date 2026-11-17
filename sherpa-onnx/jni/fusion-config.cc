@@ -42,6 +42,7 @@ ScorerOptions GetScorerOptions(JNIEnv *env, jobject scorer, bool *ok) {
                               scorer);
   SHERPA_ONNX_JNI_READ_FLOAT(ans.weight, weight, cls, scorer);
   SHERPA_ONNX_JNI_READ_STRING(ans.extra, extra, cls, scorer);
+  SHERPA_ONNX_JNI_READ_BOOL(ans.rescore, rescore, cls, scorer);
 
   env->DeleteLocalRef(cls);
   *ok = true;

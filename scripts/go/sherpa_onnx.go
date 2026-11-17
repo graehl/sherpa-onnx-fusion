@@ -148,6 +148,10 @@ type ScorerConfig struct {
 	Provider   string  // Execution provider for the scorer's model. Empty: cpu
 	Weight     float32 // Search weight of the scorer's log score. 0 means 1
 	Extra      string  // JSON object of type-specific options. Empty: {}
+
+	// 1: apply the scorer only to the hypotheses that survive the search, as
+	// n-best rescoring does, instead of during the search.
+	Rescore int
 }
 
 // Scorers and search settings for the decoding method prefix_beam_search.
@@ -189,6 +193,7 @@ func newCFusionConfig(config *FusionConfig, c *C.struct_SherpaOnnxFusionConfig) 
 			scorers[i].provider = C.CString(s.Provider)
 			scorers[i].weight = C.float(s.Weight)
 			scorers[i].extra = C.CString(s.Extra)
+			scorers[i].rescore = C.int32_t(s.Rescore)
 		}
 		c.scorers = p
 		c.num_scorers = C.int32_t(n)

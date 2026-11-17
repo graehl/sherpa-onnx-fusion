@@ -622,6 +622,9 @@ final class SherpaOnnxScorerConfig extends Struct {
   external double weight;
 
   external Pointer<Utf8> extra;
+
+  @Int32()
+  external int rescore;
 }
 
 final class SherpaOnnxFusionConfig extends Struct {

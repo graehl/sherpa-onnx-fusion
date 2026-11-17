@@ -42,6 +42,9 @@ pub struct ScorerConfig {
     pub weight: f32,
     /// JSON object of type-specific options.
     pub extra: Option<String>,
+    /// Apply the scorer only to the hypotheses that survive the search, as
+    /// n-best rescoring does, instead of during the search.
+    pub rescore: bool,
 }
 
 impl Default for ScorerConfig {
@@ -55,6 +58,7 @@ impl Default for ScorerConfig {
             provider: Some("cpu".into()),
             weight: 1.0,
             extra: Some("{}".into()),
+            rescore: false,
         }
     }
 }
@@ -70,6 +74,7 @@ impl ScorerConfig {
             provider: to_c_ptr(&self.provider, cstrings),
             weight: self.weight,
             extra: to_c_ptr(&self.extra, cstrings),
+            rescore: self.rescore as i32,
         }
     }
 }

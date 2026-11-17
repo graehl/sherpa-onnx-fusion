@@ -182,6 +182,7 @@ JSObject _buildFusionConfig(FusionConfig fusion) {
     js['provider'] = s.provider.toJS;
     js['weight'] = s.weight.toJS;
     js['extra'] = s.extra.toJS;
+    js['rescore'] = s.rescore.toJS;
     scorers.add(js);
   }
 

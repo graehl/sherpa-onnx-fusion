@@ -182,7 +182,8 @@ public func sherpaOnnxScorerConfig(
   numThreads: Int = 1,
   provider: String = "cpu",
   weight: Float = 1.0,
-  extra: String = "{}"
+  extra: String = "{}",
+  rescore: Bool = false
 ) -> SherpaOnnxScorerConfig {
   return SherpaOnnxScorerConfig(
     type: toCPointer(type),
@@ -192,7 +193,8 @@ public func sherpaOnnxScorerConfig(
     num_threads: Int32(numThreads),
     provider: toCPointer(provider),
     weight: weight,
-    extra: toCPointer(extra))
+    extra: toCPointer(extra),
+    rescore: rescore ? 1 : 0)
 }
 
 /// Owns the C array of scorers that SherpaOnnxFusionConfig.scorers points

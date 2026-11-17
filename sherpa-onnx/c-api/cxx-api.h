@@ -194,6 +194,9 @@ struct ScorerConfig {
   float weight = 1.0f;
   /** JSON object of type-specific options. */
   std::string extra = "{}";
+  /** Apply the scorer only to the hypotheses that survive the search, as
+   * n-best rescoring does. */
+  bool rescore = false;
 };
 
 /** @brief Settings for `"prefix_beam_search"`. */

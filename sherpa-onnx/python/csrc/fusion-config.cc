@@ -36,6 +36,9 @@ Args:
     Search weight of the scorer.
   extra:
     JSON object text with options of the scorer type.
+  rescore:
+    Apply the scorer only to the hypotheses that survive the search, as
+    n-best rescoring does, instead of during the search.
 )doc";
 
 static constexpr const char *kFusionConfigInitDoc = R"doc(
@@ -68,7 +71,7 @@ static void PybindScorerConfig(py::module *m) {
       .def(py::init([](const std::string &type, const std::string &model,
                        const std::string &unit, const std::string &space,
                        int32_t num_threads, const std::string &provider,
-                       float weight, const std::string &extra) {
+                       float weight, const std::string &extra, bool rescore) {
              PyClass o;
              o.type = type;
              o.common.model = model;
@@ -78,13 +81,14 @@ static void PybindScorerConfig(py::module *m) {
              o.common.provider.provider = provider;
              o.weight = weight;
              o.extra = extra;
+             o.rescore = rescore;
              return o;
            }),
            py::arg("type") = "", py::arg("model") = "",
            py::arg("unit") = "char", py::arg("space") = "▁",
            py::arg("num_threads") = 1, py::arg("provider") = "cpu",
            py::arg("weight") = 1.0, py::arg("extra") = "{}",
-           kScorerConfigInitDoc)
+           py::arg("rescore") = false, kScorerConfigInitDoc)
       .def_readwrite("type", &PyClass::type)
       .def_property(
           "model", [](const PyClass &o) { return o.common.model; },
@@ -106,6 +110,7 @@ static void PybindScorerConfig(py::module *m) {
           })
       .def_readwrite("weight", &PyClass::weight)
       .def_readwrite("extra", &PyClass::extra)
+      .def_readwrite("rescore", &PyClass::rescore)
       .def("validate", &PyClass::Validate)
       .def("__str__", &PyClass::ToString);
 }

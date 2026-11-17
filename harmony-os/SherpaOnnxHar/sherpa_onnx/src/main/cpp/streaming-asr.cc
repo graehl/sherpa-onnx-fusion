@@ -211,6 +211,7 @@ static SherpaOnnxScorerConfig GetScorerConfig(Napi::Value v) {
   SHERPA_ONNX_ASSIGN_ATTR_STR(provider, provider);
   SHERPA_ONNX_ASSIGN_ATTR_FLOAT(weight, weight);
   SHERPA_ONNX_ASSIGN_ATTR_STR(extra, extra);
+  SHERPA_ONNX_ASSIGN_ATTR_BOOL(rescore, rescore);
 
   return c;
 }

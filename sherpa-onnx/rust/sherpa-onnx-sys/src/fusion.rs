@@ -16,6 +16,7 @@ pub struct ScorerConfig {
     pub provider: *const c_char,
     pub weight: c_float,
     pub extra: *const c_char,
+    pub rescore: i32,
 }
 
 /// `SherpaOnnxFusionConfig`: settings for `prefix_beam_search`.

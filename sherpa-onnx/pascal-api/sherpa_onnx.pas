@@ -322,6 +322,9 @@ type
     Provider: AnsiString;
     Weight: Single; { 0 means 1; set 0 through OptionsJson }
     Extra: AnsiString; { JSON object of type-specific options }
+    { Apply the scorer only to the hypotheses that survive the search, as
+      n-best rescoring does. }
+    Rescore: Boolean;
     function ToString: AnsiString;
     class operator Initialize({$IFDEF FPC}var{$ELSE}out{$ENDIF} Dest: TSherpaOnnxScorerConfig);
   end;
@@ -1082,6 +1085,7 @@ type
     Provider: PAnsiChar;
     Weight: cfloat;
     Extra: PAnsiChar;
+    Rescore: cint32;
   end;
 
   PSherpaOnnxScorerConfig = ^SherpaOnnxScorerConfig;
@@ -2091,6 +2095,7 @@ begin
     Scorers[I].Provider := PAnsiChar(Config.Scorers[I].Provider);
     Scorers[I].Weight := Config.Scorers[I].Weight;
     Scorers[I].Extra := PAnsiChar(Config.Scorers[I].Extra);
+    Scorers[I].Rescore := Ord(Config.Scorers[I].Rescore);
   end;
   if Length(Scorers) > 0 then
     Result.Scorers := @Scorers[0];
@@ -3070,6 +3075,7 @@ begin
   Dest.Provider := 'cpu';
   Dest.Weight := 1;
   Dest.Extra := '{}';
+  Dest.Rescore := False;
 end;
 
 class operator TSherpaOnnxFusionConfig.Initialize({$IFDEF FPC}var{$ELSE}out{$ENDIF} Dest: TSherpaOnnxFusionConfig);
@@ -3086,9 +3092,9 @@ function TSherpaOnnxScorerConfig.ToString: AnsiString;
 begin
   Result := Format('TSherpaOnnxScorerConfig(Type := %s, Model := %s, ' +
     'Unit := %s, Space := %s, NumThreads := %d, Provider := %s, ' +
-    'Weight := %.3f, Extra := %s)',
+    'Weight := %.3f, Extra := %s, Rescore := %s)',
     [Self.&Type, Self.Model, Self.&Unit, Self.Space, Self.NumThreads,
-     Self.Provider, Self.Weight, Self.Extra]);
+     Self.Provider, Self.Weight, Self.Extra, Self.Rescore.ToString]);
 end;
 
 function TSherpaOnnxFusionConfig.ToString: AnsiString;
