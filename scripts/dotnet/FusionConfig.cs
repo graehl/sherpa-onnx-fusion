@@ -25,6 +25,7 @@ namespace SherpaOnnx
             ModifiedBeamSearchRules = 0;
             CtcPrior = "";
             CtcPriorWeight = 1.0F;
+            LiteralZeros = 1;
         }
 
         /// <summary>
@@ -58,7 +59,7 @@ namespace SherpaOnnx
 
         /// <summary>
         /// A hypothesis survives a frame only within this score of the best.
-        /// Negative: no limit.
+        /// 0 or less: no limit.
         /// </summary>
         public float ScoreBeam;
 
@@ -90,6 +91,16 @@ namespace SherpaOnnx
         public string CtcPrior;
 
         public float CtcPriorWeight;
+
+        /// <summary>
+        /// 1 (set by the constructor, which fills in every default): a 0 in
+        /// a numeric field here or in a ScorerConfig is taken as 0. 0: as in
+        /// the C API, a numeric 0 means the default, which is what a
+        /// zero-initialized default(FusionConfig) gets. Build every
+        /// ScorerConfig with new ScorerConfig(), not default(ScorerConfig) or
+        /// new ScorerConfig[n], or its Weight and NumThreads are 0.
+        /// </summary>
+        public int LiteralZeros;
     }
 
     /// Copies a ScorerConfig[] into native memory for FusionConfig.Scorers.

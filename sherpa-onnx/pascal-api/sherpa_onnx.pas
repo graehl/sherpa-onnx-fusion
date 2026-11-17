@@ -320,7 +320,7 @@ type
     Space: AnsiString;
     NumThreads: Integer;
     Provider: AnsiString;
-    Weight: Single; { 0 means 1; set 0 through OptionsJson }
+    Weight: Single; { with Fusion.LiteralZeros (the default), 0 means 0 }
     Extra: AnsiString; { JSON object of type-specific options }
     { Apply the scorer only to the hypotheses that survive the search, as
       n-best rescoring does. }
@@ -338,7 +338,7 @@ type
     LengthBonusUnit: AnsiString; { 'token' or 'word' }
     CtcAlignment: AnsiString; { 'sum' or 'max' }
     TokenCandidates: Integer;
-    ScoreBeam: Single; { negative: no limit }
+    ScoreBeam: Single; { 0 or less: no limit }
     ScorerTextCase: AnsiString; { 'keep' or 'lower' }
     { Transducers: rank results by score divided by output length. }
     LengthNormalize: Boolean;
@@ -348,6 +348,10 @@ type
       subtracted CtcPriorWeight times from its token's log probability. }
     CtcPrior: AnsiString;
     CtcPriorWeight: Single;
+    { True (the default, since every field above has its real default): a 0
+      in a numeric field here or in Scorers is taken as 0. False: as in the
+      C API, a numeric 0 means the default. }
+    LiteralZeros: Boolean;
     function ToString: AnsiString;
     class operator Initialize({$IFDEF FPC}var{$ELSE}out{$ENDIF} Dest: TSherpaOnnxFusionConfig);
   end;
@@ -571,12 +575,15 @@ type
     Normalize: AnsiString; { 'window' or 'utterance' }
     Weight: AnsiString; { 'center' or 'cut' }
     Blend: AnsiString; { CTC models: 'log' or 'prob' }
-    { Exponent of the 'center' weight: 1 is linear. 0 means 1. }
+    { Exponent of the 'center' weight: 1 is linear, 0 uniform. }
     CenterPower: Single;
     { Context-only output frames per interior window edge. }
     ContextFrames: Integer;
     { The same as a fraction of each window's output length. }
     ContextFraction: Single;
+    { True (the default): a 0 in a numeric field here, such as Slack, is
+      taken as 0. False: as in the C API, a numeric 0 means the default. }
+    LiteralZeros: Boolean;
     function ToString: AnsiString;
     class operator Initialize({$IFDEF FPC}var{$ELSE}out{$ENDIF} Dest: TSherpaOnnxOfflineEncoderWindowConfig);
   end;
@@ -1149,6 +1156,7 @@ type
     ModifiedBeamSearchRules: cint32;
     CtcPrior: PAnsiChar;
     CtcPriorWeight: cfloat;
+    LiteralZeros: cint32;
   end;
 
   SherpaOnnxOnlineRecognizerConfig = record
@@ -1287,6 +1295,7 @@ type
     CenterPower: cfloat;
     ContextFrames: cint32;
     ContextFraction: cfloat;
+    LiteralZeros: cint32;
   end;
   SherpaOnnxOfflineEncoderConfig = record
     Window: SherpaOnnxOfflineEncoderWindowConfig;
@@ -2179,6 +2188,7 @@ begin
   Result.ModifiedBeamSearchRules := Ord(Config.ModifiedBeamSearchRules);
   Result.CtcPrior := PAnsiChar(Config.CtcPrior);
   Result.CtcPriorWeight := Config.CtcPriorWeight;
+  Result.LiteralZeros := Ord(Config.LiteralZeros);
 end;
 
 constructor TSherpaOnnxOnlineRecognizer.Create(Config: TSherpaOnnxOnlineRecognizerConfig);
@@ -2707,6 +2717,7 @@ begin
   C.ModelConfig.Encoder.Window.CenterPower := Config.ModelConfig.Encoder.Window.CenterPower;
   C.ModelConfig.Encoder.Window.ContextFrames := Config.ModelConfig.Encoder.Window.ContextFrames;
   C.ModelConfig.Encoder.Window.ContextFraction := Config.ModelConfig.Encoder.Window.ContextFraction;
+  C.ModelConfig.Encoder.Window.LiteralZeros := Ord(Config.ModelConfig.Encoder.Window.LiteralZeros);
   C.ModelConfig.Encoder.Lengths := PAnsiChar(Config.ModelConfig.Encoder.Lengths);
   C.ModelConfig.Encoder.PadTo := Config.ModelConfig.Encoder.PadTo;
 
@@ -3173,6 +3184,7 @@ begin
   Dest.CenterPower := 1;
   Dest.ContextFrames := 0;
   Dest.ContextFraction := 0;
+  Dest.LiteralZeros := True;
 end;
 
 function TSherpaOnnxOfflineEncoderWindowConfig.ToString: AnsiString;
@@ -3180,9 +3192,10 @@ begin
   Result := Format('TSherpaOnnxOfflineEncoderWindowConfig(Seconds := %.3f, ' +
     'Overlap := %.3f, Slack := %.3f, Normalize := %s, Weight := %s, ' +
     'Blend := %s, CenterPower := %.3f, ContextFrames := %d, ' +
-    'ContextFraction := %.3f)',
+    'ContextFraction := %.3f, LiteralZeros := %s)',
     [Self.Seconds, Self.Overlap, Self.Slack, Self.Normalize, Self.Weight,
-     Self.Blend, Self.CenterPower, Self.ContextFrames, Self.ContextFraction]);
+     Self.Blend, Self.CenterPower, Self.ContextFrames, Self.ContextFraction,
+     Self.LiteralZeros.ToString]);
 end;
 
 function TSherpaOnnxOfflineEncoderConfig.ToString: AnsiString;
@@ -3214,6 +3227,7 @@ begin
   Dest.LengthNormalize := False;
   Dest.ModifiedBeamSearchRules := False;
   Dest.CtcPriorWeight := 1;
+  Dest.LiteralZeros := True;
 end;
 
 function TSherpaOnnxScorerConfig.ToString: AnsiString;
@@ -3244,11 +3258,11 @@ begin
     'LengthBonus := %.3f, LengthBonusUnit := %s, CtcAlignment := %s, ' +
     'TokenCandidates := %d, ScoreBeam := %.3f, ScorerTextCase := %s, ' +
     'LengthNormalize := %s, ModifiedBeamSearchRules := %s, ' +
-    'CtcPrior := %s, CtcPriorWeight := %.3f)',
+    'CtcPrior := %s, CtcPriorWeight := %.3f, LiteralZeros := %s)',
     [ScorersStr, Self.LengthBonus, Self.LengthBonusUnit, Self.CtcAlignment,
      Self.TokenCandidates, Self.ScoreBeam, Self.ScorerTextCase,
      Self.LengthNormalize.ToString, Self.ModifiedBeamSearchRules.ToString,
-     Self.CtcPrior, Self.CtcPriorWeight]);
+     Self.CtcPrior, Self.CtcPriorWeight, Self.LiteralZeros.ToString]);
 end;
 
 constructor TSherpaOnnxCircularBuffer.Create(Capacity: Integer);

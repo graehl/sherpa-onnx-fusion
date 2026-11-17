@@ -243,7 +243,12 @@ public func sherpaOnnxFusionConfig(
   lengthNormalize: Bool = false,
   modifiedBeamSearchRules: Bool = false,
   ctcPrior: String = "",
-  ctcPriorWeight: Float = 1
+  ctcPriorWeight: Float = 1,
+  // true: a 0 in a numeric field here or in a scorer is taken as 0 (e.g.
+  // scoreBeam 0: no limit), since these parameters and
+  // sherpaOnnxScorerConfig() carry the real defaults. false: as in the C
+  // API, a numeric 0 means the default.
+  literalZeros: Bool = true
 ) -> SherpaOnnxFusionConfig {
   return SherpaOnnxFusionConfig(
     scorers: UnsafePointer(scorers?.pointer),
@@ -257,7 +262,8 @@ public func sherpaOnnxFusionConfig(
     length_normalize: lengthNormalize ? 1 : 0,
     modified_beam_search_rules: modifiedBeamSearchRules ? 1 : 0,
     ctc_prior: toCPointer(ctcPrior),
-    ctc_prior_weight: ctcPriorWeight)
+    ctc_prior_weight: ctcPriorWeight,
+    literal_zeros: literalZeros ? 1 : 0)
 }
 
 public func sherpaOnnxOnlineRecognizerConfig(
@@ -694,7 +700,10 @@ public func sherpaOnnxOfflineEncoderWindowConfig(
   blend: String = "log",
   centerPower: Float = 1,
   contextFrames: Int = 0,
-  contextFraction: Float = 0
+  contextFraction: Float = 0,
+  // true: a 0 in a numeric field here (e.g. slack 0) is taken as 0. false:
+  // as in the C API, a numeric 0 means the default.
+  literalZeros: Bool = true
 ) -> SherpaOnnxOfflineEncoderWindowConfig {
   return SherpaOnnxOfflineEncoderWindowConfig(
     seconds: seconds,
@@ -705,7 +714,8 @@ public func sherpaOnnxOfflineEncoderWindowConfig(
     blend: toCPointer(blend),
     center_power: centerPower,
     context_frames: Int32(contextFrames),
-    context_fraction: contextFraction)
+    context_fraction: contextFraction,
+    literal_zeros: literalZeros ? 1 : 0)
 }
 
 /// How an offline model's encoder runs.

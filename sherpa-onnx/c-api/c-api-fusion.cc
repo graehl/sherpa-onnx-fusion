@@ -17,15 +17,21 @@ void SetIfGiven(const char *value, std::string *out) {
   if (value && *value) *out = value;
 }
 
-ScorerOptions GetScorerOptions(const SherpaOnnxScorerConfig &c) {
+// A zero is the default unless "literal" (a struct's literal_zeros) is set.
+template <typename T>
+void SetNumber(T value, bool literal, T *out) {
+  if (literal || value != 0) *out = value;
+}
+
+ScorerOptions GetScorerOptions(const SherpaOnnxScorerConfig &c, bool literal) {
   ScorerOptions o;
   SetIfGiven(c.type, &o.type);
   SetIfGiven(c.model, &o.common.model);
   SetIfGiven(c.unit, &o.common.unit);
   SetIfGiven(c.space, &o.common.space);
-  if (c.num_threads > 0) o.common.num_threads = c.num_threads;
+  SetNumber(c.num_threads, literal, &o.common.num_threads);
   SetIfGiven(c.provider, &o.common.provider.provider);
-  if (c.weight != 0) o.weight = c.weight;
+  SetNumber(c.weight, literal, &o.weight);
   SetIfGiven(c.extra, &o.extra);
   o.rescore = c.rescore != 0;
   return o;
@@ -46,21 +52,22 @@ bool ApplyJson(const CConfig *c, Config *config) {
 
 FusionConfig GetFusionConfig(const SherpaOnnxFusionConfig &c) {
   FusionConfig f;
+  bool literal = c.literal_zeros != 0;
   if (c.scorers) {
     for (int32_t i = 0; i < c.num_scorers; ++i) {
-      f.scorers.push_back(GetScorerOptions(c.scorers[i]));
+      f.scorers.push_back(GetScorerOptions(c.scorers[i], literal));
     }
   }
   f.length_bonus = c.length_bonus;
   SetIfGiven(c.length_bonus_unit, &f.length_bonus_unit);
   SetIfGiven(c.ctc_alignment, &f.ctc_alignment);
-  if (c.token_candidates > 0) f.token_candidates = c.token_candidates;
-  if (c.score_beam != 0) f.score_beam = c.score_beam;
+  SetNumber(c.token_candidates, literal, &f.token_candidates);
+  SetNumber(c.score_beam, literal, &f.score_beam);
   SetIfGiven(c.scorer_text_case, &f.scorer_text_case);
   f.length_normalize = c.length_normalize != 0;
   f.modified_beam_search_rules = c.modified_beam_search_rules != 0;
   SetIfGiven(c.ctc_prior, &f.ctc_prior);
-  if (c.ctc_prior_weight != 0) f.ctc_prior_weight = c.ctc_prior_weight;
+  SetNumber(c.ctc_prior_weight, literal, &f.ctc_prior_weight);
   return f;
 }
 
@@ -68,13 +75,14 @@ OfflineEncoderConfig GetOfflineEncoderConfig(
     const SherpaOnnxOfflineEncoderConfig &c) {
   OfflineEncoderConfig e;
   OfflineEncoderWindowConfig &w = e.window;
+  bool literal = c.window.literal_zeros != 0;
   w.seconds = c.window.seconds;
-  if (c.window.overlap != 0) w.overlap = c.window.overlap;
-  if (c.window.slack != 0) w.slack = c.window.slack;
+  SetNumber(c.window.overlap, literal, &w.overlap);
+  SetNumber(c.window.slack, literal, &w.slack);
   SetIfGiven(c.window.normalize, &w.normalize);
   SetIfGiven(c.window.weight, &w.weight);
   SetIfGiven(c.window.blend, &w.blend);
-  if (c.window.center_power != 0) w.center_power = c.window.center_power;
+  SetNumber(c.window.center_power, literal, &w.center_power);
   w.context_frames = c.window.context_frames;
   w.context_fraction = c.window.context_fraction;
   SetIfGiven(c.lengths, &e.lengths);

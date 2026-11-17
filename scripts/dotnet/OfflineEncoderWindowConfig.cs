@@ -22,6 +22,7 @@ namespace SherpaOnnx
             CenterPower = 1.0F;
             ContextFrames = 0;
             ContextFraction = 0.0F;
+            LiteralZeros = 1;
         }
 
         /// <summary>
@@ -63,8 +64,7 @@ namespace SherpaOnnx
 
         /// <summary>
         /// Exponent of the "center" weight, (1 + distance from the nearer
-        /// retained edge)^CenterPower: 1 is linear. 0 means 1; set uniform
-        /// weights through OptionsJson.
+        /// retained edge)^CenterPower: 1 is linear, 0 uniform.
         /// </summary>
         public float CenterPower;
 
@@ -79,5 +79,12 @@ namespace SherpaOnnx
         /// of ContextFrames and ContextFraction may be non-zero.
         /// </summary>
         public float ContextFraction;
+
+        /// <summary>
+        /// 1 (set by the constructor, which fills in every default): a 0 in
+        /// a numeric field here, such as Slack, is taken as 0. 0: as in the C
+        /// API, a numeric 0 means the default.
+        /// </summary>
+        public int LiteralZeros;
     }
 }

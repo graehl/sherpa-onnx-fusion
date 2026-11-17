@@ -302,8 +302,7 @@
 /**
  * How an offline encoder runs an utterance longer than a window: in
  * overlapping windows whose outputs are blended per output frame. An omitted
- * or zero field takes the default given beside it; set an explicit zero
- * through the recognizer config's optionsJson.
+ * field takes the default given beside it; an explicit 0 is taken as 0.
  * @typedef {Object} OfflineEncoderWindowConfig
  * @property {number} [seconds] - Window length. Default 0: every utterance
  *   is encoded whole.
@@ -461,8 +460,8 @@
 
 /**
  * One scorer, such as a language model, fused into
- * decodingMethod 'prefix_beam_search'. An omitted or zero field takes the
- * default given beside it.
+ * decodingMethod 'prefix_beam_search'. An omitted field takes the default
+ * given beside it; an explicit 0 is taken as 0.
  * @typedef {Object} ScorerConfig
  * @property {string} [type] - Registered scorer type: 'kenlm' or 'onnx-rnn'.
  * @property {string} [model] - Path to the scorer's model.
@@ -482,9 +481,9 @@
 
 /**
  * Scorers and search settings for decodingMethod 'prefix_beam_search'.
- * An omitted or zero field takes the default given beside it; for a value
- * these fields cannot express, such as a weight of 0, use the recognizer
- * config's optionsJson.
+ * An omitted field takes the default given beside it; an explicit 0 is taken
+ * as 0. For a setting these fields do not cover, use the recognizer config's
+ * optionsJson.
  * @typedef {Object} FusionConfig
  * @property {ScorerConfig[]} [scorers] - Fused with independent weights.
  * @property {number} [lengthBonus] - Added per lengthBonusUnit of output.
@@ -493,7 +492,7 @@
  * @property {number} [tokenCandidates] - Most probable tokens per frame that
  *   may extend a hypothesis. Default 8.
  * @property {number} [scoreBeam] - A hypothesis survives a frame only within
- *   this score of the best. Default 12; a negative value means no limit.
+ *   this score of the best. Default 12; 0 or less: no limit.
  * @property {string} [scorerTextCase] - Case of the text character scorers
  *   are given: 'keep' (default) or 'lower'. The output is unchanged.
  * @property {boolean|number} [lengthNormalize] - Transducers, true: rank

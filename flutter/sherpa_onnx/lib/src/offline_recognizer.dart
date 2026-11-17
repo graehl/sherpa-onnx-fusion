@@ -310,6 +310,8 @@ class OfflineRecognizer {
     c.ref.model.encoder.window.centerPower = window.centerPower;
     c.ref.model.encoder.window.contextFrames = window.contextFrames;
     c.ref.model.encoder.window.contextFraction = window.contextFraction;
+    // Every numeric field above carries its real default, so a 0 is meant.
+    c.ref.model.encoder.window.literalZeros = 1;
     c.ref.model.encoder.lengths = config.model.encoder.lengths.toNativeUtf8();
     c.ref.model.encoder.padTo = config.model.encoder.padTo;
 

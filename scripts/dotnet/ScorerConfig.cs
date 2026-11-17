@@ -51,8 +51,8 @@ namespace SherpaOnnx
         public string Provider;
 
         /// <summary>
-        /// Search weight of the scorer's log score. 0 means 1; set a weight
-        /// of 0 through OptionsJson.
+        /// Search weight of the scorer's log score. With the default
+        /// FusionConfig.LiteralZeros of 1, 0 means 0.
         /// </summary>
         public float Weight;
 

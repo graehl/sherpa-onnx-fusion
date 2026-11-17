@@ -450,16 +450,16 @@ impl OfflineFunASRNanoModelConfig {
 /// overlapping windows whose outputs are blended per output frame.
 ///
 /// Supported for the offline CTC models, the zipformer transducer, and NeMo
-/// RNN-T and TDT. A value of 0 for `overlap` or `slack` means the default;
-/// set an explicit zero through `options_json`, e.g.
-/// `{"encoder": {"window": {"slack": 0}}}`.
+/// RNN-T and TDT. [`Default`] gives the real defaults, and every numeric
+/// field is passed as given: a 0 means 0. A `None` string takes the core
+/// default.
 pub struct OfflineEncoderWindowConfig {
     /// Window length in seconds. 0: every utterance is encoded whole.
     pub seconds: f32,
     /// The least overlap of neighbouring windows, in seconds.
     pub overlap: f32,
     /// How far an interior window may move, in seconds, to put its edges
-    /// where the audio is quietest.
+    /// where the audio is quietest; 0 keeps the windows evenly spaced.
     pub slack: f32,
     /// Scope of input normalization: `window` or `utterance`.
     pub normalize: Option<String>,
@@ -470,8 +470,7 @@ pub struct OfflineEncoderWindowConfig {
     /// CTC models: what `center` averages, `log` probabilities or `prob`.
     pub blend: Option<String>,
     /// Exponent of the `center` weight, (1 + distance from the nearer
-    /// retained edge)^center_power: 1 is linear. 0 here means 1; use
-    /// `options_json` for uniform weights.
+    /// retained edge)^center_power: 1 is linear, 0 uniform.
     pub center_power: f32,
     /// Context-only output frames per interior window edge; they inform the
     /// window's other frames but are not themselves kept.
@@ -509,6 +508,8 @@ impl OfflineEncoderWindowConfig {
             center_power: self.center_power,
             context_frames: self.context_frames,
             context_fraction: self.context_fraction,
+            // Every numeric field above holds its real value.
+            literal_zeros: 1,
         }
     }
 }

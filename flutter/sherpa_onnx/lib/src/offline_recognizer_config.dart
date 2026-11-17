@@ -602,9 +602,7 @@ class OfflineLMConfig {
 /// overlapping windows whose outputs are blended per output frame.
 ///
 /// Supported for the offline CTC models, the zipformer transducer, and NeMo
-/// RNN-T and TDT. A zero field takes the default given beside it; set an
-/// explicit zero through `optionsJson`, e.g.
-/// `{"encoder": {"window": {"slack": 0}}}`.
+/// RNN-T and TDT.
 class OfflineEncoderWindowConfig {
   const OfflineEncoderWindowConfig({
     this.seconds = 0.0,
@@ -671,8 +669,7 @@ class OfflineEncoderWindowConfig {
   final String blend;
 
   /// Exponent of the `center` weight, (1 + distance from the nearer retained
-  /// edge)^centerPower: 1 is linear. 0 means 1; use `optionsJson` for
-  /// uniform weights.
+  /// edge)^centerPower: 1 is linear, 0 uniform.
   final double centerPower;
 
   /// Context-only output frames per interior window edge; they inform the

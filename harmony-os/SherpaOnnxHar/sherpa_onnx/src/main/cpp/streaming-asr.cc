@@ -196,6 +196,10 @@ SherpaOnnxHomophoneReplacerConfig GetHomophoneReplacerConfig(Napi::Object obj) {
 static SherpaOnnxScorerConfig GetScorerConfig(Napi::Value v) {
   SherpaOnnxScorerConfig c;
   memset(&c, 0, sizeof(c));
+  // The real defaults: GetFusionConfig() sets literal_zeros, so that an
+  // explicit 0 reaches the core as 0.
+  c.num_threads = 1;
+  c.weight = 1;
 
   if (!v.IsObject()) {
     return c;
@@ -235,6 +239,12 @@ SherpaOnnxFusionConfig GetFusionConfig(Napi::Object obj) {
   }
 
   Napi::Object o = obj.Get("fusion").As<Napi::Object>();
+
+  // Fill in the real defaults so that an explicit 0 reaches the core as 0.
+  c.token_candidates = 8;
+  c.score_beam = 12;
+  c.ctc_prior_weight = 1;
+  c.literal_zeros = 1;
 
   if (o.Has("scorers") && o.Get("scorers").IsArray()) {
     Napi::Array arr = o.Get("scorers").As<Napi::Array>();
