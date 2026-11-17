@@ -999,7 +999,22 @@ Beam search initially runs on CPU. Changing the model provider does not move
 prefix merging, bookkeeping, or pruning to the GPU. Scorers write scores
 into caller-owned CPU-readable result arrays; a GPU-resident search would need
 additional implementation and potentially a device-resident score interface.
-Backend-owned neural states can nevertheless remain on their accelerator.
+Backend-owned neural states can nevertheless remain on their accelerator,
+and the onnx-rnn scorer's do: with `--scorer.N.provider=cuda` each step's
+recurrent states stay in GPU memory and only its log probabilities come to
+the host. A node holds its step's result and its row
+(`RecurrentLmStep::Result`); a step gathers its parents' rows on the
+device with a Concat and Gather graph that onnxruntime's model editor
+builds at load, nesting it when the parents come from more than eight
+earlier results, and runs through IO binding. On the CPU provider the
+states stay in their step's host output, and a step copies only its
+parents' rows into its input. The search's results are unchanged: on 40
+LibriSpeech test-other recordings in batches of four, the zipformer CTC
+model with icefall's LibriSpeech token LSTM (weight 0.3) gave the same 40
+transcripts as host-held states, on the CPU and with the LSTM on the GPU,
+nested gathers included; its real-time factor was 0.127 with the LSTM on
+the CPU and 0.020 on the GPU (RTX PRO 6000, one run each, 2026-11-17).
+onnxruntime builds without the model editor keep states on the host.
 Keep model execution separate from the search so later implementations can
 reuse model and scorer contracts where appropriate. Search on the same GPU
 as the models is deferred; see

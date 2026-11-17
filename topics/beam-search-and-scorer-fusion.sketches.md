@@ -67,7 +67,8 @@ A first measurement (2026-11-15; 100 test-other recordings in list-order
 batches of 8, zipformer CTC model and a token LSTM both on one GPU, a
 character KenLM on CPU, one thread running the model, two runs each,
 other jobs holding the GPU at 100% throughout, so the level is not to be
-trusted and the order probably is):
+trusted and the order probably is; the LSTM's states then went through
+the host on every step, as they no longer do):
 
 | Search threads | Elapsed s |
 |---|---|
@@ -102,10 +103,10 @@ costs nothing measurable. On a GPU a change of shape cost the encoder
 22–60 ms a call
 ([GPU decode cost](../gaps/gpu-decode-cost-outside-the-model.md)), and a
 step is far cheaper than that, so a GPU scorer would mostly pay for shape
-changes; the step graph's own cost per change is not measured. With
-`--scorer.N.provider=cuda` the step runs on the GPU, but each node's
-recurrent state is a host vector, so every step also copies its parents'
-states to the device and its outputs back.
+changes; the step graph's own cost per change is not measured. Its
+gather of parents' states on the device
+([execution placement](beam-search-and-scorer-fusion.md#execution-placement-and-batching))
+changes width with it.
 
 The option (graehl, 2026-11-17): a fixed step width W. A call's nodes run
 in chunks of W, and the last chunk either is padded to W, so every call
@@ -117,6 +118,20 @@ search's time with W at a few values against unpadded. Off by default;
 only a GPU scorer needs it. The same applies to the transducer's decoder
 and joiner calls if their search moves to a GPU
 ([transducer search batching](../gaps/sketches/transducer-search-batching.md)).
+
+## Less than whole rows from a GPU scorer
+
+A GPU recurrent scorer's step brings each node's log probabilities of
+every unit to the host, and a token LSTM's rows can be thousands wide.
+Some pruning can happen on the GPU first (graehl, 2026-11-17). The search
+reads only the units its extensions name, but a node's row is kept for
+later extensions of the same prefix, so the choices are a top-k row per
+node with a floor for the rest, or the requested entries with a lookup on
+the device on a later miss. Measure the transfer's share of a step first.
+This pays only once more of the search's own work runs on the GPU
+(graehl, 2026-11-17); with the search on the CPU, the rows are what it
+reads. Either way, the recognizer's scores before the scorers could be
+sent to the GPU to combine there.
 
 ## Recovery by iterative widening
 
