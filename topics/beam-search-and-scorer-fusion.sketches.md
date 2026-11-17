@@ -466,7 +466,7 @@ design for what does not.
   twice in a row. Join markers the recognizer does not remove itself
   (`##`, `@@`) would be scored as written; no such model is supported. The
   options exist in the C++ config and command line only; see
-  [the bindings gap](../gaps/fusion-config-bindings.md).
+  [the fork-wide bindings gap](../gaps/fork-feature-bindings.md).
 
 - **Streaming recognizer**: the same method and options for streaming
   CTC models (`online-ctc-prefix-beam-search-decoder.h`). Each stream keeps
