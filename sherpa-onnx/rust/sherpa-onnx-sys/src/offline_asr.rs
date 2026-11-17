@@ -196,6 +196,7 @@ pub struct OfflineModelConfig {
     pub cohere_transcribe: OfflineCohereTranscribeModelConfig,
     pub w2v_bert_ctc: *const c_char,
     pub litert_dispatch_dir: *const c_char,
+    pub litert_window: *const c_char,
 }
 
 #[repr(C)]

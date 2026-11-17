@@ -484,6 +484,9 @@ pub struct OfflineModelConfig {
     /// and provider `npu`; for a Pixel, the directory holding
     /// `libLiteRtDispatch_GoogleTensor.so`.
     pub litert_dispatch_dir: Option<String>,
+    /// `"WINDOW_S:OVERLAP_S:SLACK_S"`: how a .tflite model runs an utterance
+    /// longer than its window length. `None`: windows of its longest length.
+    pub litert_window: Option<String>,
 }
 
 impl OfflineModelConfig {
@@ -554,6 +557,7 @@ impl OfflineModelConfig {
             telespeech_ctc: to_c_ptr(&self.telespeech_ctc, cstrings),
             w2v_bert_ctc: to_c_ptr(&self.w2v_bert_ctc, cstrings),
             litert_dispatch_dir: to_c_ptr(&self.litert_dispatch_dir, cstrings),
+            litert_window: to_c_ptr(&self.litert_window, cstrings),
         }
     }
 }

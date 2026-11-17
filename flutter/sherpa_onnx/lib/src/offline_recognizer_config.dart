@@ -635,6 +635,7 @@ class OfflineModelConfig {
     this.telespeechCtc = '',
     this.w2vBertCtc = '',
     this.litertDispatchDir = '',
+    this.litertWindow = '',
   });
 
   factory OfflineModelConfig.fromJson(Map<String, dynamic> json) {
@@ -739,12 +740,13 @@ class OfflineModelConfig {
       telespeechCtc: json['telespeechCtc'] as String? ?? '',
       w2vBertCtc: json['w2vBertCtc'] as String? ?? '',
       litertDispatchDir: json['litertDispatchDir'] as String? ?? '',
+      litertWindow: json['litertWindow'] as String? ?? '',
     );
   }
 
   @override
   String toString() {
-    return 'OfflineModelConfig(transducer: $transducer, paraformer: $paraformer, nemoCtc: $nemoCtc, whisper: $whisper, tdnn: $tdnn, senseVoice: $senseVoice, moonshine: $moonshine, fireRedAsr: $fireRedAsr, dolphin: $dolphin, zipformerCtc: $zipformerCtc, canary: $canary, wenetCtc: $wenetCtc, omnilingual: $omnilingual, medasr: $medasr, funasrNano: $funasrNano, fireRedAsrCtc: $fireRedAsrCtc, qwen3Asr: $qwen3Asr, cohereTranscribe: $cohereTranscribe, tokens: $tokens, numThreads: $numThreads, debug: $debug, provider: $provider, modelType: $modelType, modelingUnit: $modelingUnit, bpeVocab: $bpeVocab, telespeechCtc: $telespeechCtc, w2vBertCtc: $w2vBertCtc, litertDispatchDir: $litertDispatchDir)';
+    return 'OfflineModelConfig(transducer: $transducer, paraformer: $paraformer, nemoCtc: $nemoCtc, whisper: $whisper, tdnn: $tdnn, senseVoice: $senseVoice, moonshine: $moonshine, fireRedAsr: $fireRedAsr, dolphin: $dolphin, zipformerCtc: $zipformerCtc, canary: $canary, wenetCtc: $wenetCtc, omnilingual: $omnilingual, medasr: $medasr, funasrNano: $funasrNano, fireRedAsrCtc: $fireRedAsrCtc, qwen3Asr: $qwen3Asr, cohereTranscribe: $cohereTranscribe, tokens: $tokens, numThreads: $numThreads, debug: $debug, provider: $provider, modelType: $modelType, modelingUnit: $modelingUnit, bpeVocab: $bpeVocab, telespeechCtc: $telespeechCtc, w2vBertCtc: $w2vBertCtc, litertDispatchDir: $litertDispatchDir, litertWindow: $litertWindow)';
   }
 
   Map<String, dynamic> toJson() => {
@@ -776,6 +778,7 @@ class OfflineModelConfig {
     'telespeechCtc': telespeechCtc,
     'w2vBertCtc': w2vBertCtc,
     'litertDispatchDir': litertDispatchDir,
+    'litertWindow': litertWindow,
   };
 
   final OfflineTransducerModelConfig transducer;
@@ -813,6 +816,10 @@ class OfflineModelConfig {
   /// and provider `npu`; for a Pixel, the directory holding
   /// libLiteRtDispatch_GoogleTensor.so.
   final String litertDispatchDir;
+
+  /// `WINDOW_S:OVERLAP_S:SLACK_S`: how a .tflite model runs an utterance
+  /// longer than its window length. Empty: windows of its longest length.
+  final String litertWindow;
 }
 
 /// Top-level configuration for [OfflineRecognizer].

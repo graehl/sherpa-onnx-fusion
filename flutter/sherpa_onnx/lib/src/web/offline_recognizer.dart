@@ -349,6 +349,7 @@ JSObject _buildModelConfig(OfflineModelConfig model) {
   jsModel['telespeechCtc'] = model.telespeechCtc.toJS;
   jsModel['w2vBertCtc'] = model.w2vBertCtc.toJS;
   jsModel['litertDispatchDir'] = model.litertDispatchDir.toJS;
+  jsModel['litertWindow'] = model.litertWindow.toJS;
 
   return jsModel;
 }

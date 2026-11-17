@@ -744,6 +744,9 @@ struct OfflineModelConfig {
   /** Where LiteRT finds its accelerator library, for a .tflite model run
    * with provider `"npu"`. */
   std::string litert_dispatch_dir;
+  /** `"WINDOW_S:OVERLAP_S:SLACK_S"`: how a .tflite model runs an utterance
+   * longer than its window length. Empty: windows of its longest length. */
+  std::string litert_window;
 };
 
 /** @brief Optional language-model rescoring configuration for offline ASR. */

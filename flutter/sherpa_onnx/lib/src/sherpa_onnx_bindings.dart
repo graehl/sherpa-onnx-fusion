@@ -582,6 +582,7 @@ final class SherpaOnnxOfflineModelConfig extends Struct {
 
   external Pointer<Utf8> w2vBertCtc;
   external Pointer<Utf8> litertDispatchDir;
+  external Pointer<Utf8> litertWindow;
 }
 
 final class SherpaOnnxOfflineRecognizerConfig extends Struct {

@@ -38,6 +38,7 @@ namespace SherpaOnnx
             CohereTranscribe = new OfflineCohereTranscribeModelConfig();
             W2vBertCtc = "";
             LitertDispatchDir = "";
+            LitertWindow = "";
         }
         public OfflineTransducerModelConfig Transducer;
         public OfflineParaformerModelConfig Paraformer;
@@ -89,5 +90,11 @@ namespace SherpaOnnx
         /// model and provider "npu".
         [MarshalAs(UnmanagedType.LPStr)]
         public string LitertDispatchDir;
+
+        /// "WINDOW_S:OVERLAP_S:SLACK_S": how a .tflite model runs an
+        /// utterance longer than its window length. Empty: windows of its
+        /// longest length.
+        [MarshalAs(UnmanagedType.LPStr)]
+        public string LitertWindow;
     }
 }

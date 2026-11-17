@@ -325,6 +325,8 @@
  *   exported from transformers.
  * @property {string} [litertDispatchDir] - Where LiteRT finds its
  *   accelerator library, used with a .tflite model and provider 'npu'.
+ * @property {string} [litertWindow] - 'WINDOW_S:OVERLAP_S:SLACK_S': how a
+ *   .tflite model runs an utterance longer than its window length.
  */
 
 /**

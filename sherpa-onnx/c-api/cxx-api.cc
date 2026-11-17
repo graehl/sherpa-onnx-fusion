@@ -329,6 +329,7 @@ static SherpaOnnxOfflineRecognizerConfig Convert(
   c.model_config.w2v_bert_ctc = config.model_config.w2v_bert_ctc.c_str();
   c.model_config.litert_dispatch_dir =
       config.model_config.litert_dispatch_dir.c_str();
+  c.model_config.litert_window = config.model_config.litert_window.c_str();
 
   c.model_config.sense_voice.model =
       config.model_config.sense_voice.model.c_str();

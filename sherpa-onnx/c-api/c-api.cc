@@ -537,6 +537,8 @@ static sherpa_onnx::OfflineRecognizerConfig GetOfflineRecognizerConfig(
       SHERPA_ONNX_OR(config->model_config.w2v_bert_ctc, "");
   recognizer_config.model_config.litert_dispatch_dir =
       SHERPA_ONNX_OR(config->model_config.litert_dispatch_dir, "");
+  recognizer_config.model_config.litert_window =
+      SHERPA_ONNX_OR(config->model_config.litert_window, "");
 
   recognizer_config.model_config.sense_voice.model =
       SHERPA_ONNX_OR(config->model_config.sense_voice.model, "");
