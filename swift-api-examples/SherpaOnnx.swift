@@ -235,7 +235,8 @@ public func sherpaOnnxFusionConfig(
   lengthBonus: Float = 0,
   lengthBonusUnit: String = "token",
   ctcAlignment: String = "sum",
-  tokenCandidates: Int = 8
+  tokenCandidates: Int = 8,
+  scoreBeam: Float = 12
 ) -> SherpaOnnxFusionConfig {
   return SherpaOnnxFusionConfig(
     scorers: UnsafePointer(scorers?.pointer),
@@ -243,7 +244,8 @@ public func sherpaOnnxFusionConfig(
     length_bonus: lengthBonus,
     length_bonus_unit: toCPointer(lengthBonusUnit),
     ctc_alignment: toCPointer(ctcAlignment),
-    token_candidates: Int32(tokenCandidates))
+    token_candidates: Int32(tokenCandidates),
+    score_beam: scoreBeam)
 }
 
 public func sherpaOnnxOnlineRecognizerConfig(

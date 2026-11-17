@@ -518,7 +518,7 @@ function initSherpaOnnxFusionConfig(config, Module) {
   Module.stringToUTF8(
       config.ctcAlignment || '', buffer + lengthBonusUnitLen, ctcAlignmentLen);
 
-  const len = 6 * 4;
+  const len = 7 * 4;
   const ptr = Module._malloc(len);
 
   let offset = 0;
@@ -538,6 +538,9 @@ function initSherpaOnnxFusionConfig(config, Module) {
   offset += 4;
 
   Module.setValue(ptr + offset, config.tokenCandidates || 0, 'i32');
+  offset += 4;
+
+  Module.setValue(ptr + offset, config.scoreBeam || 0, 'float');
   offset += 4;
 
   return {ptr: ptr, len: len, buffer: buffer, scorers: scorers};

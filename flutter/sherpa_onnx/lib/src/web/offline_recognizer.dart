@@ -173,6 +173,7 @@ JSObject _buildFusionConfig(FusionConfig fusion) {
   jsFusion['lengthBonusUnit'] = fusion.lengthBonusUnit.toJS;
   jsFusion['ctcAlignment'] = fusion.ctcAlignment.toJS;
   jsFusion['tokenCandidates'] = fusion.tokenCandidates.toJS;
+  jsFusion['scoreBeam'] = fusion.scoreBeam.toJS;
   return jsFusion;
 }
 

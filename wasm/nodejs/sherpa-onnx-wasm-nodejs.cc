@@ -60,7 +60,7 @@ static_assert(sizeof(SherpaOnnxOfflineModelConfig) ==
               "");
 static_assert(sizeof(SherpaOnnxFeatureConfig) == 2 * 4, "");
 static_assert(sizeof(SherpaOnnxScorerConfig) == 8 * 4, "");
-static_assert(sizeof(SherpaOnnxFusionConfig) == 6 * 4, "");
+static_assert(sizeof(SherpaOnnxFusionConfig) == 7 * 4, "");
 static_assert(sizeof(SherpaOnnxOfflineRecognizerConfig) ==
                   sizeof(SherpaOnnxFeatureConfig) +
                       sizeof(SherpaOnnxOfflineLMConfig) +

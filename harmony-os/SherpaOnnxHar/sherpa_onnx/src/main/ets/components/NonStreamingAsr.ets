@@ -231,6 +231,7 @@ export class FusionConfig {
   public lengthBonusUnit: string = 'token';  // 'token' or 'word'
   public ctcAlignment: string = 'sum';  // CTC models: 'sum' or 'max'
   public tokenCandidates: number = 8;
+  public scoreBeam: number = 12;  // a negative value means no limit
 }
 
 export class OfflineRecognizerConfig {

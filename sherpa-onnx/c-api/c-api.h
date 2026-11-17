@@ -367,6 +367,11 @@ typedef struct SherpaOnnxFusionConfig {
   const char *ctc_alignment;
   /** Most probable tokens per frame that may extend a hypothesis. 0: 8. */
   int32_t token_candidates;
+  /**
+   * A hypothesis survives a frame only within this score of the best.
+   * 0 means 12; a negative value means no limit.
+   */
+  float score_beam;
 } SherpaOnnxFusionConfig;
 
 /**

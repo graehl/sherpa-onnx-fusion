@@ -19,6 +19,7 @@ namespace SherpaOnnx
             LengthBonusUnit = "token";
             CtcAlignment = "sum";
             TokenCandidates = 8;
+            ScoreBeam = 12.0F;
         }
 
         /// <summary>
@@ -49,6 +50,12 @@ namespace SherpaOnnx
         /// Most probable tokens per frame that may extend a hypothesis.
         /// </summary>
         public int TokenCandidates;
+
+        /// <summary>
+        /// A hypothesis survives a frame only within this score of the best.
+        /// Negative: no limit.
+        /// </summary>
+        public float ScoreBeam;
     }
 
     /// Copies a ScorerConfig[] into native memory for FusionConfig.Scorers.

@@ -89,6 +89,9 @@ pub struct FusionConfig {
     pub ctc_alignment: Option<String>,
     /// Most probable tokens per frame that may extend a hypothesis.
     pub token_candidates: i32,
+    /// A hypothesis survives a frame only within this score of the best.
+    /// Negative: no limit.
+    pub score_beam: f32,
 }
 
 impl Default for FusionConfig {
@@ -99,6 +102,7 @@ impl Default for FusionConfig {
             length_bonus_unit: Some("token".into()),
             ctc_alignment: Some("sum".into()),
             token_candidates: 8,
+            score_beam: 12.0,
         }
     }
 }
@@ -131,6 +135,7 @@ impl FusionConfig {
             length_bonus_unit: to_c_ptr(&self.length_bonus_unit, cstrings),
             ctc_alignment: to_c_ptr(&self.ctc_alignment, cstrings),
             token_candidates: self.token_candidates,
+            score_beam: self.score_beam,
         }
     }
 }
