@@ -124,9 +124,12 @@ covering windows give uniform averaging; center averaging instead weights
 each frame by its distance from the window edge. The latter is believed
 to be better with suitable parameters, not established as universally
 better. Compare both on the same windows before attributing a gain to
-center weights. The generic encoder currently exposes `center` and `cut`,
-not uniform averaging; `cut` selects one window's frame and is not the
-uniform-average condition.
+center weights. The encoder exposes uniform averaging through
+`--encoder.window.center-power=0`; the default 1 retains linear center
+weights. Context-only edges are controlled independently by
+`context-frames` or `context-fraction`, as described in the
+[chunked-encoding options](../../topics/chunked-encoding.md#options).
+`weight=cut` selects one window's frame and is not uniform averaging.
 
 ## How to measure
 

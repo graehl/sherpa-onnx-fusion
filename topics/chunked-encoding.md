@@ -57,6 +57,9 @@ they have a trained chunk-and-cache protocol and do not use this.
 | `--encoder.window.slack` | 1 | how far an interior window may move to put its edges in quiet audio; 0 keeps windows evenly spaced |
 | `--encoder.window.normalize` | `window` | `window` or `utterance`: the frames over which a feature normalization that uses its input's statistics is computed |
 | `--encoder.window.weight` | `center` | `center` averages the windows covering a frame, each weighted by 1 + the frame's distance from that window's nearer edge; `cut` takes the frame from the window in which it is farthest from an edge |
+| `--encoder.window.center-power` | 1 | exponent of the center weight: 0 gives exactly uniform averaging, 0.5 flatter weights, 1 linear weights, 2 sharper weights; finite and nonnegative |
+| `--encoder.window.context-frames` | 0 | zero-weight output frames per interior window edge; context only, still encoded |
+| `--encoder.window.context-fraction` | 0 | zero-weight fraction per interior edge of each window's valid output frames, rounded down; at least 0 and less than 0.5 |
 | `--encoder.window.blend` | `log` | CTC only: `log` averages log probabilities and renormalizes; `prob` averages probabilities |
 | `--encoder.lengths` | empty | comma-separated seconds: pad every encoder input to the shortest of these that holds it |
 | `--encoder.pad-to` | 0 | pad an input that `--encoder.lengths` does not hold to a multiple of this many seconds |
@@ -83,6 +86,27 @@ Example: 20 s windows, with every call at 10 or 20 s or a multiple of 5 s:
 ```text
 --encoder.window.seconds=20 --encoder.lengths=10,20 --encoder.pad-to=5
 ```
+
+The center controls require `weight=center`; only one of `context-frames`
+and `context-fraction` may be nonzero. Frame counts refer to encoder output
+frames, not audio samples, input features or decoded text tokens. Both
+generic and LiteRT windows use the same controls. Defaults preserve the
+original weighting.
+
+At an interior window edge, the specified context receives exactly zero
+weight. At the recording's outer edges it is retained because no neighboring
+window can supply those frames; a single window retains everything. On the
+remaining region, the weight is `(1 + distance to nearer retained edge)`
+raised to `center-power`. Thus power 0 is uniform over retained frames,
+and does not restore excluded context. The fraction is per edge, not the
+total discarded fraction. Large finite powers are evaluated with scaling
+to avoid overflowing the weights.
+
+If the realized windows leave any output frame with no positive weight,
+joining fails rather than silently restoring context-only frames. Increase
+overlap or reduce the context margin. Slack movement and encoder front-end
+edge loss can reduce usable overlap, so a nominal overlap of twice the
+context margin does not by itself guarantee coverage.
 
 ## Where windows go and how they are joined
 

@@ -37,9 +37,35 @@ void OfflineEncoderWindowConfig::Register(ParseOptions *po) {
   p.Register("blend", &blend,
              "log or prob: for a CTC model, average log probabilities "
              "and renormalize, or average probabilities");
+  p.Register("center-power", &center_power,
+             "Center-weight exponent: 0 uniform, 1 linear, larger sharper; "
+             "finite and nonnegative; requires weight=center");
+  p.Register("context-frames", &context_frames,
+             "Zero-weight output frames per interior window edge; recording "
+             "ends retained; exclusive with context-fraction");
+  p.Register("context-fraction", &context_fraction,
+             "Zero-weight fraction per interior window edge, rounded down "
+             "to output frames; [0,0.5); exclusive with context-frames");
 }
 
 bool OfflineEncoderWindowConfig::Validate() const {
+  if (!std::isfinite(center_power) || center_power < 0 || context_frames < 0 ||
+      !std::isfinite(context_fraction) || context_fraction < 0 ||
+      context_fraction >= 0.5f ||
+      (context_frames > 0 && context_fraction > 0)) {
+    SHERPA_ONNX_LOGE(
+        "encoder.window: center-power must be finite and nonnegative; "
+        "context-frames nonnegative; context-fraction in [0,0.5); "
+        "choose only one context setting");
+    return false;
+  }
+  if (weight != "center" &&
+      (center_power != 1 || context_frames != 0 || context_fraction != 0)) {
+    SHERPA_ONNX_LOGE(
+        "encoder.window center-power and context settings require "
+        "weight=center");
+    return false;
+  }
   if (!std::isfinite(seconds) || !std::isfinite(overlap) ||
       !std::isfinite(slack) || seconds < 0 || overlap < 0 || slack < 0) {
     SHERPA_ONNX_LOGE(
@@ -79,7 +105,9 @@ std::string OfflineEncoderWindowConfig::ToString() const {
   os << "OfflineEncoderWindowConfig(seconds=" << seconds
      << ", overlap=" << overlap << ", slack=" << slack << ", normalize=\""
      << normalize << "\", weight=\"" << weight << "\", blend=\"" << blend
-     << "\")";
+     << "\", center_power=" << center_power
+     << ", context_frames=" << context_frames
+     << ", context_fraction=" << context_fraction << ")";
   return os.str();
 }
 
@@ -216,19 +244,52 @@ WindowBlend::WindowBlend(int32_t num_frames, int32_t dim, Rows rows,
             : rows == Rows::kScores && config.blend == "prob"
                 ? Mode::kCenterProb
                 : Mode::kCenterLinear),
+      center_power_(config.center_power),
+      context_frames_(config.context_frames),
+      context_fraction_(config.context_fraction),
       sum_(static_cast<size_t>(num_frames) * dim,
            mode_ == Mode::kCenterProb ? -std::numeric_limits<double>::infinity()
                                       : 0.0),
-      weight_(num_frames, 0.0) {
+      weight_(num_frames, 0.0),
+      log_scale_(
+          config.center_power == 0 || config.center_power == 1 ? 0 : num_frames,
+          -std::numeric_limits<double>::infinity()) {
   // An average of probabilities is already normalized.
   if (mode_ == Mode::kCenterProb) log_softmax_ = false;
 }
 
 void WindowBlend::Add(const float *rows, int32_t frames, int32_t offset) {
+  const int32_t context = std::max(
+      context_frames_,
+      static_cast<int32_t>(frames * static_cast<double>(context_fraction_)));
+  const int32_t left = offset == 0 ? 0 : context;
+  const int32_t right = offset + frames == num_frames_ ? 0 : context;
   for (int32_t f = 0; f < frames; ++f, rows += dim_) {
-    const double w = 1.0 + std::min(f, frames - 1 - f);
+    if (f < left || frames - 1 - f < right) continue;
+    double w = 1.0 + std::min(f - left, frames - right - 1 - f);
     double *to = sum_.data() + static_cast<size_t>(offset + f) * dim_;
     double &total = weight_[offset + f];
+    if (center_power_ == 0) {
+      w = 1;
+    } else if (center_power_ != 1) {
+      const double log_w = center_power_ * std::log(w);
+      double &scale = log_scale_[offset + f];
+      if (log_w > scale) {
+        const double shift = scale - log_w;
+        const double factor = std::exp(shift);
+        for (int32_t v = 0; v < dim_; ++v) {
+          if (mode_ == Mode::kCenterProb) {
+            to[v] += shift;
+          } else {
+            to[v] *= factor;
+          }
+        }
+        total *= factor;
+        scale = log_w;
+      }
+      w = std::exp(log_w - scale);
+      if (w == 0) continue;
+    }
     switch (mode_) {
       case Mode::kCenterLinear:
         for (int32_t v = 0; v < dim_; ++v) to[v] += w * rows[v];
