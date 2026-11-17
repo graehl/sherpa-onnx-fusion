@@ -409,11 +409,49 @@
  */
 
 /**
+ * One scorer, such as a language model, fused into
+ * decodingMethod 'prefix_beam_search'. An omitted or zero field takes the
+ * default given beside it.
+ * @typedef {Object} ScorerConfig
+ * @property {string} [type] - Registered scorer type: 'kenlm' or 'onnx-rnn'.
+ * @property {string} [model] - Path to the scorer's model.
+ * @property {string} [unit] - What the scorer reads: 'char' (default) or
+ *   'token'.
+ * @property {string} [space] - Word-boundary unit of a character scorer.
+ *   Default '▁'.
+ * @property {number} [numThreads] - Threads for the scorer's model. Default 1.
+ * @property {string} [provider] - Execution provider. Default 'cpu'.
+ * @property {number} [weight] - Search weight of the scorer's log score.
+ *   Default 1.
+ * @property {string} [extra] - JSON object text of type-specific options.
+ *   Default '{}'.
+ */
+
+/**
+ * Scorers and search settings for decodingMethod 'prefix_beam_search'.
+ * An omitted or zero field takes the default given beside it; for a value
+ * these fields cannot express, such as a weight of 0, use the recognizer
+ * config's optionsJson.
+ * @typedef {Object} FusionConfig
+ * @property {ScorerConfig[]} [scorers] - Fused with independent weights.
+ * @property {number} [lengthBonus] - Added per lengthBonusUnit of output.
+ * @property {string} [lengthBonusUnit] - 'token' (default) or 'word'.
+ * @property {string} [ctcAlignment] - CTC models: 'sum' (default) or 'max'.
+ * @property {number} [tokenCandidates] - Most probable tokens per frame that
+ *   may extend a hypothesis. Default 8.
+ */
+
+/**
  * Offline recognizer config passed to createOfflineRecognizer.
  * @typedef {Object} OfflineRecognizerConfig
  * @property {FeatureConfig} [featConfig]
  * @property {OfflineModelConfig} [modelConfig]
  * @property {OfflineCtcFstDecoderConfig} [ctcFstDecoderConfig]
+ * @property {FusionConfig} [fusion]
+ * @property {string} [optionsJson] - JSON object of command-line options
+ *   applied after every other field, e.g.
+ *   '{"scorer": [{"weight": 40}], "score-beam": 0}'. An error in it makes
+ *   recognizer creation fail.
  */
 
 /**

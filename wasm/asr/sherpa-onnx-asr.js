@@ -107,6 +107,14 @@ function freeConfig(config, Module) {
     freeConfig(config.hr, Module)
   }
 
+  if ('fusion' in config) {
+    freeConfig(config.fusion, Module)
+  }
+
+  if ('scorers' in config) {
+    freeConfig(config.scorers, Module)
+  }
+
   Module._free(config.ptr);
 }
 
@@ -453,6 +461,86 @@ function initSherpaOnnxOfflineCtcFstDecoderConfig(config, Module) {
   Module.setValue(ptr, buffer, 'i8*');
   Module.setValue(ptr + 4, config.maxActive || 3000, 'i32');
   return {ptr: ptr, len: len, buffer: buffer};
+}
+
+// The array of SherpaOnnxScorerConfig that SherpaOnnxFusionConfig points to.
+// A field left out or zero takes the C API's default.
+function initSherpaOnnxScorerConfigArray(scorers, Module) {
+  const len = 8 * 4;  // size of one SherpaOnnxScorerConfig
+  const n = scorers.length;
+  if (n == 0) {
+    return {ptr: 0, len: 0, buffer: 0};
+  }
+
+  const strs = [];
+  for (const s of scorers) {
+    strs.push(
+        s.type || '', s.model || '', s.unit || '', s.space || '',
+        s.provider || '', s.extra || '');
+  }
+  const lens = strs.map((s) => Module.lengthBytesUTF8(s) + 1);
+  const buffer = Module._malloc(lens.reduce((a, b) => a + b, 0));
+  const p = [];
+  let offset = 0;
+  for (let i = 0; i < strs.length; ++i) {
+    Module.stringToUTF8(strs[i], buffer + offset, lens[i]);
+    p.push(buffer + offset);
+    offset += lens[i];
+  }
+
+  const ptr = Module._malloc(n * len);
+  for (let i = 0; i < n; ++i) {
+    const s = scorers[i];
+    const q = ptr + i * len;
+    Module.setValue(q, p[6 * i], 'i8*');           // type
+    Module.setValue(q + 4, p[6 * i + 1], 'i8*');   // model
+    Module.setValue(q + 8, p[6 * i + 2], 'i8*');   // unit
+    Module.setValue(q + 12, p[6 * i + 3], 'i8*');  // space
+    Module.setValue(q + 16, s.numThreads || 0, 'i32');
+    Module.setValue(q + 20, p[6 * i + 4], 'i8*');  // provider
+    Module.setValue(q + 24, s.weight || 0, 'float');
+    Module.setValue(q + 28, p[6 * i + 5], 'i8*');  // extra
+  }
+
+  return {ptr: ptr, len: n * len, buffer: buffer};
+}
+
+// SherpaOnnxFusionConfig: scorers and settings for prefix_beam_search.
+// A field left out or zero takes the C API's default.
+function initSherpaOnnxFusionConfig(config, Module) {
+  const scorers = initSherpaOnnxScorerConfigArray(config.scorers || [], Module);
+
+  const lengthBonusUnitLen =
+      Module.lengthBytesUTF8(config.lengthBonusUnit || '') + 1;
+  const ctcAlignmentLen = Module.lengthBytesUTF8(config.ctcAlignment || '') + 1;
+  const buffer = Module._malloc(lengthBonusUnitLen + ctcAlignmentLen);
+  Module.stringToUTF8(config.lengthBonusUnit || '', buffer, lengthBonusUnitLen);
+  Module.stringToUTF8(
+      config.ctcAlignment || '', buffer + lengthBonusUnitLen, ctcAlignmentLen);
+
+  const len = 6 * 4;
+  const ptr = Module._malloc(len);
+
+  let offset = 0;
+  Module.setValue(ptr + offset, scorers.ptr, 'i8*');
+  offset += 4;
+
+  Module.setValue(ptr + offset, (config.scorers || []).length, 'i32');
+  offset += 4;
+
+  Module.setValue(ptr + offset, config.lengthBonus || 0, 'float');
+  offset += 4;
+
+  Module.setValue(ptr + offset, buffer, 'i8*');  // length_bonus_unit
+  offset += 4;
+
+  Module.setValue(ptr + offset, buffer + lengthBonusUnitLen, 'i8*');
+  offset += 4;
+
+  Module.setValue(ptr + offset, config.tokenCandidates || 0, 'i32');
+  offset += 4;
+
+  return {ptr: ptr, len: len, buffer: buffer, scorers: scorers};
 }
 
 function initSherpaOnnxOnlineRecognizerConfig(config, Module) {
@@ -1723,8 +1811,10 @@ function initSherpaOnnxOfflineRecognizerConfig(config, Module) {
   const hr = initSherpaOnnxHomophoneReplacerConfig(config.hr, Module);
   const ctcFstDecoder = initSherpaOnnxOfflineCtcFstDecoderConfig(
       config.ctcFstDecoderConfig, Module);
+  const fusion = initSherpaOnnxFusionConfig(config.fusion || {}, Module);
 
-  const len = feat.len + model.len + lm.len + 7 * 4 + hr.len + ctcFstDecoder.len;
+  const len = feat.len + model.len + lm.len + 7 * 4 + hr.len +
+      ctcFstDecoder.len + fusion.len + 1 * 4;
   const ptr = Module._malloc(len);
 
   let offset = 0;
@@ -1742,8 +1832,9 @@ function initSherpaOnnxOfflineRecognizerConfig(config, Module) {
   const hotwordsFileLen = Module.lengthBytesUTF8(config.hotwordsFile || '') + 1;
   const ruleFstsLen = Module.lengthBytesUTF8(config.ruleFsts || '') + 1;
   const ruleFarsLen = Module.lengthBytesUTF8(config.ruleFars || '') + 1;
-  const bufferLen =
-      decodingMethodLen + hotwordsFileLen + ruleFstsLen + ruleFarsLen;
+  const optionsJsonLen = Module.lengthBytesUTF8(config.optionsJson || '') + 1;
+  const bufferLen = decodingMethodLen + hotwordsFileLen + ruleFstsLen +
+      ruleFarsLen + optionsJsonLen;
   const buffer = Module._malloc(bufferLen);
 
   offset = 0;
@@ -1760,6 +1851,10 @@ function initSherpaOnnxOfflineRecognizerConfig(config, Module) {
 
   Module.stringToUTF8(config.ruleFars || '', buffer + offset, ruleFarsLen);
   offset += ruleFarsLen;
+
+  Module.stringToUTF8(
+      config.optionsJson || '', buffer + offset, optionsJsonLen);
+  offset += optionsJsonLen;
 
   offset = feat.len + model.len + lm.len;
 
@@ -1793,6 +1888,15 @@ function initSherpaOnnxOfflineRecognizerConfig(config, Module) {
   Module._CopyHeap(ctcFstDecoder.ptr, ctcFstDecoder.len, ptr + offset);
   offset += ctcFstDecoder.len;
 
+  Module._CopyHeap(fusion.ptr, fusion.len, ptr + offset);
+  offset += fusion.len;
+
+  Module.setValue(
+      ptr + offset,
+      buffer + decodingMethodLen + hotwordsFileLen + ruleFstsLen + ruleFarsLen,
+      'i8*');  // options_json
+  offset += 4;
+
   return {
     buffer: buffer,
     ptr: ptr,
@@ -1802,6 +1906,7 @@ function initSherpaOnnxOfflineRecognizerConfig(config, Module) {
     lm: lm,
     hr: hr,
     ctcFstDecoder: ctcFstDecoder,
+    fusion: fusion,
   };
 }
 

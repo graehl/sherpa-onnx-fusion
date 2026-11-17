@@ -14,6 +14,7 @@ set(sources
   audio-tagging.cc
   common.cc
   forced-aligner.cc
+  fusion-config.cc
   jni.cc
   keyword-spotter.cc
   offline-diacritization.cc

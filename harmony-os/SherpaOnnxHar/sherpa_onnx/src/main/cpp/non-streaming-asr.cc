@@ -14,6 +14,8 @@
 // defined in ./streaming-asr.cc
 SherpaOnnxFeatureConfig GetFeatureConfig(Napi::Object obj);
 SherpaOnnxHomophoneReplacerConfig GetHomophoneReplacerConfig(Napi::Object obj);
+SherpaOnnxFusionConfig GetFusionConfig(Napi::Object obj);
+void FreeFusionConfig(const SherpaOnnxFusionConfig &c);
 
 static SherpaOnnxOfflineTransducerModelConfig GetOfflineTransducerModelConfig(
     Napi::Object obj) {
@@ -436,6 +438,7 @@ static SherpaOnnxOfflineRecognizerConfig ParseConfig(Napi::Object o) {
   c.lm_config = GetOfflineLMConfig(o);
   c.hr = GetHomophoneReplacerConfig(o);
   c.ctc_fst_decoder_config = GetOfflineCtcFstDecoderConfig(o);
+  c.fusion = GetFusionConfig(o);
 
   SHERPA_ONNX_ASSIGN_ATTR_STR(decoding_method, decodingMethod);
   SHERPA_ONNX_ASSIGN_ATTR_INT32(max_active_paths, maxActivePaths);
@@ -444,6 +447,7 @@ static SherpaOnnxOfflineRecognizerConfig ParseConfig(Napi::Object o) {
   SHERPA_ONNX_ASSIGN_ATTR_STR(rule_fsts, ruleFsts);
   SHERPA_ONNX_ASSIGN_ATTR_STR(rule_fars, ruleFars);
   SHERPA_ONNX_ASSIGN_ATTR_FLOAT(blank_penalty, blankPenalty);
+  SHERPA_ONNX_ASSIGN_ATTR_STR(options_json, optionsJson);
 
   return c;
 }
@@ -525,6 +529,8 @@ static void FreeConfig(const SherpaOnnxOfflineRecognizerConfig &c) {
   SHERPA_ONNX_DELETE_C_STR(c.hr.lexicon);
   SHERPA_ONNX_DELETE_C_STR(c.hr.rule_fsts);
   SHERPA_ONNX_DELETE_C_STR(c.ctc_fst_decoder_config.graph);
+  FreeFusionConfig(c.fusion);
+  SHERPA_ONNX_DELETE_C_STR(c.options_json);
 }
 
 static Napi::External<SherpaOnnxOfflineRecognizer>

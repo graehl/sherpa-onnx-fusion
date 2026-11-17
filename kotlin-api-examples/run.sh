@@ -447,6 +447,7 @@ function testOfflineAsr() {
     FeatureConfig.kt \
     QnnConfig.kt \
     HomophoneReplacerConfig.kt \
+    FusionConfig.kt \
     OfflineRecognizer.kt \
     OfflineStream.kt \
     WaveReader.kt \
@@ -477,6 +478,7 @@ function testInverseTextNormalizationOfflineAsr() {
     FeatureConfig.kt \
     QnnConfig.kt \
     HomophoneReplacerConfig.kt \
+    FusionConfig.kt \
     OfflineRecognizer.kt \
     OfflineStream.kt \
     WaveReader.kt \
@@ -700,6 +702,7 @@ function testOfflineSenseVoiceWithHr() {
     FeatureConfig.kt \
     QnnConfig.kt \
     HomophoneReplacerConfig.kt \
+    FusionConfig.kt \
     OfflineRecognizer.kt \
     OfflineStream.kt \
     WaveReader.kt \
@@ -722,6 +725,7 @@ function testOfflineNeMoCanary() {
     FeatureConfig.kt \
     QnnConfig.kt \
     HomophoneReplacerConfig.kt \
+    FusionConfig.kt \
     OfflineRecognizer.kt \
     OfflineStream.kt \
     WaveReader.kt \
@@ -745,6 +749,7 @@ function testOfflineOmnilingualAsrCtc() {
     FeatureConfig.kt \
     QnnConfig.kt \
     HomophoneReplacerConfig.kt \
+    FusionConfig.kt \
     OfflineRecognizer.kt \
     OfflineStream.kt \
     WaveReader.kt \
@@ -767,6 +772,7 @@ function testOfflineMedAsrCtc() {
     FeatureConfig.kt \
     QnnConfig.kt \
     HomophoneReplacerConfig.kt \
+    FusionConfig.kt \
     OfflineRecognizer.kt \
     OfflineStream.kt \
     WaveReader.kt \
@@ -789,6 +795,7 @@ function testOfflineMoonshineAsrV2() {
     FeatureConfig.kt \
     QnnConfig.kt \
     HomophoneReplacerConfig.kt \
+    FusionConfig.kt \
     OfflineRecognizer.kt \
     OfflineStream.kt \
     WaveReader.kt \
@@ -811,6 +818,7 @@ function testOfflineFireRedAsrCtc() {
     FeatureConfig.kt \
     QnnConfig.kt \
     HomophoneReplacerConfig.kt \
+    FusionConfig.kt \
     OfflineRecognizer.kt \
     OfflineStream.kt \
     WaveReader.kt \
@@ -833,6 +841,7 @@ function testOfflineFunAsrNano() {
     FeatureConfig.kt \
     QnnConfig.kt \
     HomophoneReplacerConfig.kt \
+    FusionConfig.kt \
     OfflineRecognizer.kt \
     OfflineStream.kt \
     WaveReader.kt \
@@ -855,6 +864,7 @@ function testOfflineQwen3Asr() {
     FeatureConfig.kt \
     QnnConfig.kt \
     HomophoneReplacerConfig.kt \
+    FusionConfig.kt \
     OfflineRecognizer.kt \
     OfflineStream.kt \
     WaveReader.kt \
@@ -877,6 +887,7 @@ function testOfflineCohereTranscribe() {
     FeatureConfig.kt \
     QnnConfig.kt \
     HomophoneReplacerConfig.kt \
+    FusionConfig.kt \
     OfflineRecognizer.kt \
     OfflineStream.kt \
     WaveReader.kt \
@@ -899,6 +910,7 @@ function testOfflineWenetCtc() {
     FeatureConfig.kt \
     QnnConfig.kt \
     HomophoneReplacerConfig.kt \
+    FusionConfig.kt \
     OfflineRecognizer.kt \
     OfflineStream.kt \
     WaveReader.kt \
@@ -921,6 +933,35 @@ function testOfflineZipformerCtcHlg() {
     FeatureConfig.kt \
     QnnConfig.kt \
     HomophoneReplacerConfig.kt \
+    FusionConfig.kt \
+    OfflineRecognizer.kt \
+    OfflineStream.kt \
+    WaveReader.kt \
+    faked-asset-manager.kt
+
+  ls -lh $out_filename
+  java -Djava.library.path=../build/lib -jar $out_filename
+}
+
+# Needs a build with -DSHERPA_ONNX_ENABLE_KENLM=ON. Not run below.
+function testOfflineZipformerCtcFusion() {
+  if [ ! -f sherpa-onnx-zipformer-ctc-en-2023-10-02/model.int8.onnx ]; then
+    curl -fSL -O https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-zipformer-ctc-en-2023-10-02.tar.bz2
+    tar xvf sherpa-onnx-zipformer-ctc-en-2023-10-02.tar.bz2
+    rm sherpa-onnx-zipformer-ctc-en-2023-10-02.tar.bz2
+  fi
+
+  if [ ! -f ./en-librispeech-char-6gram.bin ]; then
+    curl -fSL -O https://huggingface.co/graehl/sherpa-onnx-fusion-lm/resolve/9e61c0627e6cfc9ef62c355bcd62f796d97c26b4/en-librispeech-char-6gram.bin
+  fi
+
+  out_filename=test_offline_zipformer_ctc_fusion.jar
+  kotlinc-jvm -include-runtime -d $out_filename \
+    test_offline_zipformer_ctc_fusion.kt \
+    FeatureConfig.kt \
+    QnnConfig.kt \
+    HomophoneReplacerConfig.kt \
+    FusionConfig.kt \
     OfflineRecognizer.kt \
     OfflineStream.kt \
     WaveReader.kt \

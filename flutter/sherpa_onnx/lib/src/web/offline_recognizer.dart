@@ -3,6 +3,7 @@
 import 'dart:js_interop';
 import 'dart:js_interop_unsafe';
 
+import '../fusion_config.dart';
 import '../offline_recognizer_config.dart';
 import 'init.dart';
 import 'offline_stream.dart';
@@ -145,7 +146,34 @@ JSObject _buildConfig(OfflineRecognizerConfig config) {
   jsConfig['ruleFars'] = config.ruleFars.toJS;
   jsConfig['blankPenalty'] = config.blankPenalty.toJS;
 
+  jsConfig['fusion'] = _buildFusionConfig(config.fusion);
+  jsConfig['optionsJson'] = config.optionsJson.toJS;
+
   return jsConfig;
+}
+
+JSObject _buildFusionConfig(FusionConfig fusion) {
+  final scorers = <JSObject>[];
+  for (final s in fusion.scorers) {
+    final js = JSObject();
+    js['type'] = s.type.toJS;
+    js['model'] = s.model.toJS;
+    js['unit'] = s.unit.toJS;
+    js['space'] = s.space.toJS;
+    js['numThreads'] = s.numThreads.toJS;
+    js['provider'] = s.provider.toJS;
+    js['weight'] = s.weight.toJS;
+    js['extra'] = s.extra.toJS;
+    scorers.add(js);
+  }
+
+  final jsFusion = JSObject();
+  jsFusion['scorers'] = scorers.toJS;
+  jsFusion['lengthBonus'] = fusion.lengthBonus.toJS;
+  jsFusion['lengthBonusUnit'] = fusion.lengthBonusUnit.toJS;
+  jsFusion['ctcAlignment'] = fusion.ctcAlignment.toJS;
+  jsFusion['tokenCandidates'] = fusion.tokenCandidates.toJS;
+  return jsFusion;
 }
 
 JSObject _buildModelConfig(OfflineModelConfig model) {

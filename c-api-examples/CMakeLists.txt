@@ -122,6 +122,9 @@ target_link_libraries(nemo-giga-am-v2-c-api sherpa-onnx-c-api)
 add_executable(nemo-ctc-c-api nemo-ctc-c-api.c)
 target_link_libraries(nemo-ctc-c-api sherpa-onnx-c-api)
 
+add_executable(prefix-beam-search-lm-c-api prefix-beam-search-lm-c-api.c)
+target_link_libraries(prefix-beam-search-lm-c-api sherpa-onnx-c-api)
+
 add_executable(sense-voice-c-api sense-voice-c-api.c)
 target_link_libraries(sense-voice-c-api sherpa-onnx-c-api)
 

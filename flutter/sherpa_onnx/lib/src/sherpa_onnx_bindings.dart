@@ -602,6 +602,42 @@ final class SherpaOnnxOfflineRecognizerConfig extends Struct {
   external double blankPenalty;
   external SherpaOnnxHomophoneReplacerConfig hr;
   external SherpaOnnxOfflineCtcFstDecoderConfig ctcFstDecoderConfig;
+
+  external SherpaOnnxFusionConfig fusion;
+  external Pointer<Utf8> optionsJson;
+}
+
+final class SherpaOnnxScorerConfig extends Struct {
+  external Pointer<Utf8> type;
+  external Pointer<Utf8> model;
+  external Pointer<Utf8> unit;
+  external Pointer<Utf8> space;
+
+  @Int32()
+  external int numThreads;
+
+  external Pointer<Utf8> provider;
+
+  @Float()
+  external double weight;
+
+  external Pointer<Utf8> extra;
+}
+
+final class SherpaOnnxFusionConfig extends Struct {
+  external Pointer<SherpaOnnxScorerConfig> scorers;
+
+  @Int32()
+  external int numScorers;
+
+  @Float()
+  external double lengthBonus;
+
+  external Pointer<Utf8> lengthBonusUnit;
+  external Pointer<Utf8> ctcAlignment;
+
+  @Int32()
+  external int tokenCandidates;
 }
 
 final class SherpaOnnxOfflineCtcFstDecoderConfig extends Struct {

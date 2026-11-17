@@ -11,6 +11,7 @@
 #include "sherpa-onnx/python/csrc/endpoint.h"
 #include "sherpa-onnx/python/csrc/features.h"
 #include "sherpa-onnx/python/csrc/forced-aligner.h"
+#include "sherpa-onnx/python/csrc/fusion-config.h"
 #include "sherpa-onnx/python/csrc/homophone-replacer.h"
 #include "sherpa-onnx/python/csrc/keyword-spotter.h"
 #include "sherpa-onnx/python/csrc/offline-ctc-fst-decoder-config.h"
@@ -60,6 +61,7 @@ PYBIND11_MODULE(_sherpa_onnx, m) {
   PybindOfflinePunctuation(&m);
   PybindOnlinePunctuation(&m);
   PybindHomophoneReplacer(&m);
+  PybindFusionConfig(&m);
 
   PybindFeatures(&m);
   PybindOnlineCtcFstDecoderConfig(&m);

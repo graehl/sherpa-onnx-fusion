@@ -171,6 +171,81 @@ public func sherpaOnnxHomophoneReplacerConfig(
     rule_fsts: toCPointer(ruleFsts))
 }
 
+/// One scorer, such as a language model, fused into
+/// decodingMethod "prefix_beam_search". Collect scorers in a
+/// SherpaOnnxScorerConfigList for sherpaOnnxFusionConfig().
+public func sherpaOnnxScorerConfig(
+  type: String = "",
+  model: String = "",
+  unit: String = "char",
+  space: String = "▁",
+  numThreads: Int = 1,
+  provider: String = "cpu",
+  weight: Float = 1.0,
+  extra: String = "{}"
+) -> SherpaOnnxScorerConfig {
+  return SherpaOnnxScorerConfig(
+    type: toCPointer(type),
+    model: toCPointer(model),
+    unit: toCPointer(unit),
+    space: toCPointer(space),
+    num_threads: Int32(numThreads),
+    provider: toCPointer(provider),
+    weight: weight,
+    extra: toCPointer(extra))
+}
+
+/// Owns the C array of scorers that SherpaOnnxFusionConfig.scorers points
+/// to. The fusion config holds only a raw pointer, so keep this object
+/// alive until the recognizer has been created, e.g.
+///
+///   let scorers = SherpaOnnxScorerConfigList([lm])
+///   var config = sherpaOnnxOfflineRecognizerConfig(
+///     ..., fusion: sherpaOnnxFusionConfig(scorers: scorers))
+///   let recognizer = withExtendedLifetime(scorers) {
+///     SherpaOnnxOfflineRecognizer(config: &config)
+///   }
+public class SherpaOnnxScorerConfigList {
+  public let pointer: UnsafeMutablePointer<SherpaOnnxScorerConfig>?
+  public let count: Int
+
+  public init(_ scorers: [SherpaOnnxScorerConfig]) {
+    count = scorers.count
+    if scorers.isEmpty {
+      pointer = nil
+    } else {
+      let p = UnsafeMutablePointer<SherpaOnnxScorerConfig>.allocate(capacity: scorers.count)
+      p.initialize(from: scorers, count: scorers.count)
+      pointer = p
+    }
+  }
+
+  deinit {
+    if let p = pointer {
+      p.deinitialize(count: count)
+      p.deallocate()
+    }
+  }
+}
+
+/// Settings for decodingMethod "prefix_beam_search". See
+/// SherpaOnnxScorerConfigList for how long `scorers` must live.
+public func sherpaOnnxFusionConfig(
+  scorers: SherpaOnnxScorerConfigList? = nil,
+  lengthBonus: Float = 0,
+  lengthBonusUnit: String = "token",
+  ctcAlignment: String = "sum",
+  tokenCandidates: Int = 8
+) -> SherpaOnnxFusionConfig {
+  return SherpaOnnxFusionConfig(
+    scorers: UnsafePointer(scorers?.pointer),
+    num_scorers: Int32(scorers?.count ?? 0),
+    length_bonus: lengthBonus,
+    length_bonus_unit: toCPointer(lengthBonusUnit),
+    ctc_alignment: toCPointer(ctcAlignment),
+    token_candidates: Int32(tokenCandidates))
+}
+
 public func sherpaOnnxOnlineRecognizerConfig(
   featConfig: SherpaOnnxFeatureConfig,
   modelConfig: SherpaOnnxOnlineModelConfig,
@@ -667,7 +742,9 @@ public func sherpaOnnxOfflineRecognizerConfig(
   ruleFars: String = "",
   blankPenalty: Float = 0.0,
   hr: SherpaOnnxHomophoneReplacerConfig = sherpaOnnxHomophoneReplacerConfig(),
-  ctcFstDecoderConfig: SherpaOnnxOfflineCtcFstDecoderConfig = sherpaOnnxOfflineCtcFstDecoderConfig()
+  ctcFstDecoderConfig: SherpaOnnxOfflineCtcFstDecoderConfig = sherpaOnnxOfflineCtcFstDecoderConfig(),
+  fusion: SherpaOnnxFusionConfig = sherpaOnnxFusionConfig(),
+  optionsJson: String = ""
 ) -> SherpaOnnxOfflineRecognizerConfig {
   return SherpaOnnxOfflineRecognizerConfig(
     feat_config: featConfig,
@@ -681,7 +758,9 @@ public func sherpaOnnxOfflineRecognizerConfig(
     rule_fars: toCPointer(ruleFars),
     blank_penalty: blankPenalty,
     hr: hr,
-    ctc_fst_decoder_config: ctcFstDecoderConfig
+    ctc_fst_decoder_config: ctcFstDecoderConfig,
+    fusion: fusion,
+    options_json: toCPointer(optionsJson)
   )
 }
 

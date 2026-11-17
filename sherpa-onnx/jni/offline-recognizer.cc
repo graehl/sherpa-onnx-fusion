@@ -11,6 +11,7 @@
 #include "sherpa-onnx/csrc/macros.h"
 #include "sherpa-onnx/csrc/text-utils.h"
 #include "sherpa-onnx/jni/common.h"
+#include "sherpa-onnx/jni/fusion-config.h"
 
 namespace sherpa_onnx {
 
@@ -538,6 +539,15 @@ static OfflineRecognizerConfig GetOfflineConfig(JNIEnv *env, jobject config,
 
   SHERPA_ONNX_JNI_READ_STRING(ans.hr.rule_fsts, ruleFsts, hr_config_cls,
                               hr_config);
+
+  fid = env->GetFieldID(cls, "fusion", "Lcom/k2fsa/sherpa/onnx/FusionConfig;");
+  jobject fusion_config = env->GetObjectField(config, fid);
+  bool fusion_ok = false;
+  ans.fusion = GetFusionConfig(env, fusion_config, &fusion_ok);
+  if (!fusion_ok) return ans;
+
+  // options_json is applied after every typed field.
+  if (!ApplyOptionsJsonField(env, config, &ans)) return ans;
 
   *ok = true;
   return ans;

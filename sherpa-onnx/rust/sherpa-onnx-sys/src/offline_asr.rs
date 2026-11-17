@@ -212,6 +212,8 @@ pub struct OfflineRecognizerConfig {
     pub blank_penalty: c_float,
     pub hr: super::online_asr::HomophoneReplacerConfig,
     pub ctc_fst_decoder_config: OfflineCtcFstDecoderConfig,
+    pub fusion: super::fusion::FusionConfig,
+    pub options_json: *const c_char,
 }
 
 #[repr(C)]

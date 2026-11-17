@@ -34,6 +34,7 @@ extern "C" {
 
 pub mod audio_tagging;
 pub mod forced_alignment;
+pub mod fusion;
 pub mod kws;
 pub mod offline_asr;
 pub mod offline_punctuation;
@@ -50,6 +51,7 @@ pub mod wave;
 
 pub use audio_tagging::*;
 pub use forced_alignment::*;
+pub use fusion::*;
 pub use kws::*;
 pub use offline_asr::*;
 pub use offline_punctuation::*;

@@ -212,6 +212,27 @@ export class OfflineCtcFstDecoderConfig {
   public maxActive: number = 3000;
 }
 
+// One scorer, such as a language model, fused into prefix_beam_search
+export class ScorerConfig {
+  public type: string = '';  // 'kenlm' or 'onnx-rnn'
+  public model: string = '';
+  public unit: string = 'char';  // 'char' or 'token'
+  public space: string = '▁';
+  public numThreads: number = 1;
+  public provider: string = 'cpu';
+  public weight: number = 1.0;
+  public extra: string = '{}';  // JSON object of type-specific options
+}
+
+// Scorers and search settings for decodingMethod 'prefix_beam_search'
+export class FusionConfig {
+  public scorers: ScorerConfig[] = [];
+  public lengthBonus: number = 0;
+  public lengthBonusUnit: string = 'token';  // 'token' or 'word'
+  public ctcAlignment: string = 'sum';  // CTC models: 'sum' or 'max'
+  public tokenCandidates: number = 8;
+}
+
 export class OfflineRecognizerConfig {
   public featConfig: FeatureConfig = new FeatureConfig();
   public modelConfig: OfflineModelConfig = new OfflineModelConfig();
@@ -225,6 +246,10 @@ export class OfflineRecognizerConfig {
   public blankPenalty: number = 0;
   public hr: HomophoneReplacerConfig = new HomophoneReplacerConfig();
   public ctcFstDecoderConfig: OfflineCtcFstDecoderConfig = new OfflineCtcFstDecoderConfig();
+  public fusion: FusionConfig = new FusionConfig();
+  // JSON object of options applied after every other field, e.g.
+  // '{"scorer": [{"weight": 40}], "score-beam": 0}'
+  public optionsJson: string = '';
 }
 
 export class OfflineRecognizerResult {

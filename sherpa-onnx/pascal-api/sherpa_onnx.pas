@@ -311,6 +311,34 @@ type
     function ToString: AnsiString;
   end;
 
+  { One scorer, such as a language model, fused into
+    DecodingMethod := 'prefix_beam_search'. }
+  TSherpaOnnxScorerConfig = record
+    &Type: AnsiString; { 'kenlm' or 'onnx-rnn' }
+    Model: AnsiString;
+    &Unit: AnsiString; { 'char' or 'token' }
+    Space: AnsiString;
+    NumThreads: Integer;
+    Provider: AnsiString;
+    Weight: Single; { 0 means 1; set 0 through OptionsJson }
+    Extra: AnsiString; { JSON object of type-specific options }
+    function ToString: AnsiString;
+    class operator Initialize({$IFDEF FPC}var{$ELSE}out{$ENDIF} Dest: TSherpaOnnxScorerConfig);
+  end;
+
+  TSherpaOnnxScorerConfigArray = array of TSherpaOnnxScorerConfig;
+
+  { Settings for DecodingMethod := 'prefix_beam_search'. }
+  TSherpaOnnxFusionConfig = record
+    Scorers: TSherpaOnnxScorerConfigArray;
+    LengthBonus: Single;
+    LengthBonusUnit: AnsiString; { 'token' or 'word' }
+    CtcAlignment: AnsiString; { 'sum' or 'max' }
+    TokenCandidates: Integer;
+    function ToString: AnsiString;
+    class operator Initialize({$IFDEF FPC}var{$ELSE}out{$ENDIF} Dest: TSherpaOnnxFusionConfig);
+  end;
+
   TSherpaOnnxOnlineRecognizerConfig = record
     FeatConfig: TSherpaOnnxFeatureConfig;
     ModelConfig: TSherpaOnnxOnlineModelConfig;
@@ -568,6 +596,10 @@ type
     BlankPenalty: Single;
     Hr: TSherpaOnnxHomophoneReplacerConfig;
     CtcFstDecoderConfig: TSherpaOnnxOfflineCtcFstDecoderConfig;
+    Fusion: TSherpaOnnxFusionConfig;
+    { JSON object of command-line options applied after every other field;
+      an error in it makes recognizer creation fail. }
+    OptionsJson: AnsiString;
     class operator Initialize({$IFDEF FPC}var{$ELSE}out{$ENDIF} Dest: TSherpaOnnxOfflineRecognizerConfig);
     function ToString: AnsiString;
   end;
@@ -1030,6 +1062,29 @@ type
     RuleFsts: PAnsiChar;
   end;
 
+  SherpaOnnxScorerConfig = record
+    &Type: PAnsiChar;
+    Model: PAnsiChar;
+    &Unit: PAnsiChar;
+    Space: PAnsiChar;
+    NumThreads: cint32;
+    Provider: PAnsiChar;
+    Weight: cfloat;
+    Extra: PAnsiChar;
+  end;
+
+  PSherpaOnnxScorerConfig = ^SherpaOnnxScorerConfig;
+  TSherpaOnnxNativeScorerArray = array of SherpaOnnxScorerConfig;
+
+  SherpaOnnxFusionConfig = record
+    Scorers: PSherpaOnnxScorerConfig;
+    NumScorers: cint32;
+    LengthBonus: cfloat;
+    LengthBonusUnit: PAnsiChar;
+    CtcAlignment: PAnsiChar;
+    TokenCandidates: cint32;
+  end;
+
   SherpaOnnxOnlineRecognizerConfig = record
     FeatConfig: SherpaOnnxFeatureConfig;
     ModelConfig: SherpaOnnxOnlineModelConfig;
@@ -1201,6 +1256,8 @@ type
     BlankPenalty: cfloat;
     Hr: SherpaOnnxHomophoneReplacerConfig;
     CtcFstDecoderConfig: SherpaOnnxOfflineCtcFstDecoderConfig;
+    Fusion: SherpaOnnxFusionConfig;
+    OptionsJson: PAnsiChar;
   end;
 
   PSherpaOnnxOfflineRecognizerConfig = ^SherpaOnnxOfflineRecognizerConfig;
@@ -1989,6 +2046,36 @@ begin
     [Self.Text, TokensStr, TimestampStr]);
 end;
 
+{ The returned config points into Config's strings and into Scorers, which
+  must both outlive its use. }
+function ConvertFusionConfig(const Config: TSherpaOnnxFusionConfig;
+  var Scorers: TSherpaOnnxNativeScorerArray): SherpaOnnxFusionConfig;
+var
+  I: Integer;
+begin
+  Result := Default(SherpaOnnxFusionConfig);
+  SetLength(Scorers, Length(Config.Scorers));
+  for I := 0 to High(Config.Scorers) do
+  begin
+    Scorers[I] := Default(SherpaOnnxScorerConfig);
+    Scorers[I].&Type := PAnsiChar(Config.Scorers[I].&Type);
+    Scorers[I].Model := PAnsiChar(Config.Scorers[I].Model);
+    Scorers[I].&Unit := PAnsiChar(Config.Scorers[I].&Unit);
+    Scorers[I].Space := PAnsiChar(Config.Scorers[I].Space);
+    Scorers[I].NumThreads := Config.Scorers[I].NumThreads;
+    Scorers[I].Provider := PAnsiChar(Config.Scorers[I].Provider);
+    Scorers[I].Weight := Config.Scorers[I].Weight;
+    Scorers[I].Extra := PAnsiChar(Config.Scorers[I].Extra);
+  end;
+  if Length(Scorers) > 0 then
+    Result.Scorers := @Scorers[0];
+  Result.NumScorers := Length(Scorers);
+  Result.LengthBonus := Config.LengthBonus;
+  Result.LengthBonusUnit := PAnsiChar(Config.LengthBonusUnit);
+  Result.CtcAlignment := PAnsiChar(Config.CtcAlignment);
+  Result.TokenCandidates := Config.TokenCandidates;
+end;
+
 constructor TSherpaOnnxOnlineRecognizer.Create(Config: TSherpaOnnxOnlineRecognizerConfig);
 var
   C: SherpaOnnxOnlineRecognizerConfig;
@@ -2387,16 +2474,20 @@ begin
     'RuleFars := %s, ' +
     'BlankPenalty := %1.f, ' +
     'Hr := %s, ' +
-    'CtcFstDecoderConfig := %s' +
+    'CtcFstDecoderConfig := %s, ' +
+    'Fusion := %s, ' +
+    'OptionsJson := %s' +
     ')',
     [Self.FeatConfig.ToString, Self.ModelConfig.ToString,
      Self.LMConfig.ToString, Self.DecodingMethod, Self.MaxActivePaths,
      Self.HotwordsFile, Self.HotwordsScore, Self.RuleFsts, Self.RuleFars,
-     Self.BlankPenalty, Self.Hr.ToString, Self.CtcFstDecoderConfig.ToString
+     Self.BlankPenalty, Self.Hr.ToString, Self.CtcFstDecoderConfig.ToString,
+     Self.Fusion.ToString, Self.OptionsJson
      ]);
 end;
 
-function ConvertOfflineRecognizerConfig(Config: TSherpaOnnxOfflineRecognizerConfig): SherpaOnnxOfflineRecognizerConfig;
+function ConvertOfflineRecognizerConfig(Config: TSherpaOnnxOfflineRecognizerConfig;
+  var Scorers: TSherpaOnnxNativeScorerArray): SherpaOnnxOfflineRecognizerConfig;
 var
   C: SherpaOnnxOfflineRecognizerConfig;
 begin
@@ -2506,14 +2597,18 @@ begin
   C.CtcFstDecoderConfig.Graph := PAnsiChar(Config.CtcFstDecoderConfig.Graph);
   C.CtcFstDecoderConfig.MaxActive := Config.CtcFstDecoderConfig.MaxActive;
 
+  C.Fusion := ConvertFusionConfig(Config.Fusion, Scorers);
+  C.OptionsJson := PAnsiChar(Config.OptionsJson);
+
   Result := C;
 end;
 
 constructor TSherpaOnnxOfflineRecognizer.Create(Config: TSherpaOnnxOfflineRecognizerConfig);
 var
   C: SherpaOnnxOfflineRecognizerConfig;
+  Scorers: TSherpaOnnxNativeScorerArray;
 begin
-  C := ConvertOfflineRecognizerConfig(Config);
+  C := ConvertOfflineRecognizerConfig(Config, Scorers);
   Self.Handle := SherpaOnnxCreateOfflineRecognizer(@C);
   Self._Config := Config;
 end;
@@ -2521,8 +2616,9 @@ end;
 procedure TSherpaOnnxOfflineRecognizer.SetConfig(Config: TSherpaOnnxOfflineRecognizerConfig);
 var
   C: SherpaOnnxOfflineRecognizerConfig;
+  Scorers: TSherpaOnnxNativeScorerArray;
 begin
-  C := ConvertOfflineRecognizerConfig(Config);
+  C := ConvertOfflineRecognizerConfig(Config, Scorers);
   SherpaOnnxOfflineRecognizerSetConfig(Self.Handle, @C);
   { We don't update Self._Config }
 end;
@@ -2916,6 +3012,55 @@ begin
   Dest.MaxActivePaths := 4;
   Dest.HotwordsScore := 1.5;
   Dest.BlankPenalty := 0;
+end;
+
+class operator TSherpaOnnxScorerConfig.Initialize({$IFDEF FPC}var{$ELSE}out{$ENDIF} Dest: TSherpaOnnxScorerConfig);
+begin
+  Dest.&Unit := 'char';
+  Dest.Space := #$E2#$96#$81; { U+2581, in UTF-8 }
+  Dest.NumThreads := 1;
+  Dest.Provider := 'cpu';
+  Dest.Weight := 1;
+  Dest.Extra := '{}';
+end;
+
+class operator TSherpaOnnxFusionConfig.Initialize({$IFDEF FPC}var{$ELSE}out{$ENDIF} Dest: TSherpaOnnxFusionConfig);
+begin
+  Dest.LengthBonus := 0;
+  Dest.LengthBonusUnit := 'token';
+  Dest.CtcAlignment := 'sum';
+  Dest.TokenCandidates := 8;
+end;
+
+function TSherpaOnnxScorerConfig.ToString: AnsiString;
+begin
+  Result := Format('TSherpaOnnxScorerConfig(Type := %s, Model := %s, ' +
+    'Unit := %s, Space := %s, NumThreads := %d, Provider := %s, ' +
+    'Weight := %.3f, Extra := %s)',
+    [Self.&Type, Self.Model, Self.&Unit, Self.Space, Self.NumThreads,
+     Self.Provider, Self.Weight, Self.Extra]);
+end;
+
+function TSherpaOnnxFusionConfig.ToString: AnsiString;
+var
+  ScorersStr: AnsiString;
+  Sep: AnsiString;
+  I: Integer;
+begin
+  ScorersStr := '[';
+  Sep := '';
+  for I := 0 to High(Self.Scorers) do
+  begin
+    ScorersStr := ScorersStr + Sep + Self.Scorers[I].ToString;
+    Sep := ', ';
+  end;
+  ScorersStr := ScorersStr + ']';
+
+  Result := Format('TSherpaOnnxFusionConfig(Scorers := %s, ' +
+    'LengthBonus := %.3f, LengthBonusUnit := %s, CtcAlignment := %s, ' +
+    'TokenCandidates := %d)',
+    [ScorersStr, Self.LengthBonus, Self.LengthBonusUnit, Self.CtcAlignment,
+     Self.TokenCandidates]);
 end;
 
 constructor TSherpaOnnxCircularBuffer.Create(Capacity: Integer);

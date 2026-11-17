@@ -14,6 +14,19 @@ namespace SherpaOnnx
             _handle = new HandleRef(this, h);
         }
 
+        /// Creates the recognizer with these scorers in
+        /// config.Fusion, for DecodingMethod "prefix_beam_search".
+        public OfflineRecognizer(OfflineRecognizerConfig config, ScorerConfig[] scorers)
+        {
+            using (NativeScorers s = new NativeScorers(scorers))
+            {
+                config.Fusion.Scorers = s.Ptr;
+                config.Fusion.NumScorers = s.Count;
+                IntPtr h = SherpaOnnxCreateOfflineRecognizer(ref config);
+                _handle = new HandleRef(this, h);
+            }
+        }
+
         public void SetConfig(OfflineRecognizerConfig config)
         {
             SherpaOnnxOfflineRecognizerSetConfig(_handle.Handle, ref config);
