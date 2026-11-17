@@ -120,10 +120,12 @@ RecurrentLmVocabulary Vocabulary() {
 }
 
 struct Fixture {
-  Fixture() {
+  explicit Fixture(int32_t max_batch = 0) {
     auto owned = std::make_unique<FakeStep>();
     step = owned.get();
-    scorer = MakeRecurrentLmScorer(std::move(owned), Vocabulary());
+    RecurrentLmVocabulary vocabulary = Vocabulary();
+    vocabulary.max_batch = max_batch;
+    scorer = MakeRecurrentLmScorer(std::move(owned), std::move(vocabulary));
     utterance = scorer->NewUtterance();
   }
   FakeStep *step;
@@ -299,6 +301,37 @@ TEST(RecurrentLmScorer, TokenUnitsAreTheModelsOwnIds) {
   for (std::byte *state : {start, three, three_two, beyond}) {
     info.destroy_state(state);
   }
+  EXPECT_EQ(RecurrentLmLiveNodes(), 0);
+}
+
+// With max_batch 2, three nodes needed at once run in steps of 2 and 1,
+// with the same scores as stepping each history alone.
+TEST(RecurrentLmScorer, MaxBatchSplitsAWideStep) {
+  Fixture f(2);
+  alignas(8) std::byte start[8], children[3][8], grandchildren[3][8];
+  f.scorer->Start(f.utterance.get(), start);
+  UnitId units[3] = {'a', 'b', ' '};
+  ScorerExtension wave[3];
+  ScorerAdvanceResult results[3];
+  for (int32_t i = 0; i != 3; ++i) {
+    wave[i] = {{f.utterance.get(), start}, units[i], children[i]};
+  }
+  f.scorer->Advance({wave, 3}, results);
+  f.step->batch_sizes.clear();
+  for (int32_t i = 0; i != 3; ++i) {
+    wave[i] = {{f.utterance.get(), children[i]}, 'b', grandchildren[i]};
+  }
+  f.scorer->Advance({wave, 3}, results);
+  EXPECT_EQ(f.step->batch_sizes, std::vector<int32_t>({2, 1}));
+  const int32_t model_ids[3] = {2, 3, 4};
+  for (int32_t i = 0; i != 3; ++i) {
+    EXPECT_FLOAT_EQ(results[i].log_score, ReferenceLogProbs({model_ids[i]})[3]);
+  }
+  for (int32_t i = 0; i != 3; ++i) {
+    f.scorer->Info().destroy_state(grandchildren[i]);
+    f.scorer->Info().destroy_state(children[i]);
+  }
+  f.scorer->Info().destroy_state(start);
   EXPECT_EQ(RecurrentLmLiveNodes(), 0);
 }
 

@@ -64,6 +64,11 @@ struct RecurrentLmVocabulary {
   bool score_end = true;
   // Lower bound on each raw unit/EOS log score, before its fusion weight.
   float score_floor = -std::numeric_limits<float>::infinity();
+  // The most nodes one model step takes; a call needing more steps in
+  // chunks of this many. 0: no limit. A step's width follows the beams of
+  // every utterance of a decode call, so on a device with little memory
+  // (a phone's GPU) this bounds the step's working memory.
+  int32_t max_batch = 0;
   // The model's unit ID for each character it knows. The boundary between
   // words is the entry for ' '.
   CharacterIndex id_of_char;
@@ -105,6 +110,8 @@ int32_t RecurrentLmLiveNodes();
 //     Default true.
 //   "floor": nonpositive natural-log score floor per unit and end of input.
 //     Omitted means no floor; recurrent state updates are unchanged.
+//   "max-batch": the most nodes one model step takes (default 0, no
+//     limit); a wider call runs in chunks with the same results.
 std::unique_ptr<ScorerFactory> MakeOnnxRecurrentLmScorerFactory();
 
 }  // namespace sherpa_onnx

@@ -378,6 +378,7 @@ struct Extra {
   bool score_end = true;
   float score_floor = -std::numeric_limits<float>::infinity();
   int32_t id_offset = 0;
+  int32_t max_batch = 0;
 };
 
 Extra ParseExtra(const std::string &text, bool token_units) {
@@ -417,6 +418,12 @@ Extra ParseExtra(const std::string &text, bool token_units) {
       if (!std::isfinite(extra.score_floor) || extra.score_floor > 0) {
         throw std::runtime_error(
             "onnx-rnn scorer: floor must be finite and nonpositive");
+      }
+    } else if (key == "max-batch" && value.is_number_integer()) {
+      extra.max_batch = value.get<int32_t>();
+      if (extra.max_batch < 0) {
+        throw std::runtime_error(
+            "onnx-rnn scorer: max-batch must be 0 (no limit) or more");
       }
     } else {
       throw std::runtime_error("onnx-rnn scorer: unknown or invalid option '" +
@@ -491,6 +498,7 @@ class OnnxRecurrentLmScorerFactory : public ScorerFactory {
     }
     vocabulary.score_end = extra.score_end;
     vocabulary.score_floor = extra.score_floor;
+    vocabulary.max_batch = extra.max_batch;
     return MakeRecurrentLmScorer(std::move(step), std::move(vocabulary));
   }
 };
