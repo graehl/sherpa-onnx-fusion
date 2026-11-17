@@ -306,6 +306,39 @@ untouched meeting audio or diarization. Plain word-edit scoring and
 the pinned inputs are described in the
 [comparison recipe](../repro/README.md#long-recording-encoder-windows).
 
+### Overlap versus silence-favoring hard splits
+
+On the same eight reconstructed TED-LIUM validation talks (93.8 minutes,
+17,427 reference words), silence-favoring hard splits gave the following
+comparison with the overlapping windows above. Models, scoring and CUDA
+execution settings match; all 48 talk/model/length pairs have matching talk IDs,
+references and audio durations.
+
+| Length cap | CTC overlap WER % | CTC split WER % | CTC split RTF | Transducer overlap WER % | Transducer split WER % | Transducer split RTF |
+|---|---:|---:|---:|---:|---:|---:|
+| 20 s | 10.72 | 10.95 | 0.0017 | 11.17 | 11.53 | 0.0021 |
+| 15 s | 10.70 | 11.18 | 0.0017 | 11.33 | 11.58 | 0.0020 |
+| 10 s | 10.81 | 11.51 | 0.0018 | 11.42 | 11.77 | 0.0021 |
+
+The split baseline searches the 3 s before each length cap on a 20 ms
+grid, cutting at the center of the quietest 200 ms region by mean-square
+audio energy. It preserves every sample exactly once, choosing the quietest
+region even when no silence exists. All pieces of a talk are encoded in one
+batch, decoded independently, and their transcripts concatenated in order.
+The recipe uses `--segmentation=silence-split --windows=20,15,10`.
+
+Overlap has lower WER in all six comparisons, by 0.23–0.70 percentage
+points. This compares overlap, center blending and one continuous search
+against independent searches after hard cuts; it does not isolate the
+benefit of center weighting, silence anchoring or retaining search state.
+Uniform averaging and context-only margins have not been evaluated here.
+No significance test is reported for this eight-talk comparison.
+
+Split RTF excludes model loading and the preparation of piece WAV files.
+The overlap RTFs are in the preceding table. Host load was about 1–2
+during splitting runs and 14–16 during overlapping runs, so the timing
+difference does not establish their relative throughput under equal load.
+
 ### Lao quality and real-time factor
 
 Measurements from 2026-11-15/16 on 405 FLEURS Lao test clips, using the
