@@ -239,6 +239,49 @@ shared facility and the one after gave byte-identical results by
 default and with `--litert-window=10:3:1`, and
 `--encoder.window.seconds=10` gave the same bytes as that alias.
 
+### English long-talk window comparison
+
+On eight reconstructed TED-LIUM validation talks (2026-11-17; 93.8 minutes,
+17,427 reference words, 3.1–21.6 minutes per talk), greedy decoding with
+the public English zipformer CTC and small zipformer transducer gave:
+
+| Window | CTC WER % | CTC RTF | Transducer WER % | Transducer RTF |
+|---|---:|---:|---:|---:|
+| 20 s | 10.72 | 0.0021 | 11.17 | 0.0038 |
+| 15 s | 10.70 | 0.0019 | 11.33 | 0.0035 |
+| 10 s | 10.81 | 0.0019 | 11.42 | 0.0036 |
+
+All windows use 3 s overlap, 1 s slack and the default center blend;
+each talk has one search after joining its windows. Runs used float32
+ONNX graphs, CUDA on an RTX PRO 6000 Blackwell, two CPU threads and one
+talk per recognizer call. RTF excludes model loading but includes
+first-call execution costs: each call used a fresh process. These are
+single-pass diagnostic timings on a shared host, not warmed serving
+throughput. The current encoder batches all windows of a talk together;
+this does not establish the performance of a bounded serving packer.
+
+Whole-recording CTC encoding failed on the fifth talk (15.1 minutes),
+requesting a single 65.9 GB attention buffer. On the same four shorter
+talks where whole-recording encoding completed for both models
+(19.9 minutes, 3,971 words), the comparison is:
+
+| Encoding | CTC WER % | Transducer WER % |
+|---|---:|---:|
+| Whole recording | 15.13 | 15.87 |
+| 20 s windows | 13.57 | 13.77 |
+| 15 s windows | 13.62 | 13.52 |
+| 10 s windows | 13.85 | 13.75 |
+
+Windowing improved WER on that subset; shorter context need not be a
+quality sacrifice for these exports. Across all eight talks the CTC
+scores are close, while the transducer's point estimates favor 20 s.
+This supports trying 20 s first, not a significance or equivalence
+claim from eight speakers. The source set joins transcribed segments
+within each talk, omitting untranscribed gaps; it is not a test of
+untouched meeting audio or diarization. Plain word-edit scoring and
+the pinned inputs are described in the
+[comparison recipe](../repro/README.md#long-recording-encoder-windows).
+
 ### Lao quality and real-time factor
 
 Measurements from 2026-11-15/16 on 405 FLEURS Lao test clips, using the
@@ -306,7 +349,8 @@ bf16, because weights were dequantized on each call.
 
 ## Not done
 
-- A word error rate comparison of the settings on long recordings.
+- Broader long-recording WER coverage, including untouched meetings and
+  more model families; the eight-talk comparison above is exploratory.
 - Bindings for the options, tracked in the
   [fork-wide bindings gap](../gaps/fork-feature-bindings.md).
 - Starting the search on finished windows before the whole utterance is
