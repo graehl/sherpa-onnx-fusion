@@ -351,6 +351,21 @@ JSObject _buildModelConfig(OfflineModelConfig model) {
   jsModel['litertDispatchDir'] = model.litertDispatchDir.toJS;
   jsModel['litertWindow'] = model.litertWindow.toJS;
 
+  // Encoder windows, lengths and padding.
+  final w = model.encoder.window;
+  final window = JSObject();
+  window['seconds'] = w.seconds.toJS;
+  window['overlap'] = w.overlap.toJS;
+  window['slack'] = w.slack.toJS;
+  window['normalize'] = w.normalize.toJS;
+  window['weight'] = w.weight.toJS;
+  window['blend'] = w.blend.toJS;
+  final encoder = JSObject();
+  encoder['window'] = window;
+  encoder['lengths'] = model.encoder.lengths.toJS;
+  encoder['padTo'] = model.encoder.padTo.toJS;
+  jsModel['encoder'] = encoder;
+
   return jsModel;
 }
 

@@ -25,6 +25,8 @@ from sherpa_onnx.lib._sherpa_onnx import (
     OfflineDiacritizationConfig,
     OfflineDiacritizationModelConfig,
     OfflineDolphinModelConfig,
+    OfflineEncoderConfig,
+    OfflineEncoderWindowConfig,
     OfflineFireRedAsrModelConfig,
     OfflineFunASRNanoModelConfig,
     OfflineLMConfig,

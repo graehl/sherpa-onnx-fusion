@@ -64,6 +64,21 @@ FusionConfig GetFusionConfig(const SherpaOnnxFusionConfig &c) {
   return f;
 }
 
+OfflineEncoderConfig GetOfflineEncoderConfig(
+    const SherpaOnnxOfflineEncoderConfig &c) {
+  OfflineEncoderConfig e;
+  OfflineEncoderWindowConfig &w = e.window;
+  w.seconds = c.window.seconds;
+  if (c.window.overlap != 0) w.overlap = c.window.overlap;
+  if (c.window.slack != 0) w.slack = c.window.slack;
+  SetIfGiven(c.window.normalize, &w.normalize);
+  SetIfGiven(c.window.weight, &w.weight);
+  SetIfGiven(c.window.blend, &w.blend);
+  SetIfGiven(c.lengths, &e.lengths);
+  e.pad_to = c.pad_to;
+  return e;
+}
+
 bool ApplyCOptionsJson(const SherpaOnnxOfflineRecognizerConfig *c,
                        OfflineRecognizerConfig *config) {
   return ApplyJson(c, config);

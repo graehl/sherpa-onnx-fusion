@@ -115,6 +115,14 @@ function freeConfig(config, Module) {
     freeConfig(config.scorers, Module)
   }
 
+  if ('encoder' in config) {
+    freeConfig(config.encoder, Module)
+  }
+
+  if ('window' in config) {
+    freeConfig(config.window, Module)
+  }
+
   Module._free(config.ptr);
 }
 
@@ -1462,6 +1470,69 @@ function initSherpaOnnxOfflineLMConfig(config, Module) {
   };
 }
 
+// SherpaOnnxOfflineEncoderWindowConfig. A field left out or zero takes the
+// C API's default.
+function initSherpaOnnxOfflineEncoderWindowConfig(config, Module) {
+  const normalizeLen = Module.lengthBytesUTF8(config.normalize || '') + 1;
+  const weightLen = Module.lengthBytesUTF8(config.weight || '') + 1;
+  const blendLen = Module.lengthBytesUTF8(config.blend || '') + 1;
+  const buffer = Module._malloc(normalizeLen + weightLen + blendLen);
+  Module.stringToUTF8(config.normalize || '', buffer, normalizeLen);
+  Module.stringToUTF8(config.weight || '', buffer + normalizeLen, weightLen);
+  Module.stringToUTF8(
+      config.blend || '', buffer + normalizeLen + weightLen, blendLen);
+
+  const len = 6 * 4;
+  const ptr = Module._malloc(len);
+
+  let offset = 0;
+  Module.setValue(ptr + offset, config.seconds || 0, 'float');
+  offset += 4;
+
+  Module.setValue(ptr + offset, config.overlap || 0, 'float');
+  offset += 4;
+
+  Module.setValue(ptr + offset, config.slack || 0, 'float');
+  offset += 4;
+
+  Module.setValue(ptr + offset, buffer, 'i8*');  // normalize
+  offset += 4;
+
+  Module.setValue(ptr + offset, buffer + normalizeLen, 'i8*');  // weight
+  offset += 4;
+
+  Module.setValue(
+      ptr + offset, buffer + normalizeLen + weightLen, 'i8*');  // blend
+  offset += 4;
+
+  return {buffer: buffer, ptr: ptr, len: len};
+}
+
+// SherpaOnnxOfflineEncoderConfig: how the encoder runs, e.g. in windows.
+function initSherpaOnnxOfflineEncoderConfig(config, Module) {
+  const window =
+      initSherpaOnnxOfflineEncoderWindowConfig(config.window || {}, Module);
+
+  const lengthsLen = Module.lengthBytesUTF8(config.lengths || '') + 1;
+  const buffer = Module._malloc(lengthsLen);
+  Module.stringToUTF8(config.lengths || '', buffer, lengthsLen);
+
+  const len = window.len + 2 * 4;
+  const ptr = Module._malloc(len);
+
+  let offset = 0;
+  Module._CopyHeap(window.ptr, window.len, ptr + offset);
+  offset += window.len;
+
+  Module.setValue(ptr + offset, buffer, 'i8*');  // lengths
+  offset += 4;
+
+  Module.setValue(ptr + offset, config.padTo || 0, 'float');
+  offset += 4;
+
+  return {buffer: buffer, ptr: ptr, len: len, window: window};
+}
+
 function initSherpaOnnxOfflineModelConfig(config, Module) {
   if (!('transducer' in config)) {
     config.transducer = {
@@ -1667,11 +1738,14 @@ function initSherpaOnnxOfflineModelConfig(config, Module) {
   const cohereTranscribe = initSherpaOnnxOfflineCohereTranscribeModelConfig(
       config.cohereTranscribe, Module);
 
+  const encoder =
+      initSherpaOnnxOfflineEncoderConfig(config.encoder || {}, Module);
+
   const len = transducer.len + paraformer.len + nemoCtc.len + whisper.len +
       tdnn.len + 8 * 4 + senseVoice.len + moonshine.len + fireRedAsr.len +
       dolphin.len + zipformerCtc.len + canary.len + wenetCtc.len +
       omnilingual.len + medasr.len + funasrNano.len + fireRedAsrCtc.len +
-      qwen3Asr.len + cohereTranscribe.len + 3 * 4;
+      qwen3Asr.len + cohereTranscribe.len + 3 * 4 + encoder.len;
 
   const ptr = Module._malloc(len);
 
@@ -1829,6 +1903,9 @@ function initSherpaOnnxOfflineModelConfig(config, Module) {
   Module.setValue(ptr + offset, litertWindowPtr, 'i8*');
   offset += 4;
 
+  Module._CopyHeap(encoder.ptr, encoder.len, ptr + offset);
+  offset += encoder.len;
+
   return {
     buffer: buffer,
     ptr: ptr,
@@ -1850,7 +1927,8 @@ function initSherpaOnnxOfflineModelConfig(config, Module) {
     funasrNano: funasrNano,
     fireRedAsrCtc: fireRedAsrCtc,
     qwen3Asr: qwen3Asr,
-    cohereTranscribe: cohereTranscribe
+    cohereTranscribe: cohereTranscribe,
+    encoder: encoder,
   };
 }
 

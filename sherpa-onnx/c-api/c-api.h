@@ -1149,6 +1149,56 @@ typedef struct SherpaOnnxOfflineMedAsrCtcModelConfig {
 } SherpaOnnxOfflineMedAsrCtcModelConfig;
 
 /**
+ * @brief How an offline encoder runs an utterance longer than a window: in
+ * overlapping windows whose outputs are blended per output frame.
+ *
+ * Supported for the offline CTC models, the zipformer transducer, and NeMo
+ * RNN-T and TDT. A zero or NULL field takes the default given beside it;
+ * set an explicit zero through the recognizer config's @c options_json,
+ * e.g. `{"encoder": {"window": {"slack": 0}}}`.
+ */
+typedef struct SherpaOnnxOfflineEncoderWindowConfig {
+  /** Window length in seconds. 0: every utterance is encoded whole. */
+  float seconds;
+  /** The least overlap of neighbouring windows, in seconds. 0 means 3. */
+  float overlap;
+  /**
+   * How far an interior window may move, in seconds, to put its edges where
+   * the audio is quietest. 0 means 1.
+   */
+  float slack;
+  /**
+   * Scope of input normalization: "window" (default) or "utterance".
+   */
+  const char *normalize;
+  /**
+   * "center" (default): a frame is the weighted average of the windows that
+   * cover it; "cut": it is taken from the window in which it is farthest
+   * from an edge.
+   */
+  const char *weight;
+  /**
+   * CTC models: what "center" averages, "log" (default) probabilities or
+   * "prob".
+   */
+  const char *blend;
+} SherpaOnnxOfflineEncoderWindowConfig;
+
+/** @brief How an offline model's encoder runs. */
+typedef struct SherpaOnnxOfflineEncoderConfig {
+  /** Encoding a long utterance in windows. */
+  SherpaOnnxOfflineEncoderWindowConfig window;
+  /**
+   * Comma-separated input lengths in seconds an encoder call may have: an
+   * input is padded to the shortest that holds it. Needs a model that takes
+   * a padded batch.
+   */
+  const char *lengths;
+  /** Else pad an input to a multiple of this many seconds. 0: no padding. */
+  float pad_to;
+} SherpaOnnxOfflineEncoderConfig;
+
+/**
  * @brief Model configuration shared by offline ASR recognizers.
  *
  * Zero-initialize this struct before use, then fill in exactly the sub-config
@@ -1232,6 +1282,8 @@ typedef struct SherpaOnnxOfflineModelConfig {
    * longer than its window length. NULL: windows of its longest length.
    */
   const char *litert_window;
+  /** How the encoder runs, for example a long utterance in windows. */
+  SherpaOnnxOfflineEncoderConfig encoder;
 } SherpaOnnxOfflineModelConfig;
 
 /**

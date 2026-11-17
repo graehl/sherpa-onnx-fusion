@@ -176,6 +176,25 @@ export class OfflineMoonshineModelConfig {
   public mergedDecoder: string = '';
 }
 
+// How an offline encoder runs an utterance longer than a window: in
+// overlapping windows whose outputs are blended per output frame
+export class OfflineEncoderWindowConfig {
+  public seconds: number = 0;  // 0: every utterance is encoded whole
+  public overlap: number = 3;  // the least overlap of neighbouring windows
+  public slack: number = 1;  // how far an interior window may move
+  public normalize: string = 'window';  // 'window' or 'utterance'
+  public weight: string = 'center';  // 'center' or 'cut'
+  public blend: string = 'log';  // CTC models: 'log' or 'prob'
+}
+
+// How an offline model's encoder runs
+export class OfflineEncoderConfig {
+  public window: OfflineEncoderWindowConfig = new OfflineEncoderWindowConfig();
+  // Comma-separated input lengths in seconds an encoder call may have
+  public lengths: string = '';
+  public padTo: number = 0;  // else pad to a multiple of this many seconds
+}
+
 export class OfflineModelConfig {
   public transducer: OfflineTransducerModelConfig = new OfflineTransducerModelConfig();
   public paraformer: OfflineParaformerModelConfig = new OfflineParaformerModelConfig();
@@ -208,6 +227,7 @@ export class OfflineModelConfig {
   public litertDispatchDir: string = '';
   // 'WINDOW_S:OVERLAP_S:SLACK_S' for a .tflite model's long utterances
   public litertWindow: string = '';
+  public encoder: OfflineEncoderConfig = new OfflineEncoderConfig();
 }
 
 export class OfflineLMConfig {

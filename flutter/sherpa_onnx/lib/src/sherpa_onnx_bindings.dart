@@ -583,6 +583,30 @@ final class SherpaOnnxOfflineModelConfig extends Struct {
   external Pointer<Utf8> w2vBertCtc;
   external Pointer<Utf8> litertDispatchDir;
   external Pointer<Utf8> litertWindow;
+  external SherpaOnnxOfflineEncoderConfig encoder;
+}
+
+final class SherpaOnnxOfflineEncoderWindowConfig extends Struct {
+  @Float()
+  external double seconds;
+
+  @Float()
+  external double overlap;
+
+  @Float()
+  external double slack;
+
+  external Pointer<Utf8> normalize;
+  external Pointer<Utf8> weight;
+  external Pointer<Utf8> blend;
+}
+
+final class SherpaOnnxOfflineEncoderConfig extends Struct {
+  external SherpaOnnxOfflineEncoderWindowConfig window;
+  external Pointer<Utf8> lengths;
+
+  @Float()
+  external double padTo;
 }
 
 final class SherpaOnnxOfflineRecognizerConfig extends Struct {

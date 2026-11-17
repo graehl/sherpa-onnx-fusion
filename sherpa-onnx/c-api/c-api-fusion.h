@@ -17,6 +17,8 @@ namespace sherpa_onnx {
 
 // A zero or NULL field keeps the core default.
 FusionConfig GetFusionConfig(const SherpaOnnxFusionConfig &c);
+OfflineEncoderConfig GetOfflineEncoderConfig(
+    const SherpaOnnxOfflineEncoderConfig &c);
 
 // Applies c->options_json to *config. On failure logs the problem and
 // returns false.

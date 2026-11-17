@@ -103,6 +103,18 @@ class TestOfflineFusion(unittest.TestCase):
         recognizer.decode_streams(ss)
         self.assertEqual(ss[0].result.text, ss[1].result.text)
 
+    def test_encoder_windows(self):
+        greedy = self.decode(self.recognizer())
+        self.assertIn("DISHONORED", greedy)
+        encoder = sherpa_onnx.OfflineEncoderConfig(
+            window=sherpa_onnx.OfflineEncoderWindowConfig(seconds=4, overlap=1)
+        )
+        windowed = self.decode(
+            self.recognizer(decoding_method="prefix_beam_search", encoder=encoder),
+            encode=True,
+        )
+        self.assertIn("DISHONOURED", windowed)
+
     def test_bad_options_json_fails_creation(self):
         with self.assertRaises(ValueError) as e:
             self.recognizer(

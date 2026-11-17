@@ -679,6 +679,34 @@ struct OfflineQwen3ASRModelConfig {
   int32_t seed = 42;
 };
 
+/** @brief How an offline encoder runs an utterance longer than a window;
+ * see SherpaOnnxOfflineEncoderWindowConfig. */
+struct OfflineEncoderWindowConfig {
+  /** Window length in seconds. 0: every utterance is encoded whole. */
+  float seconds = 0;
+  /** The least overlap of neighbouring windows, in seconds. 0 means 3. */
+  float overlap = 3;
+  /** How far an interior window may move to a quiet edge, in seconds.
+   * 0 means 1. */
+  float slack = 1;
+  /** Scope of input normalization: `"window"` or `"utterance"`. */
+  std::string normalize = "window";
+  /** `"center"` or `"cut"`. */
+  std::string weight = "center";
+  /** CTC models: what `"center"` averages, `"log"` or `"prob"`. */
+  std::string blend = "log";
+};
+
+/** @brief How an offline model's encoder runs. */
+struct OfflineEncoderConfig {
+  /** Encoding a long utterance in windows. */
+  OfflineEncoderWindowConfig window;
+  /** Comma-separated input lengths in seconds an encoder call may have. */
+  std::string lengths;
+  /** Else pad an input to a multiple of this many seconds. */
+  float pad_to = 0;
+};
+
 /**
  * @brief Acoustic model configuration for offline ASR.
  *
@@ -747,6 +775,8 @@ struct OfflineModelConfig {
   /** `"WINDOW_S:OVERLAP_S:SLACK_S"`: how a .tflite model runs an utterance
    * longer than its window length. Empty: windows of its longest length. */
   std::string litert_window;
+  /** How the encoder runs, for example a long utterance in windows. */
+  OfflineEncoderConfig encoder;
 };
 
 /** @brief Optional language-model rescoring configuration for offline ASR. */

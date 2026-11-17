@@ -16,6 +16,7 @@ set(srcs
   offline-ctc-fst-decoder-config.cc
   offline-diacritization.cc
   offline-dolphin-model-config.cc
+  offline-encoder-config.cc
   offline-fire-red-asr-ctc-model-config.cc
   offline-fire-red-asr-model-config.cc
   offline-funasr-nano-model-config.cc

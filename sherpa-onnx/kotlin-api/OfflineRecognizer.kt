@@ -141,6 +141,36 @@ data class OfflineSenseVoiceModelConfig(
     var qnnConfig: QnnConfig = QnnConfig(),
 )
 
+// How an offline encoder runs an utterance longer than a window: in
+// overlapping windows whose outputs are blended per output frame. Supported
+// for the offline CTC models, the zipformer transducer, and NeMo RNN-T and
+// TDT.
+data class OfflineEncoderWindowConfig(
+    var seconds: Float = 0.0f, // window length; 0: encode whole
+    var overlap: Float = 3.0f, // least overlap of neighbouring windows
+    // How far an interior window may move, in seconds, to put its edges
+    // where the audio is quietest.
+    var slack: Float = 1.0f,
+    var normalize: String = "window", // "window" or "utterance"
+    // "center": a frame is the weighted average of the windows that cover
+    // it; "cut": it is taken from the window in which it is farthest from
+    // an edge.
+    var weight: String = "center",
+    // CTC models: what "center" averages, "log" probabilities or "prob".
+    var blend: String = "log",
+)
+
+// How an offline model's encoder runs.
+data class OfflineEncoderConfig(
+    var window: OfflineEncoderWindowConfig = OfflineEncoderWindowConfig(),
+    // Comma-separated input lengths in seconds an encoder call may have: an
+    // input is padded to the shortest that holds it. Needs a model that
+    // takes a padded batch.
+    var lengths: String = "",
+    // Else pad an input to a multiple of this many seconds. 0: no padding.
+    var padTo: Float = 0.0f,
+)
+
 data class OfflineModelConfig(
     var transducer: OfflineTransducerModelConfig = OfflineTransducerModelConfig(),
     var paraformer: OfflineParaformerModelConfig = OfflineParaformerModelConfig(),
@@ -176,6 +206,8 @@ data class OfflineModelConfig(
     // "WINDOW_S:OVERLAP_S:SLACK_S": how a .tflite model runs an utterance
     // longer than its window length. Empty: windows of its longest length.
     var litertWindow: String = "",
+    // How the encoder runs, for example a long utterance in windows.
+    var encoder: OfflineEncoderConfig = OfflineEncoderConfig(),
 )
 
 data class OfflineCtcFstDecoderConfig(

@@ -445,6 +445,83 @@ impl OfflineFunASRNanoModelConfig {
     }
 }
 
+#[derive(Clone, Debug)]
+/// How an offline encoder runs an utterance longer than a window: in
+/// overlapping windows whose outputs are blended per output frame.
+///
+/// Supported for the offline CTC models, the zipformer transducer, and NeMo
+/// RNN-T and TDT. A value of 0 for `overlap` or `slack` means the default;
+/// set an explicit zero through `options_json`, e.g.
+/// `{"encoder": {"window": {"slack": 0}}}`.
+pub struct OfflineEncoderWindowConfig {
+    /// Window length in seconds. 0: every utterance is encoded whole.
+    pub seconds: f32,
+    /// The least overlap of neighbouring windows, in seconds.
+    pub overlap: f32,
+    /// How far an interior window may move, in seconds, to put its edges
+    /// where the audio is quietest.
+    pub slack: f32,
+    /// Scope of input normalization: `window` or `utterance`.
+    pub normalize: Option<String>,
+    /// `center`: a frame is the weighted average of the windows that cover
+    /// it; `cut`: it is taken from the window in which it is farthest from an
+    /// edge.
+    pub weight: Option<String>,
+    /// CTC models: what `center` averages, `log` probabilities or `prob`.
+    pub blend: Option<String>,
+}
+
+impl Default for OfflineEncoderWindowConfig {
+    fn default() -> Self {
+        Self {
+            seconds: 0.0,
+            overlap: 3.0,
+            slack: 1.0,
+            normalize: Some("window".into()),
+            weight: Some("center".into()),
+            blend: Some("log".into()),
+        }
+    }
+}
+
+impl OfflineEncoderWindowConfig {
+    fn to_sys(&self, cstrings: &mut Vec<CString>) -> sys::OfflineEncoderWindowConfig {
+        sys::OfflineEncoderWindowConfig {
+            seconds: self.seconds,
+            overlap: self.overlap,
+            slack: self.slack,
+            normalize: to_c_ptr(&self.normalize, cstrings),
+            weight: to_c_ptr(&self.weight, cstrings),
+            blend: to_c_ptr(&self.blend, cstrings),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+/// How an offline model's encoder runs.
+pub struct OfflineEncoderConfig {
+    /// Encoding a long utterance in windows.
+    pub window: OfflineEncoderWindowConfig,
+    /// Comma-separated input lengths in seconds an encoder call may have: an
+    /// input is padded to the shortest that holds it. Needs a model that
+    /// takes a padded batch.
+    pub lengths: Option<String>,
+    /// Else pad an input to a multiple of this many seconds. 0: no padding.
+    pub pad_to: f32,
+}
+
+impl OfflineEncoderConfig {
+    fn to_sys(&self, cstrings: &mut Vec<CString>) -> sys::OfflineEncoderConfig {
+        sys::OfflineEncoderConfig {
+            window: self
+                .window
+                .to_sys(cstrings),
+            lengths: to_c_ptr(&self.lengths, cstrings),
+            pad_to: self.pad_to,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 /// Aggregate model configuration for offline recognition.
 ///
@@ -487,6 +564,8 @@ pub struct OfflineModelConfig {
     /// `"WINDOW_S:OVERLAP_S:SLACK_S"`: how a .tflite model runs an utterance
     /// longer than its window length. `None`: windows of its longest length.
     pub litert_window: Option<String>,
+    /// How the encoder runs, for example a long utterance in windows.
+    pub encoder: OfflineEncoderConfig,
 }
 
 impl OfflineModelConfig {
@@ -558,6 +637,9 @@ impl OfflineModelConfig {
             w2v_bert_ctc: to_c_ptr(&self.w2v_bert_ctc, cstrings),
             litert_dispatch_dir: to_c_ptr(&self.litert_dispatch_dir, cstrings),
             litert_window: to_c_ptr(&self.litert_window, cstrings),
+            encoder: self
+                .encoder
+                .to_sys(cstrings),
         }
     }
 }

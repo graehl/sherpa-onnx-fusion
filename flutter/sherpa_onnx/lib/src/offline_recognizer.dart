@@ -300,6 +300,16 @@ class OfflineRecognizer {
         .toNativeUtf8();
     c.ref.model.litertWindow = config.model.litertWindow.toNativeUtf8();
 
+    final window = config.model.encoder.window;
+    c.ref.model.encoder.window.seconds = window.seconds;
+    c.ref.model.encoder.window.overlap = window.overlap;
+    c.ref.model.encoder.window.slack = window.slack;
+    c.ref.model.encoder.window.normalize = window.normalize.toNativeUtf8();
+    c.ref.model.encoder.window.weight = window.weight.toNativeUtf8();
+    c.ref.model.encoder.window.blend = window.blend.toNativeUtf8();
+    c.ref.model.encoder.lengths = config.model.encoder.lengths.toNativeUtf8();
+    c.ref.model.encoder.padTo = config.model.encoder.padTo;
+
     c.ref.lm.model = config.lm.model.toNativeUtf8();
     c.ref.lm.scale = config.lm.scale;
 
@@ -338,6 +348,10 @@ class OfflineRecognizer {
     calloc.free(c.ref.hotwordsFile);
     calloc.free(c.ref.decodingMethod);
     calloc.free(c.ref.lm.model);
+    calloc.free(c.ref.model.encoder.lengths);
+    calloc.free(c.ref.model.encoder.window.blend);
+    calloc.free(c.ref.model.encoder.window.weight);
+    calloc.free(c.ref.model.encoder.window.normalize);
     calloc.free(c.ref.model.litertWindow);
     calloc.free(c.ref.model.litertDispatchDir);
     calloc.free(c.ref.model.w2vBertCtc);

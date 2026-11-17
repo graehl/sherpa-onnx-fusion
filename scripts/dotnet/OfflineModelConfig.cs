@@ -39,6 +39,7 @@ namespace SherpaOnnx
             W2vBertCtc = "";
             LitertDispatchDir = "";
             LitertWindow = "";
+            Encoder = new OfflineEncoderConfig();
         }
         public OfflineTransducerModelConfig Transducer;
         public OfflineParaformerModelConfig Paraformer;
@@ -96,5 +97,8 @@ namespace SherpaOnnx
         /// longest length.
         [MarshalAs(UnmanagedType.LPStr)]
         public string LitertWindow;
+
+        /// How the encoder runs, for example a long utterance in windows.
+        public OfflineEncoderConfig Encoder;
     }
 }
