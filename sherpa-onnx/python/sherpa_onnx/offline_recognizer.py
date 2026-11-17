@@ -5,6 +5,7 @@ from typing import List, Optional
 
 from sherpa_onnx.lib._sherpa_onnx import (
     FeatureExtractorConfig,
+    FusionConfig,
     HomophoneReplacerConfig,
     OfflineCanaryModelConfig,
     OfflineCohereTranscribeModelConfig,
@@ -38,6 +39,10 @@ from sherpa_onnx.lib._sherpa_onnx import (
 
 def _assert_file_exists(f: str):
     assert Path(f).is_file(), f"{f} does not exist"
+
+
+def _fusion_or_default(fusion: Optional[FusionConfig]) -> FusionConfig:
+    return FusionConfig() if fusion is None else fusion
 
 
 class OfflineRecognizer(object):
@@ -131,6 +136,8 @@ class OfflineRecognizer(object):
         hr_lexicon: str = "",
         lodr_fst: str = "",
         lodr_scale: float = 0.0,
+        fusion: Optional[FusionConfig] = None,
+        options_json: str = "",
     ):
         """
         Please refer to
@@ -199,6 +206,13 @@ class OfflineRecognizer(object):
             Path to the LODR FST file in binary format. If empty, LODR is disabled.
           lodr_scale:
             Scale factor for LODR rescoring. Only used when lodr_fst is provided.
+          fusion:
+            A :class:`FusionConfig`: scorers fused into the search, and search
+            options, used when decoding_method is prefix_beam_search.
+          options_json:
+            A JSON object of command-line options applied after every other
+            option, e.g. ``'{"scorer": [{"weight": 40}], "score-beam": 0}'``.
+            An error raises ``ValueError``.
         """
         self = cls.__new__(cls)
         model_config = OfflineModelConfig(
@@ -259,6 +273,8 @@ class OfflineRecognizer(object):
                 lexicon=hr_lexicon,
                 rule_fsts=hr_rule_fsts,
             ),
+            fusion=_fusion_or_default(fusion),
+            options_json=options_json,
         )
         self.recognizer = _Recognizer(recognizer_config)
         self.config = recognizer_config
@@ -666,6 +682,8 @@ class OfflineRecognizer(object):
         hr_dict_dir: str = "",
         hr_rule_fsts: str = "",
         hr_lexicon: str = "",
+        fusion: Optional[FusionConfig] = None,
+        options_json: str = "",
     ):
         """
         Please refer to
@@ -701,6 +719,13 @@ class OfflineRecognizer(object):
           rule_fars:
             If not empty, it specifies fst archives for inverse text normalization.
             If there are multiple archives, they are separated by a comma.
+          fusion:
+            A :class:`FusionConfig`: scorers fused into the search, and search
+            options, used when decoding_method is prefix_beam_search.
+          options_json:
+            A JSON object of command-line options applied after every other
+            option, e.g. ``'{"scorer": [{"weight": 40}], "score-beam": 0}'``.
+            An error raises ``ValueError``.
         """
         self = cls.__new__(cls)
         model_config = OfflineModelConfig(
@@ -725,6 +750,8 @@ class OfflineRecognizer(object):
             hr=HomophoneReplacerConfig(
                 dict_dir=hr_dict_dir, lexicon=hr_lexicon, rule_fsts=hr_rule_fsts
             ),
+            fusion=_fusion_or_default(fusion),
+            options_json=options_json,
         )
         self.recognizer = _Recognizer(recognizer_config)
         self.config = recognizer_config
@@ -746,6 +773,8 @@ class OfflineRecognizer(object):
         hr_dict_dir: str = "",
         hr_rule_fsts: str = "",
         hr_lexicon: str = "",
+        fusion: Optional[FusionConfig] = None,
+        options_json: str = "",
     ):
         """
         Please refer to
@@ -779,6 +808,13 @@ class OfflineRecognizer(object):
           rule_fars:
             If not empty, it specifies fst archives for inverse text normalization.
             If there are multiple archives, they are separated by a comma.
+          fusion:
+            A :class:`FusionConfig`: scorers fused into the search, and search
+            options, used when decoding_method is prefix_beam_search.
+          options_json:
+            A JSON object of command-line options applied after every other
+            option, e.g. ``'{"scorer": [{"weight": 40}], "score-beam": 0}'``.
+            An error raises ``ValueError``.
         """
         self = cls.__new__(cls)
         model_config = OfflineModelConfig(
@@ -805,6 +841,8 @@ class OfflineRecognizer(object):
                 lexicon=hr_lexicon,
                 rule_fsts=hr_rule_fsts,
             ),
+            fusion=_fusion_or_default(fusion),
+            options_json=options_json,
         )
         self.recognizer = _Recognizer(recognizer_config)
         self.config = recognizer_config
@@ -819,6 +857,8 @@ class OfflineRecognizer(object):
         decoding_method: str = "greedy_search",
         debug: bool = False,
         provider: str = "cpu",
+        fusion: Optional[FusionConfig] = None,
+        options_json: str = "",
     ):
         """
         Please refer to
@@ -842,6 +882,13 @@ class OfflineRecognizer(object):
             True to show debug messages.
           provider:
             onnxruntime execution providers. Valid values are: cpu, cuda, coreml.
+          fusion:
+            A :class:`FusionConfig`: scorers fused into the search, and search
+            options, used when decoding_method is prefix_beam_search.
+          options_json:
+            A JSON object of command-line options applied after every other
+            option, e.g. ``'{"scorer": [{"weight": 40}], "score-beam": 0}'``.
+            An error raises ``ValueError``.
         """
         self = cls.__new__(cls)
         model_config = OfflineModelConfig(
@@ -855,6 +902,8 @@ class OfflineRecognizer(object):
         recognizer_config = OfflineRecognizerConfig(
             model_config=model_config,
             decoding_method=decoding_method,
+            fusion=_fusion_or_default(fusion),
+            options_json=options_json,
         )
         self.recognizer = _Recognizer(recognizer_config)
         self.config = recognizer_config
@@ -925,6 +974,8 @@ class OfflineRecognizer(object):
         decoding_method: str = "greedy_search",
         debug: bool = False,
         provider: str = "cpu",
+        fusion: Optional[FusionConfig] = None,
+        options_json: str = "",
     ):
         """
         Please refer to
@@ -948,6 +999,13 @@ class OfflineRecognizer(object):
             True to show debug messages.
           provider:
             onnxruntime execution providers. Valid values are: cpu, cuda, coreml.
+          fusion:
+            A :class:`FusionConfig`: scorers fused into the search, and search
+            options, used when decoding_method is prefix_beam_search.
+          options_json:
+            A JSON object of command-line options applied after every other
+            option, e.g. ``'{"scorer": [{"weight": 40}], "score-beam": 0}'``.
+            An error raises ``ValueError``.
         """
         self = cls.__new__(cls)
         model_config = OfflineModelConfig(
@@ -961,6 +1019,8 @@ class OfflineRecognizer(object):
         recognizer_config = OfflineRecognizerConfig(
             model_config=model_config,
             decoding_method=decoding_method,
+            fusion=_fusion_or_default(fusion),
+            options_json=options_json,
         )
         self.recognizer = _Recognizer(recognizer_config)
         self.config = recognizer_config
@@ -975,6 +1035,8 @@ class OfflineRecognizer(object):
         decoding_method: str = "greedy_search",
         debug: bool = False,
         provider: str = "cpu",
+        fusion: Optional[FusionConfig] = None,
+        options_json: str = "",
     ):
         """
         Please refer to
@@ -998,6 +1060,13 @@ class OfflineRecognizer(object):
             True to show debug messages.
           provider:
             onnxruntime execution providers. Valid values are: cpu, cuda, coreml.
+          fusion:
+            A :class:`FusionConfig`: scorers fused into the search, and search
+            options, used when decoding_method is prefix_beam_search.
+          options_json:
+            A JSON object of command-line options applied after every other
+            option, e.g. ``'{"scorer": [{"weight": 40}], "score-beam": 0}'``.
+            An error raises ``ValueError``.
         """
         self = cls.__new__(cls)
         model_config = OfflineModelConfig(
@@ -1011,6 +1080,8 @@ class OfflineRecognizer(object):
         recognizer_config = OfflineRecognizerConfig(
             model_config=model_config,
             decoding_method=decoding_method,
+            fusion=_fusion_or_default(fusion),
+            options_json=options_json,
         )
         self.recognizer = _Recognizer(recognizer_config)
         self.config = recognizer_config
@@ -1034,6 +1105,8 @@ class OfflineRecognizer(object):
         hr_lexicon: str = "",
         ctc_graph: str = "",
         ctc_max_active: int = 3000,
+        fusion: Optional[FusionConfig] = None,
+        options_json: str = "",
     ):
         """
         Please refer to
@@ -1075,6 +1148,13 @@ class OfflineRecognizer(object):
           ctc_max_active:
             Used only when ctc_graph is not empty. It specifies the maximum
             number of active tokens during CTC+FST decoding. 0 means 3000.
+          fusion:
+            A :class:`FusionConfig`: scorers fused into the search, and search
+            options, used when decoding_method is prefix_beam_search.
+          options_json:
+            A JSON object of command-line options applied after every other
+            option, e.g. ``'{"scorer": [{"weight": 40}], "score-beam": 0}'``.
+            An error raises ``ValueError``.
         """
         self = cls.__new__(cls)
         model_config = OfflineModelConfig(
@@ -1105,6 +1185,8 @@ class OfflineRecognizer(object):
                 graph=ctc_graph,
                 max_active=ctc_max_active,
             ),
+            fusion=_fusion_or_default(fusion),
+            options_json=options_json,
         )
         self.recognizer = _Recognizer(recognizer_config)
         self.config = recognizer_config
@@ -1126,6 +1208,8 @@ class OfflineRecognizer(object):
         hr_dict_dir: str = "",
         hr_rule_fsts: str = "",
         hr_lexicon: str = "",
+        fusion: Optional[FusionConfig] = None,
+        options_json: str = "",
     ):
         """
         Please refer to
@@ -1160,6 +1244,13 @@ class OfflineRecognizer(object):
           rule_fars:
             If not empty, it specifies fst archives for inverse text normalization.
             If there are multiple archives, they are separated by a comma.
+          fusion:
+            A :class:`FusionConfig`: scorers fused into the search, and search
+            options, used when decoding_method is prefix_beam_search.
+          options_json:
+            A JSON object of command-line options applied after every other
+            option, e.g. ``'{"scorer": [{"weight": 40}], "score-beam": 0}'``.
+            An error raises ``ValueError``.
         """
         self = cls.__new__(cls)
         model_config = OfflineModelConfig(
@@ -1187,6 +1278,8 @@ class OfflineRecognizer(object):
                 lexicon=hr_lexicon,
                 rule_fsts=hr_rule_fsts,
             ),
+            fusion=_fusion_or_default(fusion),
+            options_json=options_json,
         )
         self.recognizer = _Recognizer(recognizer_config)
         self.config = recognizer_config
@@ -1807,6 +1900,8 @@ class OfflineRecognizer(object):
         hr_dict_dir: str = "",
         hr_rule_fsts: str = "",
         hr_lexicon: str = "",
+        fusion: Optional[FusionConfig] = None,
+        options_json: str = "",
     ):
         """
         Please refer to
@@ -1840,6 +1935,13 @@ class OfflineRecognizer(object):
           rule_fars:
             If not empty, it specifies fst archives for inverse text normalization.
             If there are multiple archives, they are separated by a comma.
+          fusion:
+            A :class:`FusionConfig`: scorers fused into the search, and search
+            options, used when decoding_method is prefix_beam_search.
+          options_json:
+            A JSON object of command-line options applied after every other
+            option, e.g. ``'{"scorer": [{"weight": 40}], "score-beam": 0}'``.
+            An error raises ``ValueError``.
         """
         self = cls.__new__(cls)
         model_config = OfflineModelConfig(
@@ -1867,6 +1969,8 @@ class OfflineRecognizer(object):
                 lexicon=hr_lexicon,
                 rule_fsts=hr_rule_fsts,
             ),
+            fusion=_fusion_or_default(fusion),
+            options_json=options_json,
         )
         self.recognizer = _Recognizer(recognizer_config)
         self.config = recognizer_config
@@ -1888,6 +1992,8 @@ class OfflineRecognizer(object):
         hr_dict_dir: str = "",
         hr_rule_fsts: str = "",
         hr_lexicon: str = "",
+        fusion: Optional[FusionConfig] = None,
+        options_json: str = "",
     ):
         """
         Please refer to
@@ -1922,6 +2028,13 @@ class OfflineRecognizer(object):
           rule_fars:
             If not empty, it specifies fst archives for inverse text normalization.
             If there are multiple archives, they are separated by a comma.
+          fusion:
+            A :class:`FusionConfig`: scorers fused into the search, and search
+            options, used when decoding_method is prefix_beam_search.
+          options_json:
+            A JSON object of command-line options applied after every other
+            option, e.g. ``'{"scorer": [{"weight": 40}], "score-beam": 0}'``.
+            An error raises ``ValueError``.
         """
         self = cls.__new__(cls)
         model_config = OfflineModelConfig(
@@ -1949,6 +2062,8 @@ class OfflineRecognizer(object):
                 lexicon=hr_lexicon,
                 rule_fsts=hr_rule_fsts,
             ),
+            fusion=_fusion_or_default(fusion),
+            options_json=options_json,
         )
         self.recognizer = _Recognizer(recognizer_config)
         self.config = recognizer_config

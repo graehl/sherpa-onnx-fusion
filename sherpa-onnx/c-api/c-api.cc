@@ -18,6 +18,7 @@
 #include "rawfile/raw_file_manager.h"
 #endif
 
+#include "sherpa-onnx/c-api/c-api-fusion.h"
 #include "sherpa-onnx/csrc/audio-tagging.h"
 #include "sherpa-onnx/csrc/circular-buffer.h"
 #include "sherpa-onnx/csrc/display.h"
@@ -448,8 +449,9 @@ struct SherpaOnnxOfflineStream {
       : impl(std::move(p)) {}
 };
 
+// *ok, when given, is set false if config->options_json cannot be applied.
 static sherpa_onnx::OfflineRecognizerConfig GetOfflineRecognizerConfig(
-    const SherpaOnnxOfflineRecognizerConfig *config) {
+    const SherpaOnnxOfflineRecognizerConfig *config, bool *ok = nullptr) {
   sherpa_onnx::OfflineRecognizerConfig recognizer_config;
 
   recognizer_config.feat_config.sampling_rate =
@@ -685,6 +687,10 @@ static sherpa_onnx::OfflineRecognizerConfig GetOfflineRecognizerConfig(
   recognizer_config.ctc_fst_decoder_config.max_active =
       SHERPA_ONNX_OR(config->ctc_fst_decoder_config.max_active, 3000);
 
+  recognizer_config.fusion = sherpa_onnx::GetFusionConfig(config->fusion);
+  bool json_ok = sherpa_onnx::ApplyCOptionsJson(config, &recognizer_config);
+  if (ok) *ok = json_ok;
+
   if (config->model_config.debug) {
 #if __OHOS__
     auto str_vec = sherpa_onnx::SplitString(recognizer_config.ToString(), 128);
@@ -702,10 +708,11 @@ static sherpa_onnx::OfflineRecognizerConfig GetOfflineRecognizerConfig(
 
 const SherpaOnnxOfflineRecognizer *SherpaOnnxCreateOfflineRecognizer(
     const SherpaOnnxOfflineRecognizerConfig *config) {
+  bool ok = true;
   sherpa_onnx::OfflineRecognizerConfig recognizer_config =
-      GetOfflineRecognizerConfig(config);
+      GetOfflineRecognizerConfig(config, &ok);
 
-  if (!recognizer_config.Validate()) {
+  if (!ok || !recognizer_config.Validate()) {
     SHERPA_ONNX_LOGE("Errors in config");
     return nullptr;
   }
@@ -728,8 +735,10 @@ void SherpaOnnxOfflineRecognizerSetConfig(
     const SherpaOnnxOfflineRecognizer *recognizer,
     const SherpaOnnxOfflineRecognizerConfig *config) {
   if (!recognizer || !config) return;
+  bool ok = true;
   sherpa_onnx::OfflineRecognizerConfig recognizer_config =
-      GetOfflineRecognizerConfig(config);
+      GetOfflineRecognizerConfig(config, &ok);
+  if (!ok) return;
   recognizer->impl->SetConfig(recognizer_config);
 }
 
@@ -3782,8 +3791,10 @@ const SherpaOnnxOfflineRecognizer *SherpaOnnxCreateOfflineRecognizerOHOS(
     return SherpaOnnxCreateOfflineRecognizer(config);
   }
 
+  bool ok = true;
   sherpa_onnx::OfflineRecognizerConfig recognizer_config =
-      GetOfflineRecognizerConfig(config);
+      GetOfflineRecognizerConfig(config, &ok);
+  if (!ok) return nullptr;
 
   SherpaOnnxOfflineRecognizer *recognizer = new SherpaOnnxOfflineRecognizer;
 

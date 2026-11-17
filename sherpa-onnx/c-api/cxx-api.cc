@@ -78,6 +78,35 @@ int32_t OnlineStream::HasOption(const char *key) const {
   return SherpaOnnxOnlineStreamHasOption(p_, key);
 }
 
+// The C struct points into *scorers, which must outlive it.
+static SherpaOnnxFusionConfig Convert(
+    const FusionConfig &config, std::vector<SherpaOnnxScorerConfig> *scorers) {
+  scorers->clear();
+  for (const auto &s : config.scorers) {
+    SherpaOnnxScorerConfig sc;
+    memset(&sc, 0, sizeof(sc));
+    sc.type = s.type.c_str();
+    sc.model = s.model.c_str();
+    sc.unit = s.unit.c_str();
+    sc.space = s.space.c_str();
+    sc.num_threads = s.num_threads;
+    sc.provider = s.provider.c_str();
+    sc.weight = s.weight;
+    sc.extra = s.extra.c_str();
+    scorers->push_back(sc);
+  }
+
+  SherpaOnnxFusionConfig c;
+  memset(&c, 0, sizeof(c));
+  c.scorers = scorers->data();
+  c.num_scorers = static_cast<int32_t>(scorers->size());
+  c.length_bonus = config.length_bonus;
+  c.length_bonus_unit = config.length_bonus_unit.c_str();
+  c.ctc_alignment = config.ctc_alignment.c_str();
+  c.token_candidates = config.token_candidates;
+  return c;
+}
+
 OnlineRecognizer OnlineRecognizer::Create(
     const OnlineRecognizerConfig &config) {
   struct SherpaOnnxOnlineRecognizerConfig c;
@@ -243,8 +272,10 @@ int32_t OfflineStream::HasOption(const char *key) const {
   return SherpaOnnxOfflineStreamHasOption(p_, key);
 }
 
+// The C struct points into *scorers, which must outlive it.
 static SherpaOnnxOfflineRecognizerConfig Convert(
-    const OfflineRecognizerConfig &config) {
+    const OfflineRecognizerConfig &config,
+    std::vector<SherpaOnnxScorerConfig> *scorers) {
   struct SherpaOnnxOfflineRecognizerConfig c;
   memset(&c, 0, sizeof(c));
 
@@ -401,19 +432,24 @@ static SherpaOnnxOfflineRecognizerConfig Convert(
   c.ctc_fst_decoder_config.max_active =
       config.ctc_fst_decoder_config.max_active;
 
+  c.fusion = Convert(config.fusion, scorers);
+  c.options_json = config.options_json.c_str();
+
   return c;
 }
 
 OfflineRecognizer OfflineRecognizer::Create(
     const OfflineRecognizerConfig &config) {
-  auto c = Convert(config);
+  std::vector<SherpaOnnxScorerConfig> scorers;
+  auto c = Convert(config, &scorers);
 
   auto p = SherpaOnnxCreateOfflineRecognizer(&c);
   return OfflineRecognizer(p);
 }
 
 void OfflineRecognizer::SetConfig(const OfflineRecognizerConfig &config) const {
-  auto c = Convert(config);
+  std::vector<SherpaOnnxScorerConfig> scorers;
+  auto c = Convert(config, &scorers);
   SherpaOnnxOfflineRecognizerSetConfig(p_, &c);
 }
 

@@ -2,6 +2,7 @@
 // Shared config/data classes for offline recognition -- no FFI, works on all platforms.
 
 import './feature_config.dart';
+import './fusion_config.dart';
 import './homophone_replacer_config.dart';
 
 /// Model files for an offline transducer recognizer.
@@ -843,6 +844,8 @@ class OfflineRecognizerConfig {
     this.blankPenalty = 0.0,
     this.hr = const HomophoneReplacerConfig(),
     this.ctcFstDecoderConfig = const OfflineCtcFstDecoderConfig(),
+    this.fusion = const FusionConfig(),
+    this.optionsJson = '',
   });
 
   factory OfflineRecognizerConfig.fromJson(Map<String, dynamic> json) {
@@ -868,12 +871,16 @@ class OfflineRecognizerConfig {
           ? OfflineCtcFstDecoderConfig.fromJson(
               json['ctcFstDecoderConfig'] as Map<String, dynamic>)
           : const OfflineCtcFstDecoderConfig(),
+      fusion: json['fusion'] != null
+          ? FusionConfig.fromJson(json['fusion'] as Map<String, dynamic>)
+          : const FusionConfig(),
+      optionsJson: json['optionsJson'] as String? ?? '',
     );
   }
 
   @override
   String toString() {
-    return 'OfflineRecognizerConfig(feat: $feat, model: $model, lm: $lm, decodingMethod: $decodingMethod, maxActivePaths: $maxActivePaths, hotwordsFile: $hotwordsFile, hotwordsScore: $hotwordsScore, ruleFsts: $ruleFsts, ruleFars: $ruleFars, blankPenalty: $blankPenalty, hr: $hr, ctcFstDecoderConfig: $ctcFstDecoderConfig)';
+    return 'OfflineRecognizerConfig(feat: $feat, model: $model, lm: $lm, decodingMethod: $decodingMethod, maxActivePaths: $maxActivePaths, hotwordsFile: $hotwordsFile, hotwordsScore: $hotwordsScore, ruleFsts: $ruleFsts, ruleFars: $ruleFars, blankPenalty: $blankPenalty, hr: $hr, ctcFstDecoderConfig: $ctcFstDecoderConfig, fusion: $fusion, optionsJson: $optionsJson)';
   }
 
   Map<String, dynamic> toJson() => {
@@ -889,6 +896,8 @@ class OfflineRecognizerConfig {
     'blankPenalty': blankPenalty,
     'hr': hr.toJson(),
     'ctcFstDecoderConfig': ctcFstDecoderConfig.toJson(),
+    'fusion': fusion.toJson(),
+    'optionsJson': optionsJson,
   };
 
   final FeatureConfig feat;
@@ -908,6 +917,15 @@ class OfflineRecognizerConfig {
   final double blankPenalty;
   final HomophoneReplacerConfig hr;
   final OfflineCtcFstDecoderConfig ctcFstDecoderConfig;
+
+  /// Scorers and search settings for `prefix_beam_search`.
+  final FusionConfig fusion;
+
+  /// Optional JSON object of command-line options, applied after every other
+  /// field, e.g. `{"scorer": [{"weight": 40}], "score-beam": 0}`. Keys are
+  /// the option names `sherpa-onnx-offline --help` prints. An error in it
+  /// makes recognizer creation fail.
+  final String optionsJson;
 }
 
 /// Recognition result returned by [OfflineRecognizer.getResult].

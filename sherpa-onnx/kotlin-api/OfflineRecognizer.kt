@@ -188,6 +188,11 @@ data class OfflineRecognizerConfig(
     var ruleFars: String = "",
     var blankPenalty: Float = 0.0f,
     var ctcFstDecoderConfig: OfflineCtcFstDecoderConfig = OfflineCtcFstDecoderConfig(),
+    var fusion: FusionConfig = FusionConfig(),
+    // A JSON object of command-line options applied after every other field,
+    // e.g. {"scorer": [{"weight": 40}], "score-beam": 0}. An error in it
+    // makes recognizer creation fail.
+    var optionsJson: String = "",
 )
 
 class OfflineRecognizer(

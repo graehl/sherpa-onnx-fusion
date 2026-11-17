@@ -148,6 +148,7 @@ set(sources
   phrase-matcher.cc
   provider-config.cc
   provider.cc
+  recognizer-options-json.cc
   recurrent-lm-scorer.cc
   scorer-options.cc
   scorer.cc

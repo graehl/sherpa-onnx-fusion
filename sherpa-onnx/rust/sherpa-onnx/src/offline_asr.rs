@@ -36,6 +36,7 @@
 //! println!("{}", stream.get_result().expect("result").text);
 //! ```
 
+use crate::fusion::FusionConfig;
 use crate::utils::to_c_ptr;
 use serde::Deserialize;
 use sherpa_onnx_sys as sys;
@@ -567,6 +568,14 @@ pub struct OfflineRecognizerConfig {
     pub blank_penalty: f32,
     pub hr: super::online_asr::HomophoneReplacerConfig,
     pub ctc_fst_decoder_config: OfflineCtcFstDecoderConfig,
+    /// Scorers and search settings for `prefix_beam_search`.
+    pub fusion: FusionConfig,
+    /// Optional JSON object of options, applied after every other field.
+    /// Keys are the option names that `sherpa-onnx-offline --help` prints,
+    /// nested by their dots, e.g. `{"scorer": [{"weight": 40}],
+    /// "score-beam": 0}`. An error in it makes [`OfflineRecognizer::create`]
+    /// return `None`.
+    pub options_json: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -596,7 +605,11 @@ impl OfflineCtcFstDecoderConfig {
 }
 
 impl OfflineRecognizerConfig {
-    fn to_sys(&self, cstrings: &mut Vec<CString>) -> sys::OfflineRecognizerConfig {
+    fn to_sys(
+        &self,
+        cstrings: &mut Vec<CString>,
+        scorers: &mut Vec<Vec<sys::ScorerConfig>>,
+    ) -> sys::OfflineRecognizerConfig {
         sys::OfflineRecognizerConfig {
             feat_config: self.feat_config,
             model_config: self
@@ -616,6 +629,8 @@ impl OfflineRecognizerConfig {
                 .hr
                 .to_sys(cstrings),
             ctc_fst_decoder_config: self.ctc_fst_decoder_config.to_sys(cstrings),
+            fusion: self.fusion.to_sys(cstrings, scorers),
+            options_json: to_c_ptr(&self.options_json, cstrings),
         }
     }
 }
@@ -639,6 +654,8 @@ impl Default for OfflineRecognizerConfig {
             blank_penalty: 0.0,
             hr: super::online_asr::HomophoneReplacerConfig::default(),
             ctc_fst_decoder_config: OfflineCtcFstDecoderConfig::default(),
+            fusion: FusionConfig::default(),
+            options_json: None,
         }
     }
 }
@@ -699,7 +716,8 @@ impl OfflineRecognizer {
     /// Create a recognizer from `config`.
     pub fn create(config: &OfflineRecognizerConfig) -> Option<Self> {
         let mut cstrings = Vec::new();
-        let sys_config = config.to_sys(&mut cstrings);
+        let mut scorers = Vec::new();
+        let sys_config = config.to_sys(&mut cstrings, &mut scorers);
         let ptr = unsafe { sys::SherpaOnnxCreateOfflineRecognizer(&sys_config) };
         if ptr.is_null() {
             None

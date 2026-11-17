@@ -1,5 +1,5 @@
 include_directories(${PROJECT_SOURCE_DIR})
-add_library(sherpa-onnx-c-api c-api.cc)
+add_library(sherpa-onnx-c-api c-api.cc c-api-fusion.cc)
 target_link_libraries(sherpa-onnx-c-api sherpa-onnx-core)
 target_include_directories(sherpa-onnx-c-api PUBLIC ${PROJECT_SOURCE_DIR})
 

@@ -22,6 +22,8 @@ namespace SherpaOnnx
             BlankPenalty = 0.0F;
             Hr = new HomophoneReplacerConfig();
             CtcFstDecoderConfig = new OfflineCtcFstDecoderConfig();
+            Fusion = new FusionConfig();
+            OptionsJson = "";
         }
         public FeatureConfig FeatConfig;
         public OfflineModelConfig ModelConfig;
@@ -48,5 +50,14 @@ namespace SherpaOnnx
         public HomophoneReplacerConfig Hr;
 
         public OfflineCtcFstDecoderConfig CtcFstDecoderConfig;
+
+        /// Scorers and search settings for prefix_beam_search.
+        public FusionConfig Fusion;
+
+        /// Optional JSON object of command-line options applied after every
+        /// other field, e.g. {"scorer": [{"weight": 40}], "score-beam": 0}.
+        /// An error in it makes recognizer creation fail.
+        [MarshalAs(UnmanagedType.LPStr)]
+        public string OptionsJson;
     }
 }

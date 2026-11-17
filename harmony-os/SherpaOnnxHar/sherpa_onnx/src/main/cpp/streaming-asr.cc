@@ -193,6 +193,86 @@ SherpaOnnxHomophoneReplacerConfig GetHomophoneReplacerConfig(Napi::Object obj) {
   return c;
 }
 
+static SherpaOnnxScorerConfig GetScorerConfig(Napi::Value v) {
+  SherpaOnnxScorerConfig c;
+  memset(&c, 0, sizeof(c));
+
+  if (!v.IsObject()) {
+    return c;
+  }
+
+  Napi::Object o = v.As<Napi::Object>();
+
+  SHERPA_ONNX_ASSIGN_ATTR_STR(type, type);
+  SHERPA_ONNX_ASSIGN_ATTR_STR(model, model);
+  SHERPA_ONNX_ASSIGN_ATTR_STR(unit, unit);
+  SHERPA_ONNX_ASSIGN_ATTR_STR(space, space);
+  SHERPA_ONNX_ASSIGN_ATTR_INT32(num_threads, numThreads);
+  SHERPA_ONNX_ASSIGN_ATTR_STR(provider, provider);
+  SHERPA_ONNX_ASSIGN_ATTR_FLOAT(weight, weight);
+  SHERPA_ONNX_ASSIGN_ATTR_STR(extra, extra);
+
+  return c;
+}
+
+/*
+{
+  'fusion': {
+    'scorers': [{'type': 'kenlm', 'model': './lm.bin', 'weight': 0.6}],
+    'lengthBonus': 0.5,
+  }
+}
+ */
+// Also used in ./non-streaming-asr.cc. Release the result with
+// FreeFusionConfig().
+SherpaOnnxFusionConfig GetFusionConfig(Napi::Object obj) {
+  SherpaOnnxFusionConfig c;
+  memset(&c, 0, sizeof(c));
+
+  if (!obj.Has("fusion") || !obj.Get("fusion").IsObject()) {
+    return c;
+  }
+
+  Napi::Object o = obj.Get("fusion").As<Napi::Object>();
+
+  if (o.Has("scorers") && o.Get("scorers").IsArray()) {
+    Napi::Array arr = o.Get("scorers").As<Napi::Array>();
+    uint32_t n = arr.Length();
+    if (n > 0) {
+      SherpaOnnxScorerConfig *scorers = new SherpaOnnxScorerConfig[n];
+      for (uint32_t i = 0; i != n; ++i) {
+        scorers[i] = GetScorerConfig(arr.Get(i));
+      }
+      c.scorers = scorers;
+      c.num_scorers = static_cast<int32_t>(n);
+    }
+  }
+
+  SHERPA_ONNX_ASSIGN_ATTR_FLOAT(length_bonus, lengthBonus);
+  SHERPA_ONNX_ASSIGN_ATTR_STR(length_bonus_unit, lengthBonusUnit);
+  SHERPA_ONNX_ASSIGN_ATTR_STR(ctc_alignment, ctcAlignment);
+  SHERPA_ONNX_ASSIGN_ATTR_INT32(token_candidates, tokenCandidates);
+
+  return c;
+}
+
+// Also used in ./non-streaming-asr.cc
+void FreeFusionConfig(const SherpaOnnxFusionConfig &c) {
+  for (int32_t i = 0; i != c.num_scorers; ++i) {
+    const SherpaOnnxScorerConfig &s = c.scorers[i];
+    SHERPA_ONNX_DELETE_C_STR(s.type);
+    SHERPA_ONNX_DELETE_C_STR(s.model);
+    SHERPA_ONNX_DELETE_C_STR(s.unit);
+    SHERPA_ONNX_DELETE_C_STR(s.space);
+    SHERPA_ONNX_DELETE_C_STR(s.provider);
+    SHERPA_ONNX_DELETE_C_STR(s.extra);
+  }
+  delete[] c.scorers;
+
+  SHERPA_ONNX_DELETE_C_STR(c.length_bonus_unit);
+  SHERPA_ONNX_DELETE_C_STR(c.ctc_alignment);
+}
+
 static Napi::External<SherpaOnnxOnlineRecognizer> CreateOnlineRecognizerWrapper(
     const Napi::CallbackInfo &info) {
   Napi::Env env = info.Env();

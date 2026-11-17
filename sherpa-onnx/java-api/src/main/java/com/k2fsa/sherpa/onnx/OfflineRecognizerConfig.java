@@ -14,6 +14,8 @@ public class OfflineRecognizerConfig {
     private final String ruleFsts;
     private final String ruleFars;
     private final float blankPenalty;
+    private final FusionConfig fusion;
+    private final String optionsJson;
 
     private OfflineRecognizerConfig(Builder builder) {
         this.featConfig = builder.featConfig;
@@ -27,6 +29,8 @@ public class OfflineRecognizerConfig {
         this.ruleFsts = builder.ruleFsts;
         this.ruleFars = builder.ruleFars;
         this.blankPenalty = builder.blankPenalty;
+        this.fusion = builder.fusion;
+        this.optionsJson = builder.optionsJson;
     }
 
     public static Builder builder() {
@@ -35,6 +39,14 @@ public class OfflineRecognizerConfig {
 
     public OfflineModelConfig getModelConfig() {
         return modelConfig;
+    }
+
+    public FusionConfig getFusion() {
+        return fusion;
+    }
+
+    public String getOptionsJson() {
+        return optionsJson;
     }
 
     public static class Builder {
@@ -49,6 +61,8 @@ public class OfflineRecognizerConfig {
         private String ruleFsts = "";
         private String ruleFars = "";
         private float blankPenalty = 0.0f;
+        private FusionConfig fusion = FusionConfig.builder().build();
+        private String optionsJson = "";
 
         public OfflineRecognizerConfig build() {
             return new OfflineRecognizerConfig(this);
@@ -106,6 +120,19 @@ public class OfflineRecognizerConfig {
 
         public Builder setBlankPenalty(float blankPenalty) {
             this.blankPenalty = blankPenalty;
+            return this;
+        }
+
+        public Builder setFusion(FusionConfig fusion) {
+            this.fusion = fusion;
+            return this;
+        }
+
+        // A JSON object of command-line options applied after every other
+        // field, e.g. {"scorer": [{"weight": 40}], "score-beam": 0}. An
+        // error in it makes recognizer creation fail.
+        public Builder setOptionsJson(String optionsJson) {
+            this.optionsJson = optionsJson;
             return this;
         }
     }

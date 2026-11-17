@@ -61,6 +61,7 @@ export 'src/feature_config.dart';
 export 'src/forced_aligner_config.dart';
 export 'src/forced_aligner.dart'
     if (dart.library.js_interop) 'src/web/forced_aligner.dart';
+export 'src/fusion_config.dart';
 export 'src/homophone_replacer_config.dart';
 export 'src/keyword_spotter_config.dart';
 export 'src/keyword_spotter.dart'

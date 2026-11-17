@@ -8,6 +8,7 @@ set(srcs
   endpoint.cc
   features.cc
   forced-aligner.cc
+  fusion-config.cc
   homophone-replacer.cc
   keyword-spotter.cc
   offline-canary-model-config.cc

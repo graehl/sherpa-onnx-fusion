@@ -6,6 +6,7 @@ import 'dart:isolate';
 import 'package:ffi/ffi.dart';
 
 import '../sherpa_onnx.dart' show initBindings;
+import './fusion_config_native.dart';
 import './offline_stream.dart';
 import './sherpa_onnx_bindings.dart';
 import './utils.dart';
@@ -316,10 +317,15 @@ class OfflineRecognizer {
         config.ctcFstDecoderConfig.graph.toNativeUtf8();
     c.ref.ctcFstDecoderConfig.maxActive = config.ctcFstDecoderConfig.maxActive;
 
+    fillFusionConfig(c.ref.fusion, config.fusion);
+    c.ref.optionsJson = config.optionsJson.toNativeUtf8();
+
     return c;
   }
 
   static void freeConfig(Pointer<SherpaOnnxOfflineRecognizerConfig> c) {
+    calloc.free(c.ref.optionsJson);
+    freeFusionConfig(c.ref.fusion);
     calloc.free(c.ref.ctcFstDecoderConfig.graph);
     calloc.free(c.ref.hr.lexicon);
     calloc.free(c.ref.hr.ruleFsts);

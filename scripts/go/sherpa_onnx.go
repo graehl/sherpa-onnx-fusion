@@ -135,6 +135,77 @@ type HomophoneReplacerConfig struct {
 	RuleFsts string
 }
 
+// One scorer, such as a language model, fused into the decoding method
+// prefix_beam_search. A zero or empty field takes the default given beside
+// it; for a value it cannot express, such as a weight of 0, use the
+// recognizer config's OptionsJson.
+type ScorerConfig struct {
+	Type       string  // Registered scorer type: kenlm or onnx-rnn
+	Model      string  // Path to the scorer's model
+	Unit       string  // What the scorer reads: char (default) or token
+	Space      string  // Word-boundary unit for character scorers. Empty: "▁"
+	NumThreads int     // Threads for the scorer's own model. 0 means 1
+	Provider   string  // Execution provider for the scorer's model. Empty: cpu
+	Weight     float32 // Search weight of the scorer's log score. 0 means 1
+	Extra      string  // JSON object of type-specific options. Empty: {}
+}
+
+// Scorers and search settings for the decoding method prefix_beam_search.
+// The zero value searches with no scorer and default settings.
+type FusionConfig struct {
+	Scorers         []ScorerConfig // Fused with independent weights
+	LengthBonus     float32        // Added to a score per LengthBonusUnit of output
+	LengthBonusUnit string         // What LengthBonus counts: token (default) or word
+	CtcAlignment    string         // CTC models: score an output by sum (default) or max alignment
+	TokenCandidates int            // Most probable tokens per frame that may extend a hypothesis. 0: 8
+}
+
+func freeCString(p **C.char) {
+	if *p != nil {
+		C.free(unsafe.Pointer(*p))
+		*p = nil
+	}
+}
+
+// Fill c from config. The caller frees it with freeCFusionConfig.
+func newCFusionConfig(config *FusionConfig, c *C.struct_SherpaOnnxFusionConfig) {
+	if n := len(config.Scorers); n > 0 {
+		p := (*C.struct_SherpaOnnxScorerConfig)(C.calloc(C.size_t(n), C.size_t(unsafe.Sizeof(C.struct_SherpaOnnxScorerConfig{}))))
+		scorers := unsafe.Slice(p, n)
+		for i, s := range config.Scorers {
+			scorers[i]._type = C.CString(s.Type)
+			scorers[i].model = C.CString(s.Model)
+			scorers[i].unit = C.CString(s.Unit)
+			scorers[i].space = C.CString(s.Space)
+			scorers[i].num_threads = C.int32_t(s.NumThreads)
+			scorers[i].provider = C.CString(s.Provider)
+			scorers[i].weight = C.float(s.Weight)
+			scorers[i].extra = C.CString(s.Extra)
+		}
+		c.scorers = p
+		c.num_scorers = C.int32_t(n)
+	}
+	c.length_bonus = C.float(config.LengthBonus)
+	c.length_bonus_unit = C.CString(config.LengthBonusUnit)
+	c.ctc_alignment = C.CString(config.CtcAlignment)
+	c.token_candidates = C.int32_t(config.TokenCandidates)
+}
+
+func freeCFusionConfig(c *C.struct_SherpaOnnxFusionConfig) {
+	if c.scorers != nil {
+		for _, s := range unsafe.Slice(c.scorers, int(c.num_scorers)) {
+			for _, field := range []*(*C.char){&s._type, &s.model, &s.unit, &s.space, &s.provider, &s.extra} {
+				freeCString(field)
+			}
+		}
+		C.free(unsafe.Pointer(c.scorers))
+		c.scorers = nil
+		c.num_scorers = 0
+	}
+	freeCString(&c.length_bonus_unit)
+	freeCString(&c.ctc_alignment)
+}
+
 // Configuration for the online/streaming recognizer.
 type OnlineRecognizerConfig struct {
 	FeatConfig  FeatureConfig
@@ -632,6 +703,15 @@ type OfflineRecognizerConfig struct {
 	RuleFars            string
 	Hr                  HomophoneReplacerConfig
 	CtcFstDecoderConfig OfflineCtcFstDecoderConfig
+
+	// Scorers and search settings for prefix_beam_search
+	Fusion FusionConfig
+
+	// Optional JSON object of options, applied after every other field. Keys
+	// are the option names that sherpa-onnx-offline --help prints, nested by
+	// their dots, e.g. {"scorer": [{"weight": 40}], "score-beam": 0}. An
+	// error in it makes NewOfflineRecognizer return nil.
+	OptionsJson string
 }
 
 // It wraps a pointer from C
@@ -774,6 +854,9 @@ func newCOfflineRecognizerConfig(config *OfflineRecognizerConfig) *C.struct_Sher
 
 	c.ctc_fst_decoder_config.graph = C.CString(config.CtcFstDecoderConfig.Graph)
 	c.ctc_fst_decoder_config.max_active = C.int(config.CtcFstDecoderConfig.MaxActive)
+
+	newCFusionConfig(&config.Fusion, &c.fusion)
+	c.options_json = C.CString(config.OptionsJson)
 	return &c
 }
 func freeCOfflineRecognizerConfig(c *C.struct_SherpaOnnxOfflineRecognizerConfig) {
@@ -837,6 +920,7 @@ func freeCOfflineRecognizerConfig(c *C.struct_SherpaOnnxOfflineRecognizerConfig)
 		&c.hr.lexicon,
 		&c.hr.rule_fsts,
 		&c.ctc_fst_decoder_config.graph,
+		&c.options_json,
 	}
 
 	for _, field := range stringFields {
@@ -845,6 +929,7 @@ func freeCOfflineRecognizerConfig(c *C.struct_SherpaOnnxOfflineRecognizerConfig)
 			*field = nil
 		}
 	}
+	freeCFusionConfig(&c.fusion)
 }
 
 // Frees the internal pointer of the recognition to avoid memory leak.

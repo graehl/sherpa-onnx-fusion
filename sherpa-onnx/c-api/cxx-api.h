@@ -174,6 +174,42 @@ struct HomophoneReplacerConfig {
   std::string rule_fsts;
 };
 
+/** @brief One scorer, such as a language model, fused into
+ * `"prefix_beam_search"`. Empty strings keep the defaults. */
+struct ScorerConfig {
+  /** Registered scorer type: `"kenlm"` or `"onnx-rnn"`. */
+  std::string type;
+  /** Path to the scorer's model. */
+  std::string model;
+  /** What the scorer reads: `"char"` or `"token"`. */
+  std::string unit = "char";
+  /** The scorer's word-boundary unit for character scorers. */
+  std::string space = "▁";
+  /** Threads for the scorer's own model. */
+  int32_t num_threads = 1;
+  /** Execution provider for the scorer's model. */
+  std::string provider = "cpu";
+  /** Search weight of the scorer's log score. 0 means 1; use
+   * `options_json` for a weight of 0. */
+  float weight = 1.0f;
+  /** JSON object of type-specific options. */
+  std::string extra = "{}";
+};
+
+/** @brief Settings for `"prefix_beam_search"`. */
+struct FusionConfig {
+  /** Scorers fused with independent weights. */
+  std::vector<ScorerConfig> scorers;
+  /** Added to a hypothesis's score per `length_bonus_unit` of output. */
+  float length_bonus = 0;
+  /** What `length_bonus` counts: `"token"` or `"word"`. */
+  std::string length_bonus_unit = "token";
+  /** CTC models: score an output by `"sum"` or `"max"` alignment. */
+  std::string ctc_alignment = "sum";
+  /** Most probable tokens per frame that may extend a hypothesis. */
+  int32_t token_candidates = 8;
+};
+
 /**
  * @brief Configuration for streaming ASR.
  *
@@ -757,6 +793,11 @@ struct OfflineRecognizerConfig {
   HomophoneReplacerConfig hr;
   /** Optional CTC+FST decoder configuration. */
   OfflineCtcFstDecoderConfig ctc_fst_decoder_config;
+  /** Scorers and search settings for `"prefix_beam_search"`. */
+  FusionConfig fusion;
+  /** Optional JSON object of options applied after every other field; see
+   * SherpaOnnxOfflineRecognizerConfig::options_json. */
+  std::string options_json;
 };
 
 /** @brief Offline ASR result copied into C++ containers. */

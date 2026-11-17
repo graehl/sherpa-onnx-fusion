@@ -323,6 +323,53 @@ typedef struct SherpaOnnxHomophoneReplacerConfig {
 } SherpaOnnxHomophoneReplacerConfig;
 
 /**
+ * @brief One scorer, such as a language model, fused into
+ * `decoding_method = "prefix_beam_search"`.
+ *
+ * A zero or NULL field takes the default given beside it. For a value this
+ * struct cannot express, such as a weight of 0 or a provider's further
+ * options, use the recognizer config's @c options_json.
+ */
+typedef struct SherpaOnnxScorerConfig {
+  /** Registered scorer type: "kenlm" or "onnx-rnn". */
+  const char *type;
+  /** Path to the scorer's model. */
+  const char *model;
+  /** What the scorer reads: "char" (default) or "token". */
+  const char *unit;
+  /** The scorer's word-boundary unit for character scorers. NULL: "▁". */
+  const char *space;
+  /** Threads for the scorer's own model. 0 means 1. */
+  int32_t num_threads;
+  /** Execution provider for the scorer's model. NULL: "cpu". */
+  const char *provider;
+  /** Search weight of the scorer's log score. 0 means 1. */
+  float weight;
+  /** JSON object of type-specific options. NULL: "{}". */
+  const char *extra;
+} SherpaOnnxScorerConfig;
+
+/**
+ * @brief Settings for `decoding_method = "prefix_beam_search"`.
+ *
+ * Zero-initialized, it searches with no scorer and default settings.
+ */
+typedef struct SherpaOnnxFusionConfig {
+  /** Array of @c num_scorers scorers, fused with independent weights. */
+  const SherpaOnnxScorerConfig *scorers;
+  /** Number of entries in @c scorers. */
+  int32_t num_scorers;
+  /** Added to a hypothesis's score per @c length_bonus_unit of output. */
+  float length_bonus;
+  /** What @c length_bonus counts: "token" (default) or "word". */
+  const char *length_bonus_unit;
+  /** CTC models: score an output by "sum" (default) or "max" alignment. */
+  const char *ctc_alignment;
+  /** Most probable tokens per frame that may extend a hypothesis. 0: 8. */
+  int32_t token_candidates;
+} SherpaOnnxFusionConfig;
+
+/**
  * @brief Configuration for a streaming ASR recognizer.
  *
  * Zero-initialize this struct before use. Then fill in @c feat_config,
@@ -1215,6 +1262,18 @@ typedef struct SherpaOnnxOfflineRecognizerConfig {
 
   /** Optional CTC+FST decoder configuration. */
   SherpaOnnxOfflineCtcFstDecoderConfig ctc_fst_decoder_config;
+
+  /** Scorers and search settings for prefix_beam_search. */
+  SherpaOnnxFusionConfig fusion;
+  /**
+   * Optional JSON object of options, applied after every other field. Keys
+   * are the option names that `sherpa-onnx-offline --help` prints, nested
+   * by their dots, and an array gives a list of scorers, for example
+   * `{"length-bonus": 0.5, "scorer": [{"type": "kenlm", "model": "lm.bin"}]}`.
+   * It can set what the fields above cannot, such as an explicit zero.
+   * An error in it makes recognizer creation fail.
+   */
+  const char *options_json;
 } SherpaOnnxOfflineRecognizerConfig;
 
 /** @brief Non-streaming recognizer handle. */

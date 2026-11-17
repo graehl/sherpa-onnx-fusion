@@ -4,12 +4,34 @@
 
 #include "sherpa-onnx/python/csrc/offline-recognizer.h"
 
+#include <memory>
 #include <string>
 #include <vector>
 
 #include "sherpa-onnx/csrc/offline-recognizer.h"
+#include "sherpa-onnx/csrc/recognizer-options-json.h"
 
 namespace sherpa_onnx {
+
+namespace {
+
+// The Python OfflineRecognizerConfig: the C++ config plus options_json, a
+// JSON object of command-line options applied when a recognizer is created.
+struct PyOfflineRecognizerConfig : public OfflineRecognizerConfig {
+  std::string options_json;
+};
+
+OfflineRecognizerConfig ApplyOptionsJsonOrThrow(
+    const PyOfflineRecognizerConfig &c) {
+  OfflineRecognizerConfig config = c;
+  std::string error;
+  if (!ApplyOptionsJson(c.options_json, &config, &error)) {
+    throw py::value_error("Error in options_json: " + error);
+  }
+  return config;
+}
+
+}  // namespace
 
 static constexpr const char *kOfflineRecognizerConfigInitDoc = R"doc(
 Configuration for an offline (non-streaming) recognizer.
@@ -48,6 +70,13 @@ Args:
     They are applied from left to right.
   hr:
     Config for homophone replacer.
+  fusion:
+    Scorers and search options for ``decoding_method="prefix_beam_search"``.
+  options_json:
+    A JSON object of command-line options, applied after every typed field
+    when the recognizer is created, e.g.
+    ``{"scorer": [{"weight": 40}], "score-beam": 0}``. An error makes
+    creation raise ``ValueError``.
 )doc";
 
 static constexpr const char *kOfflineRecognizerInitDoc = R"doc(
@@ -107,13 +136,30 @@ Args:
 )doc";
 
 static void PybindOfflineRecognizerConfig(py::module *m) {
-  using PyClass = OfflineRecognizerConfig;
+  using PyClass = PyOfflineRecognizerConfig;
   py::class_<PyClass>(*m, "OfflineRecognizerConfig")
-      .def(py::init<const FeatureExtractorConfig &, const OfflineModelConfig &,
-                    const OfflineLMConfig &, const OfflineCtcFstDecoderConfig &,
-                    const std::string &, int32_t, const std::string &, float,
-                    float, const std::string &, const std::string &,
-                    const HomophoneReplacerConfig &>(),
+      .def(py::init(
+               [](const FeatureExtractorConfig &feat_config,
+                  const OfflineModelConfig &model_config,
+                  const OfflineLMConfig &lm_config,
+                  const OfflineCtcFstDecoderConfig &ctc_fst_decoder_config,
+                  const std::string &decoding_method, int32_t max_active_paths,
+                  const std::string &hotwords_file, float hotwords_score,
+                  float blank_penalty, const std::string &rule_fsts,
+                  const std::string &rule_fars,
+                  const HomophoneReplacerConfig &hr, const FusionConfig &fusion,
+                  const std::string &options_json) {
+                 PyClass c;
+                 static_cast<OfflineRecognizerConfig &>(c) =
+                     OfflineRecognizerConfig(
+                         feat_config, model_config, lm_config,
+                         ctc_fst_decoder_config, decoding_method,
+                         max_active_paths, hotwords_file, hotwords_score,
+                         blank_penalty, rule_fsts, rule_fars, hr);
+                 c.fusion = fusion;
+                 c.options_json = options_json;
+                 return c;
+               }),
            py::arg("feat_config") = FeatureExtractorConfig(),
            py::arg("model_config") = OfflineModelConfig(),
            py::arg("lm_config") = OfflineLMConfig(),
@@ -123,6 +169,7 @@ static void PybindOfflineRecognizerConfig(py::module *m) {
            py::arg("hotwords_score") = 1.5, py::arg("blank_penalty") = 0.0,
            py::arg("rule_fsts") = "", py::arg("rule_fars") = "",
            py::arg("hr") = HomophoneReplacerConfig{},
+           py::arg("fusion") = FusionConfig{}, py::arg("options_json") = "",
            kOfflineRecognizerConfigInitDoc)
       .def_readwrite("feat_config", &PyClass::feat_config)
       .def_readwrite("model_config", &PyClass::model_config)
@@ -136,6 +183,8 @@ static void PybindOfflineRecognizerConfig(py::module *m) {
       .def_readwrite("rule_fsts", &PyClass::rule_fsts)
       .def_readwrite("rule_fars", &PyClass::rule_fars)
       .def_readwrite("hr", &PyClass::hr)
+      .def_readwrite("fusion", &PyClass::fusion)
+      .def_readwrite("options_json", &PyClass::options_json)
       .def("__str__", &PyClass::ToString);
 }
 
@@ -144,8 +193,11 @@ void PybindOfflineRecognizer(py::module *m) {
 
   using PyClass = OfflineRecognizer;
   py::class_<PyClass>(*m, "OfflineRecognizer")
-      .def(py::init<const OfflineRecognizerConfig &>(), py::arg("config"),
-           kOfflineRecognizerInitDoc, py::call_guard<py::gil_scoped_release>())
+      .def(py::init([](const PyOfflineRecognizerConfig &config) {
+             return std::make_unique<PyClass>(ApplyOptionsJsonOrThrow(config));
+           }),
+           py::arg("config"), kOfflineRecognizerInitDoc,
+           py::call_guard<py::gil_scoped_release>())
       .def(
           "create_stream",
           [](const PyClass &self) { return self.CreateStream(); },
@@ -159,8 +211,13 @@ void PybindOfflineRecognizer(py::module *m) {
           py::call_guard<py::gil_scoped_release>())
       .def("decode_stream", &PyClass::DecodeStream, py::arg("s"),
            kDecodeStreamDoc, py::call_guard<py::gil_scoped_release>())
-      .def("set_config", &PyClass::SetConfig, py::arg("config"),
-           kSetConfigDoc, py::call_guard<py::gil_scoped_release>())
+      .def(
+          "set_config",
+          [](PyClass &self, const PyOfflineRecognizerConfig &config) {
+            self.SetConfig(ApplyOptionsJsonOrThrow(config));
+          },
+          py::arg("config"), kSetConfigDoc,
+          py::call_guard<py::gil_scoped_release>())
       .def(
           "decode_streams",
           [](const PyClass &self, std::vector<OfflineStream *> ss) {
