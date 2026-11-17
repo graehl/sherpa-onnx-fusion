@@ -97,6 +97,46 @@ utterance batch in one call; it does not yet bound or repack that expansion.
 
 ## How to measure
 
+### Diarization-guided window placement
+
+User-directed (graehl, 2026-11-17): optionally use an actual diarization
+model that can process long recordings to choose encoding splits and
+overlaps, instead of silence guesses or in addition to them. The aim is
+better recognition even when the application does not need annotations
+of who speaks when. Better WER is a hypothesis to test.
+
+The diarizer's speaker-change and speech-activity predictions can supply
+boundary scores to the window scheduler. Keep that proposal separate
+from splitting the decoder state at every speaker change: window placement
+alone can preserve one search over the joined recording. Speaker changes
+need not be silent, and overlapping speakers do not supply a clean cut;
+neither a diarization label nor a low-energy frame guarantees a useful
+recognition boundary.
+
+Retain one packer and the same coverage, overlap, physical-length and
+bounded-center-movement constraints. A diarizer proposes preferred
+boundaries; it does not override full-slot occupancy or require a separate
+encoding implementation. When no proposed boundary is feasible, retain
+the ordinary schedule. A combined policy can use silence scores within
+the feasible region around a predicted speaker change.
+
+An offline diarizer may need the whole recording, substantial memory or
+additional model storage. Measure those costs and its added latency,
+including whether it can process long inputs without a new memory limit.
+Keep it optional, with the cheap silence heuristic available; offline
+diarization must not silently become a prerequisite for the
+[hybrid streaming path](hybrid-chunked-streaming.md).
+
+Compare uniform placement, silence placement, diarization placement and
+their combination with the same encoder, decoder, window lengths and
+overlap budget. Include both single-speaker talks and meetings with
+speaker changes; report WER, end-to-end RTF including diarization, peak
+memory and model storage. Inspect errors around proposed boundaries as
+well as whole-recording WER. Select by recognition quality and total cost,
+not diarization accuracy alone.
+
+### Batch timing
+
 Time the recognizer alone (the program prints it) on a grid of width by
 length, each cell a list of one length decoded enough times to separate a
 first call from repeats, per model and provider. Fit the smallest formula
@@ -111,3 +151,4 @@ the grid shows the affine formula with one measured overhead is within the
 spread, and that overhead is the documented way to set the option.
 
 Contributing-model: fable-5.2
+Contributing-model: 6-Astra
