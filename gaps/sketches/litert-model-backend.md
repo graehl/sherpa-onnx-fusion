@@ -221,8 +221,8 @@ Contributing-model: 6-Astra
    come from its signature; supported outputs have one frame per input
    row or per two rows. The feature options are still the
    w2v-BERT ones the recognizer sets.
-3. Bindings (C API, JNI/Kotlin) for `litert_dispatch_dir`,
-   `litert_window` and the `--encoder.*` options, and the Android app's packaging of the two libraries.
+3. The Android app's packaging of the two libraries. (The options are in
+   every binding: [language bindings](../../topics/language-bindings.md).)
 4. Transducers: encoder in LiteRT, prediction network and joiner in ONNX
    Runtime.
 5. Decide from measurements whether the per-step models should move.

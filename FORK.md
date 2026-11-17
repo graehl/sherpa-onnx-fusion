@@ -92,7 +92,7 @@ tokens, § Fusion on RNN-T and TDT, § Matching the existing decoders).
   JSON file ([option collections](topics/json-option-collections.md)).
 - A multi-utterance CTC decoder that admits, feeds, finishes, and cancels
   utterances individually while batching scorer calls across them.
-- Bulk decoding in `sherpa-onnx-offline-parallel`: one JSON line per
+- [Bulk decoding](topics/bulk-decoding.md) in `sherpa-onnx-offline-parallel`: one JSON line per
   recording naming its position in the list, with an error line for a file
   that cannot be read, printed as each finishes or in list order
   (`--ordered-output`); batches of similar length by default
@@ -107,7 +107,7 @@ tokens, § Fusion on RNN-T and TDT, § Matching the existing decoders).
 - w2v-BERT CTC models in LiteRT's `.tflite` form
   (`-DSHERPA_ONNX_ENABLE_LITERT=ON`, off by default), including a graph
   compiled for a Pixel 10 or 11, run on its TPU with `--provider=npu`
-  ([sketch](gaps/sketches/litert-model-backend.md)). A graph has fixed
+  ([topic](topics/litert-backend.md)). A graph has fixed
   lengths, one per signature, and several graphs may be given: an
   utterance runs in the shortest length that holds it, a longer one in
   blended overlapping windows (`--litert-window`).
@@ -122,7 +122,7 @@ tokens, § Fusion on RNN-T and TDT, § Matching the existing decoders).
   reruns the English CTC comparisons above, and a check that threads,
   search threads and sorting do not change the bulk program's output.
 
-Every language binding exposes these options: the C and C++ APIs, Python,
+Every [language binding](topics/language-bindings.md) exposes these options: the C and C++ APIs, Python,
 Java and Kotlin, Go, Rust, C#, Pascal, Swift, Node.js, HarmonyOS,
 WebAssembly and Dart. Scorers and search settings are typed fields of a
 `fusion` config on both recognizer configs, the encoder and LiteRT
