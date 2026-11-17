@@ -63,6 +63,10 @@ What the check does not cover is in [its gap](../gaps/parallel-check-coverage.md
   ([GPU decode cost](../gaps/gpu-decode-cost-outside-the-model.md)).
 - Shared executable-driver infrastructure
   ([driver reuse](../gaps/executable-driver-infrastructure.md)).
+- A search batch chosen apart from the model's batch, and transducer
+  searches that share their batch's model and scorer calls as CTC's do
+  ([search batches](../gaps/sketches/encoder-decoder-inflight-scheduling.md#search-batches-apart-from-model-batches),
+  [transducer search batching](../gaps/sketches/transducer-search-batching.md)).
 - Candidate designs: [a measured batch cost model](../gaps/sketches/batch-cost-model.md),
   [encoder-inclusive inflight scheduling](../gaps/sketches/encoder-decoder-inflight-scheduling.md),
   and [the throughput table](../gaps/sketches/throughput-table.md).

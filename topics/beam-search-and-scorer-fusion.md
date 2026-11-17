@@ -1020,7 +1020,8 @@ work is batched across utterances. `CtcInflightDecoder`
 (§ Decoder lifecycle) does this for CTC. The recognizers do a narrower
 thing: the utterances or streams handed to one decode call share each
 scorer call (`DecodeFramesTogether` in `ctc-prefix-search.h`). The
-transducer decoders run one utterance at a time for now.
+transducer decoders run one utterance at a time for now
+([transducer search batching](../gaps/sketches/transducer-search-batching.md)).
 Sharing a call changes no result: with each recording's log probabilities
 computed alone, 40 LibriSpeech test-other recordings searched in calls of
 4 and 8, in two orders, gave the same transcripts as each alone, with no
