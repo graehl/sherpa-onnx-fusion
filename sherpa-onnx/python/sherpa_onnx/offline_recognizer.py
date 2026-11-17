@@ -2029,6 +2029,7 @@ class OfflineRecognizer(object):
         fusion: Optional[FusionConfig] = None,
         options_json: str = "",
         litert_dispatch_dir: str = "",
+        litert_window: str = "",
     ):
         """
         A w2v-BERT 2.0 CTC model exported from transformers. The recognizer
@@ -2068,6 +2069,10 @@ class OfflineRecognizer(object):
           litert_dispatch_dir:
             Directory of LiteRT's accelerator library, for a ``.tflite`` model
             run with ``provider="npu"``.
+          litert_window:
+            ``WINDOW_S:OVERLAP_S:SLACK_S``: a ``.tflite`` model runs an utterance
+            longer than ``WINDOW_S`` in blended overlapping windows of its
+            shortest length of at least ``WINDOW_S``; empty: of its longest.
         """
         self = cls.__new__(cls)
         model_config = OfflineModelConfig(
@@ -2077,6 +2082,7 @@ class OfflineRecognizer(object):
             debug=debug,
             provider=provider,
             litert_dispatch_dir=litert_dispatch_dir,
+            litert_window=litert_window,
         )
 
         recognizer_config = OfflineRecognizerConfig(

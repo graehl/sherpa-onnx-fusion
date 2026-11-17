@@ -535,6 +535,9 @@ static OfflineRecognizerConfig GetOfflineConfig(JNIEnv *env, jobject config,
                               litertDispatchDir, model_config_cls,
                               model_config);
 
+  SHERPA_ONNX_JNI_READ_STRING(ans.model_config.litert_window, litertWindow,
+                              model_config_cls, model_config);
+
   // homophone replacer config
   fid = env->GetFieldID(cls, "hr",
                         "Lcom/k2fsa/sherpa/onnx/HomophoneReplacerConfig;");

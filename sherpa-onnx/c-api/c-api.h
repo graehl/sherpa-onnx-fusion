@@ -1227,6 +1227,11 @@ typedef struct SherpaOnnxOfflineModelConfig {
    * libLiteRtDispatch_GoogleTensor.so.
    */
   const char *litert_dispatch_dir;
+  /**
+   * "WINDOW_S:OVERLAP_S:SLACK_S": how a .tflite model runs an utterance
+   * longer than its window length. NULL: windows of its longest length.
+   */
+  const char *litert_window;
 } SherpaOnnxOfflineModelConfig;
 
 /**

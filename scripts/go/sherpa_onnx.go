@@ -739,6 +739,10 @@ type OfflineModelConfig struct {
 	// and provider npu; for a Pixel, the directory holding
 	// libLiteRtDispatch_GoogleTensor.so.
 	LitertDispatchDir string
+
+	// "WINDOW_S:OVERLAP_S:SLACK_S": how a .tflite model runs an utterance
+	// longer than its window length. Empty: windows of its longest length.
+	LitertWindow string
 }
 
 // Configuration for the offline/non-streaming recognizer.
@@ -892,6 +896,7 @@ func newCOfflineRecognizerConfig(config *OfflineRecognizerConfig) *C.struct_Sher
 
 	c.model_config.w2v_bert_ctc = C.CString(config.ModelConfig.W2vBertCtc)
 	c.model_config.litert_dispatch_dir = C.CString(config.ModelConfig.LitertDispatchDir)
+	c.model_config.litert_window = C.CString(config.ModelConfig.LitertWindow)
 
 	c.lm_config.model = C.CString(config.LmConfig.Model)
 	c.lm_config.scale = C.float(config.LmConfig.Scale)
@@ -973,6 +978,7 @@ func freeCOfflineRecognizerConfig(c *C.struct_SherpaOnnxOfflineRecognizerConfig)
 		&c.model_config.telespeech_ctc,
 		&c.model_config.w2v_bert_ctc,
 		&c.model_config.litert_dispatch_dir,
+		&c.model_config.litert_window,
 		&c.lm_config.model,
 		&c.decoding_method,
 		&c.hotwords_file,

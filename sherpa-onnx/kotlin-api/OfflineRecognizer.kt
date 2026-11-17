@@ -173,6 +173,9 @@ data class OfflineModelConfig(
     // Where LiteRT finds its accelerator library, for a .tflite model run
     // with provider "npu".
     var litertDispatchDir: String = "",
+    // "WINDOW_S:OVERLAP_S:SLACK_S": how a .tflite model runs an utterance
+    // longer than its window length. Empty: windows of its longest length.
+    var litertWindow: String = "",
 )
 
 data class OfflineCtcFstDecoderConfig(

@@ -34,6 +34,9 @@ public class OfflineModelConfig {
     // Where LiteRT finds its accelerator library, for a .tflite model run
     // with provider "npu".
     private final String litertDispatchDir;
+    // "WINDOW_S:OVERLAP_S:SLACK_S": how a .tflite model runs an utterance
+    // longer than its window length. Empty: windows of its longest length.
+    private final String litertWindow;
 
     private OfflineModelConfig(Builder builder) {
         this.transducer = builder.transducer;
@@ -63,6 +66,7 @@ public class OfflineModelConfig {
         this.bpeVocab = builder.bpeVocab;
         this.w2vBertCtc = builder.w2vBertCtc;
         this.litertDispatchDir = builder.litertDispatchDir;
+        this.litertWindow = builder.litertWindow;
     }
 
     public static Builder builder() {
@@ -177,6 +181,10 @@ public class OfflineModelConfig {
         return litertDispatchDir;
     }
 
+    public String getLitertWindow() {
+        return litertWindow;
+    }
+
     public static class Builder {
         private OfflineParaformerModelConfig paraformer = OfflineParaformerModelConfig.builder().build();
         private OfflineTransducerModelConfig transducer = OfflineTransducerModelConfig.builder().build();
@@ -206,6 +214,7 @@ public class OfflineModelConfig {
         private String bpeVocab = "";
         private String w2vBertCtc = "";
         private String litertDispatchDir = "";
+        private String litertWindow = "";
 
         public OfflineModelConfig build() {
             return new OfflineModelConfig(this);
@@ -343,6 +352,11 @@ public class OfflineModelConfig {
 
         public Builder setLitertDispatchDir(String litertDispatchDir) {
             this.litertDispatchDir = litertDispatchDir;
+            return this;
+        }
+
+        public Builder setLitertWindow(String litertWindow) {
+            this.litertWindow = litertWindow;
             return this;
         }
     }

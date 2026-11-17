@@ -718,7 +718,8 @@ public func sherpaOnnxOfflineModelConfig(
   cohereTranscribe: SherpaOnnxOfflineCohereTranscribeModelConfig =
     sherpaOnnxOfflineCohereTranscribeModelConfig(),
   w2vBertCtc: String = "",
-  litertDispatchDir: String = ""
+  litertDispatchDir: String = "",
+  litertWindow: String = ""
 ) -> SherpaOnnxOfflineModelConfig {
   return SherpaOnnxOfflineModelConfig(
     transducer: transducer,
@@ -748,7 +749,8 @@ public func sherpaOnnxOfflineModelConfig(
     qwen3_asr: qwen3Asr,
     cohere_transcribe: cohereTranscribe,
     w2v_bert_ctc: toCPointer(w2vBertCtc),
-    litert_dispatch_dir: toCPointer(litertDispatchDir)
+    litert_dispatch_dir: toCPointer(litertDispatchDir),
+    litert_window: toCPointer(litertWindow)
   )
 }
 

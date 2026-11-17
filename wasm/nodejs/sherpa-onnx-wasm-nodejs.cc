@@ -56,7 +56,7 @@ static_assert(sizeof(SherpaOnnxOfflineModelConfig) ==
                       sizeof(SherpaOnnxOfflineFireRedAsrCtcModelConfig) +
                       sizeof(SherpaOnnxOfflineQwen3ASRModelConfig) +
                       sizeof(SherpaOnnxOfflineCohereTranscribeModelConfig) +
-                      2 * 4,
+                      3 * 4,
 
               "");
 static_assert(sizeof(SherpaOnnxFeatureConfig) == 2 * 4, "");

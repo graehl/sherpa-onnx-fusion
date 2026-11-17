@@ -298,6 +298,7 @@ class OfflineRecognizer {
     c.ref.model.w2vBertCtc = config.model.w2vBertCtc.toNativeUtf8();
     c.ref.model.litertDispatchDir = config.model.litertDispatchDir
         .toNativeUtf8();
+    c.ref.model.litertWindow = config.model.litertWindow.toNativeUtf8();
 
     c.ref.lm.model = config.lm.model.toNativeUtf8();
     c.ref.lm.scale = config.lm.scale;
@@ -337,6 +338,7 @@ class OfflineRecognizer {
     calloc.free(c.ref.hotwordsFile);
     calloc.free(c.ref.decodingMethod);
     calloc.free(c.ref.lm.model);
+    calloc.free(c.ref.model.litertWindow);
     calloc.free(c.ref.model.litertDispatchDir);
     calloc.free(c.ref.model.w2vBertCtc);
     calloc.free(c.ref.model.telespeechCtc);

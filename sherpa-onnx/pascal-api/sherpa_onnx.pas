@@ -593,6 +593,9 @@ type
     { Where LiteRT finds its accelerator library, for a .tflite model run
       with provider 'npu'. }
     LitertDispatchDir: AnsiString;
+    { 'WINDOW_S:OVERLAP_S:SLACK_S': how a .tflite model runs an utterance
+      longer than its window length. Empty: windows of its longest length. }
+    LitertWindow: AnsiString;
     class operator Initialize({$IFDEF FPC}var{$ELSE}out{$ENDIF} Dest: TSherpaOnnxOfflineModelConfig);
     function ToString: AnsiString;
   end;
@@ -1273,6 +1276,7 @@ type
     CohereTranscribe: SherpaOnnxOfflineCohereTranscribeModelConfig;
     W2vBertCtc: PAnsiChar;
     LitertDispatchDir: PAnsiChar;
+    LitertWindow: PAnsiChar;
   end;
 
   SherpaOnnxOfflineCtcFstDecoderConfig = record
@@ -2505,6 +2509,7 @@ begin
      ', CohereTranscribe := %s' +
      ', W2vBertCtc := %s' +
      ', LitertDispatchDir := %s' +
+     ', LitertWindow := %s' +
      ')',
     [Self.Transducer.ToString, Self.Paraformer.ToString,
      Self.NeMoCtc.ToString, Self.Whisper.ToString, Self.Tdnn.ToString,
@@ -2516,7 +2521,7 @@ begin
      Self.Omnilingual.ToString, Self.MedAsr.ToString,
      Self.FunAsrNano.ToString, Self.FireRedAsrCtc.ToString,
      Self.Qwen3Asr.ToString, Self.CohereTranscribe.ToString,
-     Self.W2vBertCtc, Self.LitertDispatchDir
+     Self.W2vBertCtc, Self.LitertDispatchDir, Self.LitertWindow
       ]);
 end;
 
@@ -2642,6 +2647,7 @@ begin
 
   C.ModelConfig.W2vBertCtc := PAnsiChar(Config.ModelConfig.W2vBertCtc);
   C.ModelConfig.LitertDispatchDir := PAnsiChar(Config.ModelConfig.LitertDispatchDir);
+  C.ModelConfig.LitertWindow := PAnsiChar(Config.ModelConfig.LitertWindow);
 
   C.LMConfig.Model := PAnsiChar(Config.LMConfig.Model);
   C.LMConfig.Scale := Config.LMConfig.Scale;

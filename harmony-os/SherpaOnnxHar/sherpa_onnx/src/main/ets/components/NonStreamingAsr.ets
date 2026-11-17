@@ -206,6 +206,8 @@ export class OfflineModelConfig {
   public w2vBertCtc: string = '';
   // Where LiteRT finds its accelerator library (.tflite model, provider 'npu')
   public litertDispatchDir: string = '';
+  // 'WINDOW_S:OVERLAP_S:SLACK_S' for a .tflite model's long utterances
+  public litertWindow: string = '';
 }
 
 export class OfflineLMConfig {
