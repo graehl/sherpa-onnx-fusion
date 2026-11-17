@@ -22,7 +22,9 @@ void NormalizeW2vBertFeatures(float *features, int32_t num_frames,
 
 // A w2v-BERT 2.0 encoder with a CTC head, exported from Hugging Face
 // transformers (Wav2Vec2BertForCTC) with the input "input_features" of
-// shape (N, T, 160) and an output of logits (N, T, vocab_size).
+// shape (N, T, 160) and an output of logits (N, T_out, vocab_size).
+// The optional subsampling_factor metadata includes feature stacking and
+// adapter strides; absent metadata retains the original factor of 2.
 //
 // The input is what transformers' SeamlessM4TFeatureExtractor makes: 80
 // Kaldi filterbank energies per 10 ms from samples scaled to 16 bits, each
@@ -48,13 +50,13 @@ class OfflineW2vBertCtcModel : public OfflineCtcModel {
 
   // features is (N, T, 80), normalized, with features_length int64 (N,);
   // N is 1 unless SupportBatchProcessing(). Returns log probabilities
-  // (N, T / 2, vocab_size) and their lengths, int64 (N,).
+  // (N, T_out, vocab_size) and their lengths, int64 (N,).
   std::vector<Ort::Value> Forward(Ort::Value features,
                                   Ort::Value features_length) override;
 
   int32_t VocabSize() const override;
   OrtAllocator *Allocator() const override;
-  int32_t SubsamplingFactor() const override { return 2; }
+  int32_t SubsamplingFactor() const override;
   bool SupportBatchProcessing() const override;
 
   // Each bin to zero mean and unit variance over the utterance.

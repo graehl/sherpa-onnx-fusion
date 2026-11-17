@@ -122,9 +122,11 @@ class OfflineW2vBertCtcModel::Impl {
       // The model's own count of valid output frames.
       ans.push_back(std::move(out[1]));
     } else {
-      // One output frame per stacked input frame.
+      // The adapter's padded convolutions round up the stacked length.
+      const int32_t stride = subsampling_factor_ / kStack;
       for (int32_t b = 0; b != batch; ++b) {
-        stacked_length[b] = std::min<int64_t>(stacked_length[b], out_frames);
+        stacked_length[b] = std::min<int64_t>(
+            (stacked_length[b] + stride - 1) / stride, out_frames);
       }
       ans.push_back(std::move(length));
     }
@@ -132,11 +134,24 @@ class OfflineW2vBertCtcModel::Impl {
   }
 
   bool TakesLengths() const { return takes_lengths_; }
+  int32_t SubsamplingFactor() const { return subsampling_factor_; }
   int32_t VocabSize() const { return vocab_size_; }
   OrtAllocator *Allocator() { return allocator_; }
 
  private:
   void Init() {
+    Ort::ModelMetadata meta_data = sess_->GetModelMetadata();
+    Ort::AllocatorWithDefaultOptions allocator;
+    // Include both feature stacking and any strided adapter layers.
+    SHERPA_ONNX_READ_META_DATA_WITH_DEFAULT(subsampling_factor_,
+                                            "subsampling_factor", kStack);
+    if (subsampling_factor_ < kStack || subsampling_factor_ % kStack != 0) {
+      SHERPA_ONNX_LOGE(
+          "w2v-BERT subsampling_factor must be a positive "
+          "multiple of %d",
+          kStack);
+      SHERPA_ONNX_EXIT(-1);
+    }
     GetInputNames(sess_.get(), &input_names_, &input_names_ptr_);
     GetOutputNames(sess_.get(), &output_names_, &output_names_ptr_);
     // The first input is the features. A second one is each utterance's
@@ -168,6 +183,7 @@ class OfflineW2vBertCtcModel::Impl {
   std::vector<const char *> output_names_ptr_;
 
   int32_t vocab_size_ = 0;
+  int32_t subsampling_factor_ = kStack;
   bool takes_lengths_ = false;
 };
 
@@ -191,6 +207,10 @@ bool OfflineW2vBertCtcModel::SupportBatchProcessing() const {
 }
 
 int32_t OfflineW2vBertCtcModel::VocabSize() const { return impl_->VocabSize(); }
+
+int32_t OfflineW2vBertCtcModel::SubsamplingFactor() const {
+  return impl_->SubsamplingFactor();
+}
 
 OrtAllocator *OfflineW2vBertCtcModel::Allocator() const {
   return impl_->Allocator();

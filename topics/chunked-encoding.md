@@ -19,7 +19,8 @@ Moonshine, Canary and the like), whose decoders attend to every encoder
 frame. A LiteRT `.tflite` model windows itself with the same scheduler
 and blend (see [LiteRT](#litert-models)).
 
-It is off by default: with no `--encoder.*` option set, every utterance
+The generic encoder (the shared path for the models other than LiteRT)
+is off by default: with no `--encoder.*` option set, every utterance
 is encoded whole, as upstream does. With windows on, an utterance no
 longer than the window is still encoded whole. With no padding options,
 in a call holding only such utterances it gets exactly the output it gets
@@ -199,6 +200,12 @@ A window's output frame count is checked against the subsampling
 factor (within four output frames, for front-end edge loss); a model
 whose `SubsamplingFactor` is wrong fails loudly instead of misaligning
 the join.
+
+A w2v-BERT ONNX export with strided adapter layers must set
+`subsampling_factor` metadata to its total stride from 10 ms filterbank
+frames, including the factor of two from feature stacking. Without that
+metadata, the runtime assumes two. The value controls window alignment
+and timestamps; an export with one adapter of stride two needs four.
 
 ## Evidence
 
