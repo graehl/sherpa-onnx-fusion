@@ -50,6 +50,38 @@ or later with `soundfile` installed.
 
 ## Adding a claim
 
+### Long-recording encoder windows
+
+`compare_encoder_windows.py` compares whole-recording encoding (window 0)
+with 20, 15 and 10 s overlapping windows, using greedy decoding, 3 s
+overlap and 1 s slack. It accepts the validation parquet from
+[`distil-whisper/tedlium-long-form`](https://huggingface.co/datasets/distil-whisper/tedlium-long-form),
+file `data/validation-00000-of-00001-9ed099229d0cbe10.parquet`, pinned to
+SHA-256 `239c4a2874de535f3be7d498bf98abbe7db74512d00a92dda8e14e05c86ade40`.
+These eight talks were reconstructed by concatenating the original
+transcribed segments; untranscribed gaps are absent. They are development
+evidence, not an untouched full-recording test set.
+
+```bash
+uv run repro/compare_encoder_windows.py --data validation.parquet \
+  --model ctc --model-dir /path/to/sherpa-onnx-zipformer-ctc-en-2023-10-02 \
+  --output /path/to/new-results --provider cuda
+```
+
+For the small English zipformer transducer, use `--model transducer`
+and its model directory. The pinned model archives are in `claims.toml`.
+Run under a memory cap, particularly for whole-recording encoding. The
+output directory must be new; results include every hypothesis/reference,
+word-edit count, decode time, command, model hashes and executable hash.
+Normalization removes bracketed annotations and uses the existing recipe's
+case-insensitive ASCII words with apostrophes. RTF is summed decode time
+over summed audio duration; model loading is excluded. Each talk and
+condition starts a fresh process, so timing includes first-call overhead
+and is diagnostic rather than a warmed serving benchmark. Eight talks do
+not establish significance across speakers or recording types.
+
+### Other claims
+
 Add its downloads under `[artifacts.<name>]` with a URL and SHA-256, then a
 `[claims.<name>]` table naming those artifacts, the recognizer's flags, the
 test set, and one `[[claims.<name>.arms]]` per configuration. A test set is
