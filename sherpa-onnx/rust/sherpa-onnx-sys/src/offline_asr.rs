@@ -165,6 +165,25 @@ pub struct OfflineCohereTranscribeModelConfig {
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
+pub struct OfflineEncoderWindowConfig {
+    pub seconds: c_float,
+    pub overlap: c_float,
+    pub slack: c_float,
+    pub normalize: *const c_char,
+    pub weight: *const c_char,
+    pub blend: *const c_char,
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct OfflineEncoderConfig {
+    pub window: OfflineEncoderWindowConfig,
+    pub lengths: *const c_char,
+    pub pad_to: c_float,
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
 pub struct OfflineModelConfig {
     pub transducer: OfflineTransducerModelConfig,
     pub paraformer: OfflineParaformerModelConfig,
@@ -197,6 +216,7 @@ pub struct OfflineModelConfig {
     pub w2v_bert_ctc: *const c_char,
     pub litert_dispatch_dir: *const c_char,
     pub litert_window: *const c_char,
+    pub encoder: OfflineEncoderConfig,
 }
 
 #[repr(C)]

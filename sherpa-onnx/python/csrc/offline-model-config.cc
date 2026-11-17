@@ -11,15 +11,16 @@
 #include "sherpa-onnx/python/csrc/offline-canary-model-config.h"
 #include "sherpa-onnx/python/csrc/offline-cohere-transcribe-model-config.h"
 #include "sherpa-onnx/python/csrc/offline-dolphin-model-config.h"
+#include "sherpa-onnx/python/csrc/offline-encoder-config.h"
 #include "sherpa-onnx/python/csrc/offline-fire-red-asr-ctc-model-config.h"
 #include "sherpa-onnx/python/csrc/offline-fire-red-asr-model-config.h"
 #include "sherpa-onnx/python/csrc/offline-funasr-nano-model-config.h"
 #include "sherpa-onnx/python/csrc/offline-medasr-ctc-model-config.h"
-#include "sherpa-onnx/python/csrc/offline-qwen3-asr-model-config.h"
 #include "sherpa-onnx/python/csrc/offline-moonshine-model-config.h"
 #include "sherpa-onnx/python/csrc/offline-nemo-enc-dec-ctc-model-config.h"
 #include "sherpa-onnx/python/csrc/offline-omnilingual-asr-ctc-model-config.h"
 #include "sherpa-onnx/python/csrc/offline-paraformer-model-config.h"
+#include "sherpa-onnx/python/csrc/offline-qwen3-asr-model-config.h"
 #include "sherpa-onnx/python/csrc/offline-sense-voice-model-config.h"
 #include "sherpa-onnx/python/csrc/offline-tdnn-model-config.h"
 #include "sherpa-onnx/python/csrc/offline-transducer-model-config.h"
@@ -102,6 +103,9 @@ Args:
     ``WINDOW_S:OVERLAP_S:SLACK_S``: a ``.tflite`` model runs an utterance
     longer than ``WINDOW_S`` in blended overlapping windows of its shortest
     length of at least ``WINDOW_S``; empty: of its longest.
+  encoder:
+    An :class:`OfflineEncoderConfig`: how the encoder runs, e.g. a long
+    utterance in windows.
 )doc";
 
 void PybindOfflineModelConfig(py::module *m) {
@@ -123,6 +127,7 @@ void PybindOfflineModelConfig(py::module *m) {
   PybindOfflineMedAsrCtcModelConfig(m);
   PybindOfflineFireRedAsrCtcModelConfig(m);
   PybindOfflineQwen3ASRModelConfig(m);
+  PybindOfflineEncoderConfig(m);
 
   using PyClass = OfflineModelConfig;
   py::class_<PyClass>(*m, "OfflineModelConfig")
@@ -152,7 +157,8 @@ void PybindOfflineModelConfig(py::module *m) {
                  const std::string &modeling_unit, const std::string &bpe_vocab,
                  const std::string &w2v_bert_ctc,
                  const std::string &litert_dispatch_dir,
-                 const std::string &litert_window) {
+                 const std::string &litert_window,
+                 const OfflineEncoderConfig &encoder) {
                 PyClass c(transducer, paraformer, nemo_ctc, whisper,
                           fire_red_asr, tdnn, zipformer_ctc, wenet_ctc,
                           sense_voice, moonshine, dolphin, canary,
@@ -163,6 +169,7 @@ void PybindOfflineModelConfig(py::module *m) {
                 c.w2v_bert_ctc = w2v_bert_ctc;
                 c.litert_dispatch_dir = litert_dispatch_dir;
                 c.litert_window = litert_window;
+                c.encoder = encoder;
                 return c;
               }),
           py::arg("transducer") = OfflineTransducerModelConfig(),
@@ -188,7 +195,9 @@ void PybindOfflineModelConfig(py::module *m) {
           py::arg("provider") = "cpu", py::arg("model_type") = "",
           py::arg("modeling_unit") = "cjkchar", py::arg("bpe_vocab") = "",
           py::arg("w2v_bert_ctc") = "", py::arg("litert_dispatch_dir") = "",
-          py::arg("litert_window") = "", kOfflineModelConfigInitDoc)
+          py::arg("litert_window") = "",
+          py::arg("encoder") = OfflineEncoderConfig{},
+          kOfflineModelConfigInitDoc)
       .def_readwrite("transducer", &PyClass::transducer)
       .def_readwrite("paraformer", &PyClass::paraformer)
       .def_readwrite("nemo_ctc", &PyClass::nemo_ctc)
@@ -211,6 +220,7 @@ void PybindOfflineModelConfig(py::module *m) {
       .def_readwrite("w2v_bert_ctc", &PyClass::w2v_bert_ctc)
       .def_readwrite("litert_dispatch_dir", &PyClass::litert_dispatch_dir)
       .def_readwrite("litert_window", &PyClass::litert_window)
+      .def_readwrite("encoder", &PyClass::encoder)
       .def_readwrite("tokens", &PyClass::tokens)
       .def_readwrite("num_threads", &PyClass::num_threads)
       .def_readwrite("debug", &PyClass::debug)

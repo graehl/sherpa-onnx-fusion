@@ -598,6 +598,113 @@ class OfflineLMConfig {
   final double scale;
 }
 
+/// How an offline encoder runs an utterance longer than a window: in
+/// overlapping windows whose outputs are blended per output frame.
+///
+/// Supported for the offline CTC models, the zipformer transducer, and NeMo
+/// RNN-T and TDT. A zero field takes the default given beside it; set an
+/// explicit zero through `optionsJson`, e.g.
+/// `{"encoder": {"window": {"slack": 0}}}`.
+class OfflineEncoderWindowConfig {
+  const OfflineEncoderWindowConfig({
+    this.seconds = 0.0,
+    this.overlap = 3.0,
+    this.slack = 1.0,
+    this.normalize = 'window',
+    this.weight = 'center',
+    this.blend = 'log',
+  });
+
+  factory OfflineEncoderWindowConfig.fromJson(Map<String, dynamic> json) {
+    return OfflineEncoderWindowConfig(
+      seconds: (json['seconds'] as num?)?.toDouble() ?? 0.0,
+      overlap: (json['overlap'] as num?)?.toDouble() ?? 3.0,
+      slack: (json['slack'] as num?)?.toDouble() ?? 1.0,
+      normalize: json['normalize'] as String? ?? 'window',
+      weight: json['weight'] as String? ?? 'center',
+      blend: json['blend'] as String? ?? 'log',
+    );
+  }
+
+  @override
+  String toString() {
+    return 'OfflineEncoderWindowConfig(seconds: $seconds, overlap: $overlap, slack: $slack, normalize: $normalize, weight: $weight, blend: $blend)';
+  }
+
+  Map<String, dynamic> toJson() => {
+    'seconds': seconds,
+    'overlap': overlap,
+    'slack': slack,
+    'normalize': normalize,
+    'weight': weight,
+    'blend': blend,
+  };
+
+  /// Window length in seconds. 0: every utterance is encoded whole.
+  final double seconds;
+
+  /// The least overlap of neighbouring windows, in seconds.
+  final double overlap;
+
+  /// How far an interior window may move, in seconds, to put its edges where
+  /// the audio is quietest.
+  final double slack;
+
+  /// Scope of input normalization: `window` or `utterance`.
+  final String normalize;
+
+  /// `center`: a frame is the weighted average of the windows that cover
+  /// it; `cut`: it is taken from the window in which it is farthest from an
+  /// edge.
+  final String weight;
+
+  /// CTC models: what `center` averages, `log` probabilities or `prob`.
+  final String blend;
+}
+
+/// How an offline model's encoder runs.
+class OfflineEncoderConfig {
+  const OfflineEncoderConfig({
+    this.window = const OfflineEncoderWindowConfig(),
+    this.lengths = '',
+    this.padTo = 0.0,
+  });
+
+  factory OfflineEncoderConfig.fromJson(Map<String, dynamic> json) {
+    return OfflineEncoderConfig(
+      window: json['window'] != null
+          ? OfflineEncoderWindowConfig.fromJson(
+              json['window'] as Map<String, dynamic>,
+            )
+          : const OfflineEncoderWindowConfig(),
+      lengths: json['lengths'] as String? ?? '',
+      padTo: (json['padTo'] as num?)?.toDouble() ?? 0.0,
+    );
+  }
+
+  @override
+  String toString() {
+    return 'OfflineEncoderConfig(window: $window, lengths: $lengths, padTo: $padTo)';
+  }
+
+  Map<String, dynamic> toJson() => {
+    'window': window.toJson(),
+    'lengths': lengths,
+    'padTo': padTo,
+  };
+
+  /// Encoding a long utterance in windows.
+  final OfflineEncoderWindowConfig window;
+
+  /// Comma-separated input lengths in seconds an encoder call may have: an
+  /// input is padded to the shortest that holds it. Needs a model that takes
+  /// a padded batch.
+  final String lengths;
+
+  /// Else pad an input to a multiple of this many seconds. 0: no padding.
+  final double padTo;
+}
+
 /// Aggregate model configuration for offline recognition.
 ///
 /// In typical use, configure exactly one model family and set the shared
@@ -636,6 +743,7 @@ class OfflineModelConfig {
     this.w2vBertCtc = '',
     this.litertDispatchDir = '',
     this.litertWindow = '',
+    this.encoder = const OfflineEncoderConfig(),
   });
 
   factory OfflineModelConfig.fromJson(Map<String, dynamic> json) {
@@ -741,12 +849,17 @@ class OfflineModelConfig {
       w2vBertCtc: json['w2vBertCtc'] as String? ?? '',
       litertDispatchDir: json['litertDispatchDir'] as String? ?? '',
       litertWindow: json['litertWindow'] as String? ?? '',
+      encoder: json['encoder'] != null
+          ? OfflineEncoderConfig.fromJson(
+              json['encoder'] as Map<String, dynamic>,
+            )
+          : const OfflineEncoderConfig(),
     );
   }
 
   @override
   String toString() {
-    return 'OfflineModelConfig(transducer: $transducer, paraformer: $paraformer, nemoCtc: $nemoCtc, whisper: $whisper, tdnn: $tdnn, senseVoice: $senseVoice, moonshine: $moonshine, fireRedAsr: $fireRedAsr, dolphin: $dolphin, zipformerCtc: $zipformerCtc, canary: $canary, wenetCtc: $wenetCtc, omnilingual: $omnilingual, medasr: $medasr, funasrNano: $funasrNano, fireRedAsrCtc: $fireRedAsrCtc, qwen3Asr: $qwen3Asr, cohereTranscribe: $cohereTranscribe, tokens: $tokens, numThreads: $numThreads, debug: $debug, provider: $provider, modelType: $modelType, modelingUnit: $modelingUnit, bpeVocab: $bpeVocab, telespeechCtc: $telespeechCtc, w2vBertCtc: $w2vBertCtc, litertDispatchDir: $litertDispatchDir, litertWindow: $litertWindow)';
+    return 'OfflineModelConfig(transducer: $transducer, paraformer: $paraformer, nemoCtc: $nemoCtc, whisper: $whisper, tdnn: $tdnn, senseVoice: $senseVoice, moonshine: $moonshine, fireRedAsr: $fireRedAsr, dolphin: $dolphin, zipformerCtc: $zipformerCtc, canary: $canary, wenetCtc: $wenetCtc, omnilingual: $omnilingual, medasr: $medasr, funasrNano: $funasrNano, fireRedAsrCtc: $fireRedAsrCtc, qwen3Asr: $qwen3Asr, cohereTranscribe: $cohereTranscribe, tokens: $tokens, numThreads: $numThreads, debug: $debug, provider: $provider, modelType: $modelType, modelingUnit: $modelingUnit, bpeVocab: $bpeVocab, telespeechCtc: $telespeechCtc, w2vBertCtc: $w2vBertCtc, litertDispatchDir: $litertDispatchDir, litertWindow: $litertWindow, encoder: $encoder)';
   }
 
   Map<String, dynamic> toJson() => {
@@ -779,6 +892,7 @@ class OfflineModelConfig {
     'w2vBertCtc': w2vBertCtc,
     'litertDispatchDir': litertDispatchDir,
     'litertWindow': litertWindow,
+    'encoder': encoder.toJson(),
   };
 
   final OfflineTransducerModelConfig transducer;
@@ -820,6 +934,9 @@ class OfflineModelConfig {
   /// `WINDOW_S:OVERLAP_S:SLACK_S`: how a .tflite model runs an utterance
   /// longer than its window length. Empty: windows of its longest length.
   final String litertWindow;
+
+  /// How the encoder runs, for example a long utterance in windows.
+  final OfflineEncoderConfig encoder;
 }
 
 /// Top-level configuration for [OfflineRecognizer].

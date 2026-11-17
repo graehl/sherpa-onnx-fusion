@@ -300,6 +300,37 @@
  */
 
 /**
+ * How an offline encoder runs an utterance longer than a window: in
+ * overlapping windows whose outputs are blended per output frame. An omitted
+ * or zero field takes the default given beside it; set an explicit zero
+ * through the recognizer config's optionsJson.
+ * @typedef {Object} OfflineEncoderWindowConfig
+ * @property {number} [seconds] - Window length. Default 0: every utterance
+ *   is encoded whole.
+ * @property {number} [overlap] - The least overlap of neighbouring windows,
+ *   in seconds. Default 3.
+ * @property {number} [slack] - How far an interior window may move, in
+ *   seconds, to put its edges where the audio is quietest. Default 1.
+ * @property {string} [normalize] - Scope of input normalization: 'window'
+ *   (default) or 'utterance'.
+ * @property {string} [weight] - 'center' (default): a frame is the weighted
+ *   average of the windows that cover it; 'cut': it is taken from the window
+ *   in which it is farthest from an edge.
+ * @property {string} [blend] - CTC models: what 'center' averages, 'log'
+ *   (default) probabilities or 'prob'.
+ */
+
+/**
+ * How an offline model's encoder runs.
+ * @typedef {Object} OfflineEncoderConfig
+ * @property {OfflineEncoderWindowConfig} [window]
+ * @property {string} [lengths] - Comma-separated input lengths in seconds an
+ *   encoder call may have: an input is padded to the shortest that holds it.
+ * @property {number} [padTo] - Else pad an input to a multiple of this many
+ *   seconds. Default 0: no padding.
+ */
+
+/**
  * Offline model config.
  * @typedef {Object} OfflineModelConfig
  * @property {OfflineTransducerModelConfig} [transducer]
@@ -327,6 +358,8 @@
  *   accelerator library, used with a .tflite model and provider 'npu'.
  * @property {string} [litertWindow] - 'WINDOW_S:OVERLAP_S:SLACK_S': how a
  *   .tflite model runs an utterance longer than its window length.
+ * @property {OfflineEncoderConfig} [encoder] - How the encoder runs, for
+ *   example a long utterance in windows.
  */
 
 /**

@@ -562,6 +562,29 @@ type
     function ToString: AnsiString;
   end;
 
+  { How an offline encoder runs an utterance longer than a window: in
+    overlapping windows whose outputs are blended per output frame. }
+  TSherpaOnnxOfflineEncoderWindowConfig = record
+    Seconds: Single; { 0: every utterance is encoded whole }
+    Overlap: Single; { the least overlap of neighbouring windows, seconds }
+    Slack: Single; { how far an interior window may move to a quiet edge }
+    Normalize: AnsiString; { 'window' or 'utterance' }
+    Weight: AnsiString; { 'center' or 'cut' }
+    Blend: AnsiString; { CTC models: 'log' or 'prob' }
+    function ToString: AnsiString;
+    class operator Initialize({$IFDEF FPC}var{$ELSE}out{$ENDIF} Dest: TSherpaOnnxOfflineEncoderWindowConfig);
+  end;
+
+  { How an offline model's encoder runs. }
+  TSherpaOnnxOfflineEncoderConfig = record
+    Window: TSherpaOnnxOfflineEncoderWindowConfig;
+    { Comma-separated input lengths in seconds an encoder call may have. }
+    Lengths: AnsiString;
+    { Else pad an input to a multiple of this many seconds. 0: no padding. }
+    PadTo: Single;
+    function ToString: AnsiString;
+  end;
+
   TSherpaOnnxOfflineModelConfig = record
     Transducer: TSherpaOnnxOfflineTransducerModelConfig;
     Paraformer: TSherpaOnnxOfflineParaformerModelConfig;
@@ -596,6 +619,7 @@ type
     { 'WINDOW_S:OVERLAP_S:SLACK_S': how a .tflite model runs an utterance
       longer than its window length. Empty: windows of its longest length. }
     LitertWindow: AnsiString;
+    Encoder: TSherpaOnnxOfflineEncoderConfig;
     class operator Initialize({$IFDEF FPC}var{$ELSE}out{$ENDIF} Dest: TSherpaOnnxOfflineModelConfig);
     function ToString: AnsiString;
   end;
@@ -1247,6 +1271,19 @@ type
     Language: PAnsiChar;
     UseItn: cint32;
   end;
+  SherpaOnnxOfflineEncoderWindowConfig = record
+    Seconds: cfloat;
+    Overlap: cfloat;
+    Slack: cfloat;
+    Normalize: PAnsiChar;
+    Weight: PAnsiChar;
+    Blend: PAnsiChar;
+  end;
+  SherpaOnnxOfflineEncoderConfig = record
+    Window: SherpaOnnxOfflineEncoderWindowConfig;
+    Lengths: PAnsiChar;
+    PadTo: cfloat;
+  end;
   SherpaOnnxOfflineModelConfig = record
     Transducer: SherpaOnnxOfflineTransducerModelConfig;
     Paraformer: SherpaOnnxOfflineParaformerModelConfig;
@@ -1277,6 +1314,7 @@ type
     W2vBertCtc: PAnsiChar;
     LitertDispatchDir: PAnsiChar;
     LitertWindow: PAnsiChar;
+    Encoder: SherpaOnnxOfflineEncoderConfig;
   end;
 
   SherpaOnnxOfflineCtcFstDecoderConfig = record
@@ -2510,6 +2548,7 @@ begin
      ', W2vBertCtc := %s' +
      ', LitertDispatchDir := %s' +
      ', LitertWindow := %s' +
+     ', Encoder := %s' +
      ')',
     [Self.Transducer.ToString, Self.Paraformer.ToString,
      Self.NeMoCtc.ToString, Self.Whisper.ToString, Self.Tdnn.ToString,
@@ -2521,7 +2560,8 @@ begin
      Self.Omnilingual.ToString, Self.MedAsr.ToString,
      Self.FunAsrNano.ToString, Self.FireRedAsrCtc.ToString,
      Self.Qwen3Asr.ToString, Self.CohereTranscribe.ToString,
-     Self.W2vBertCtc, Self.LitertDispatchDir, Self.LitertWindow
+     Self.W2vBertCtc, Self.LitertDispatchDir, Self.LitertWindow,
+     Self.Encoder.ToString
       ]);
 end;
 
@@ -2648,6 +2688,15 @@ begin
   C.ModelConfig.W2vBertCtc := PAnsiChar(Config.ModelConfig.W2vBertCtc);
   C.ModelConfig.LitertDispatchDir := PAnsiChar(Config.ModelConfig.LitertDispatchDir);
   C.ModelConfig.LitertWindow := PAnsiChar(Config.ModelConfig.LitertWindow);
+
+  C.ModelConfig.Encoder.Window.Seconds := Config.ModelConfig.Encoder.Window.Seconds;
+  C.ModelConfig.Encoder.Window.Overlap := Config.ModelConfig.Encoder.Window.Overlap;
+  C.ModelConfig.Encoder.Window.Slack := Config.ModelConfig.Encoder.Window.Slack;
+  C.ModelConfig.Encoder.Window.Normalize := PAnsiChar(Config.ModelConfig.Encoder.Window.Normalize);
+  C.ModelConfig.Encoder.Window.Weight := PAnsiChar(Config.ModelConfig.Encoder.Window.Weight);
+  C.ModelConfig.Encoder.Window.Blend := PAnsiChar(Config.ModelConfig.Encoder.Window.Blend);
+  C.ModelConfig.Encoder.Lengths := PAnsiChar(Config.ModelConfig.Encoder.Lengths);
+  C.ModelConfig.Encoder.PadTo := Config.ModelConfig.Encoder.PadTo;
 
   C.LMConfig.Model := PAnsiChar(Config.LMConfig.Model);
   C.LMConfig.Scale := Config.LMConfig.Scale;
@@ -3099,6 +3148,32 @@ begin
   Dest.MaxActivePaths := 4;
   Dest.HotwordsScore := 1.5;
   Dest.BlankPenalty := 0;
+end;
+
+class operator TSherpaOnnxOfflineEncoderWindowConfig.Initialize({$IFDEF FPC}var{$ELSE}out{$ENDIF} Dest: TSherpaOnnxOfflineEncoderWindowConfig);
+begin
+  Dest.Seconds := 0;
+  Dest.Overlap := 3;
+  Dest.Slack := 1;
+  Dest.Normalize := 'window';
+  Dest.Weight := 'center';
+  Dest.Blend := 'log';
+end;
+
+function TSherpaOnnxOfflineEncoderWindowConfig.ToString: AnsiString;
+begin
+  Result := Format('TSherpaOnnxOfflineEncoderWindowConfig(Seconds := %.3f, ' +
+    'Overlap := %.3f, Slack := %.3f, Normalize := %s, Weight := %s, ' +
+    'Blend := %s)',
+    [Self.Seconds, Self.Overlap, Self.Slack, Self.Normalize, Self.Weight,
+     Self.Blend]);
+end;
+
+function TSherpaOnnxOfflineEncoderConfig.ToString: AnsiString;
+begin
+  Result := Format('TSherpaOnnxOfflineEncoderConfig(Window := %s, ' +
+    'Lengths := %s, PadTo := %.3f)',
+    [Self.Window.ToString, Self.Lengths, Self.PadTo]);
 end;
 
 class operator TSherpaOnnxScorerConfig.Initialize({$IFDEF FPC}var{$ELSE}out{$ENDIF} Dest: TSherpaOnnxScorerConfig);

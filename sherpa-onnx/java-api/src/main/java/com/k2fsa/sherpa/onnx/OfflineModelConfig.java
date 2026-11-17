@@ -37,6 +37,8 @@ public class OfflineModelConfig {
     // "WINDOW_S:OVERLAP_S:SLACK_S": how a .tflite model runs an utterance
     // longer than its window length. Empty: windows of its longest length.
     private final String litertWindow;
+    // How the encoder runs, for example a long utterance in windows.
+    private final OfflineEncoderConfig encoder;
 
     private OfflineModelConfig(Builder builder) {
         this.transducer = builder.transducer;
@@ -67,6 +69,7 @@ public class OfflineModelConfig {
         this.w2vBertCtc = builder.w2vBertCtc;
         this.litertDispatchDir = builder.litertDispatchDir;
         this.litertWindow = builder.litertWindow;
+        this.encoder = builder.encoder;
     }
 
     public static Builder builder() {
@@ -185,6 +188,10 @@ public class OfflineModelConfig {
         return litertWindow;
     }
 
+    public OfflineEncoderConfig getEncoder() {
+        return encoder;
+    }
+
     public static class Builder {
         private OfflineParaformerModelConfig paraformer = OfflineParaformerModelConfig.builder().build();
         private OfflineTransducerModelConfig transducer = OfflineTransducerModelConfig.builder().build();
@@ -215,6 +222,7 @@ public class OfflineModelConfig {
         private String w2vBertCtc = "";
         private String litertDispatchDir = "";
         private String litertWindow = "";
+        private OfflineEncoderConfig encoder = OfflineEncoderConfig.builder().build();
 
         public OfflineModelConfig build() {
             return new OfflineModelConfig(this);
@@ -357,6 +365,11 @@ public class OfflineModelConfig {
 
         public Builder setLitertWindow(String litertWindow) {
             this.litertWindow = litertWindow;
+            return this;
+        }
+
+        public Builder setEncoder(OfflineEncoderConfig encoder) {
+            this.encoder = encoder;
             return this;
         }
     }

@@ -682,6 +682,38 @@ public func sherpaOnnxOfflineFunASRNanoModelConfig(
   )
 }
 
+/// How an offline encoder runs an utterance longer than a window: in
+/// overlapping windows whose outputs are blended per output frame.
+/// seconds 0 encodes every utterance whole.
+public func sherpaOnnxOfflineEncoderWindowConfig(
+  seconds: Float = 0,
+  overlap: Float = 3,
+  slack: Float = 1,
+  normalize: String = "window",
+  weight: String = "center",
+  blend: String = "log"
+) -> SherpaOnnxOfflineEncoderWindowConfig {
+  return SherpaOnnxOfflineEncoderWindowConfig(
+    seconds: seconds,
+    overlap: overlap,
+    slack: slack,
+    normalize: toCPointer(normalize),
+    weight: toCPointer(weight),
+    blend: toCPointer(blend))
+}
+
+/// How an offline model's encoder runs.
+public func sherpaOnnxOfflineEncoderConfig(
+  window: SherpaOnnxOfflineEncoderWindowConfig = sherpaOnnxOfflineEncoderWindowConfig(),
+  lengths: String = "",
+  padTo: Float = 0
+) -> SherpaOnnxOfflineEncoderConfig {
+  return SherpaOnnxOfflineEncoderConfig(
+    window: window,
+    lengths: toCPointer(lengths),
+    pad_to: padTo)
+}
+
 public func sherpaOnnxOfflineModelConfig(
   tokens: String,
   transducer: SherpaOnnxOfflineTransducerModelConfig = sherpaOnnxOfflineTransducerModelConfig(),
@@ -719,7 +751,8 @@ public func sherpaOnnxOfflineModelConfig(
     sherpaOnnxOfflineCohereTranscribeModelConfig(),
   w2vBertCtc: String = "",
   litertDispatchDir: String = "",
-  litertWindow: String = ""
+  litertWindow: String = "",
+  encoder: SherpaOnnxOfflineEncoderConfig = sherpaOnnxOfflineEncoderConfig()
 ) -> SherpaOnnxOfflineModelConfig {
   return SherpaOnnxOfflineModelConfig(
     transducer: transducer,
@@ -750,7 +783,8 @@ public func sherpaOnnxOfflineModelConfig(
     cohere_transcribe: cohereTranscribe,
     w2v_bert_ctc: toCPointer(w2vBertCtc),
     litert_dispatch_dir: toCPointer(litertDispatchDir),
-    litert_window: toCPointer(litertWindow)
+    litert_window: toCPointer(litertWindow),
+    encoder: encoder
   )
 }
 

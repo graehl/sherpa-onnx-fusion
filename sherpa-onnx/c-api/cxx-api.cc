@@ -330,6 +330,15 @@ static SherpaOnnxOfflineRecognizerConfig Convert(
   c.model_config.litert_dispatch_dir =
       config.model_config.litert_dispatch_dir.c_str();
   c.model_config.litert_window = config.model_config.litert_window.c_str();
+  const auto &window = config.model_config.encoder.window;
+  c.model_config.encoder.window.seconds = window.seconds;
+  c.model_config.encoder.window.overlap = window.overlap;
+  c.model_config.encoder.window.slack = window.slack;
+  c.model_config.encoder.window.normalize = window.normalize.c_str();
+  c.model_config.encoder.window.weight = window.weight.c_str();
+  c.model_config.encoder.window.blend = window.blend.c_str();
+  c.model_config.encoder.lengths = config.model_config.encoder.lengths.c_str();
+  c.model_config.encoder.pad_to = config.model_config.encoder.pad_to;
 
   c.model_config.sense_voice.model =
       config.model_config.sense_voice.model.c_str();

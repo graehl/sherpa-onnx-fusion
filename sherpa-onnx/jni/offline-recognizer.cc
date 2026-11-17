@@ -538,6 +538,41 @@ static OfflineRecognizerConfig GetOfflineConfig(JNIEnv *env, jobject config,
   SHERPA_ONNX_JNI_READ_STRING(ans.model_config.litert_window, litertWindow,
                               model_config_cls, model_config);
 
+  // encoder
+  fid = env->GetFieldID(model_config_cls, "encoder",
+                        "Lcom/k2fsa/sherpa/onnx/OfflineEncoderConfig;");
+  jobject encoder_config = env->GetObjectField(model_config, fid);
+  jclass encoder_config_cls = env->GetObjectClass(encoder_config);
+
+  SHERPA_ONNX_JNI_READ_STRING(ans.model_config.encoder.lengths, lengths,
+                              encoder_config_cls, encoder_config);
+
+  SHERPA_ONNX_JNI_READ_FLOAT(ans.model_config.encoder.pad_to, padTo,
+                             encoder_config_cls, encoder_config);
+
+  fid = env->GetFieldID(encoder_config_cls, "window",
+                        "Lcom/k2fsa/sherpa/onnx/OfflineEncoderWindowConfig;");
+  jobject window_config = env->GetObjectField(encoder_config, fid);
+  jclass window_config_cls = env->GetObjectClass(window_config);
+
+  SHERPA_ONNX_JNI_READ_FLOAT(ans.model_config.encoder.window.seconds, seconds,
+                             window_config_cls, window_config);
+
+  SHERPA_ONNX_JNI_READ_FLOAT(ans.model_config.encoder.window.overlap, overlap,
+                             window_config_cls, window_config);
+
+  SHERPA_ONNX_JNI_READ_FLOAT(ans.model_config.encoder.window.slack, slack,
+                             window_config_cls, window_config);
+
+  SHERPA_ONNX_JNI_READ_STRING(ans.model_config.encoder.window.normalize,
+                              normalize, window_config_cls, window_config);
+
+  SHERPA_ONNX_JNI_READ_STRING(ans.model_config.encoder.window.weight, weight,
+                              window_config_cls, window_config);
+
+  SHERPA_ONNX_JNI_READ_STRING(ans.model_config.encoder.window.blend, blend,
+                              window_config_cls, window_config);
+
   // homophone replacer config
   fid = env->GetFieldID(cls, "hr",
                         "Lcom/k2fsa/sherpa/onnx/HomophoneReplacerConfig;");

@@ -696,6 +696,31 @@ type OfflineLMConfig struct {
 	Scale float32 // scale for LM score
 }
 
+// How an offline encoder runs an utterance longer than a window: in
+// overlapping windows whose outputs are blended per output frame. Supported
+// for the offline CTC models, the zipformer transducer, and NeMo RNN-T and
+// TDT. A zero or empty field takes the default given beside it; set an
+// explicit zero through OptionsJson, e.g. {"encoder": {"window": {"slack": 0}}}.
+type OfflineEncoderWindowConfig struct {
+	Seconds   float32 // Window length in seconds. 0: every utterance is encoded whole
+	Overlap   float32 // The least overlap of neighbouring windows, in seconds. 0 means 3
+	Slack     float32 // How far an interior window may move to a quiet edge, in seconds. 0 means 1
+	Normalize string  // Scope of input normalization: window (default) or utterance
+	Weight    string  // center (default): average the covering windows; cut: take the one farthest from an edge
+	Blend     string  // CTC models: what center averages, log (default) probabilities or prob
+}
+
+// How an offline model's encoder runs.
+type OfflineEncoderConfig struct {
+	Window OfflineEncoderWindowConfig // Encoding a long utterance in windows
+
+	// Comma-separated input lengths in seconds an encoder call may have: an
+	// input is padded to the shortest that holds it. Needs a model that takes
+	// a padded batch.
+	Lengths string
+	PadTo   float32 // Else pad an input to a multiple of this many seconds. 0: no padding
+}
+
 type OfflineModelConfig struct {
 	Transducer       OfflineTransducerModelConfig
 	Paraformer       OfflineParaformerModelConfig
@@ -743,6 +768,8 @@ type OfflineModelConfig struct {
 	// "WINDOW_S:OVERLAP_S:SLACK_S": how a .tflite model runs an utterance
 	// longer than its window length. Empty: windows of its longest length.
 	LitertWindow string
+
+	Encoder OfflineEncoderConfig // How the encoder runs, for example a long utterance in windows
 }
 
 // Configuration for the offline/non-streaming recognizer.
@@ -898,6 +925,15 @@ func newCOfflineRecognizerConfig(config *OfflineRecognizerConfig) *C.struct_Sher
 	c.model_config.litert_dispatch_dir = C.CString(config.ModelConfig.LitertDispatchDir)
 	c.model_config.litert_window = C.CString(config.ModelConfig.LitertWindow)
 
+	c.model_config.encoder.window.seconds = C.float(config.ModelConfig.Encoder.Window.Seconds)
+	c.model_config.encoder.window.overlap = C.float(config.ModelConfig.Encoder.Window.Overlap)
+	c.model_config.encoder.window.slack = C.float(config.ModelConfig.Encoder.Window.Slack)
+	c.model_config.encoder.window.normalize = C.CString(config.ModelConfig.Encoder.Window.Normalize)
+	c.model_config.encoder.window.weight = C.CString(config.ModelConfig.Encoder.Window.Weight)
+	c.model_config.encoder.window.blend = C.CString(config.ModelConfig.Encoder.Window.Blend)
+	c.model_config.encoder.lengths = C.CString(config.ModelConfig.Encoder.Lengths)
+	c.model_config.encoder.pad_to = C.float(config.ModelConfig.Encoder.PadTo)
+
 	c.lm_config.model = C.CString(config.LmConfig.Model)
 	c.lm_config.scale = C.float(config.LmConfig.Scale)
 
@@ -979,6 +1015,10 @@ func freeCOfflineRecognizerConfig(c *C.struct_SherpaOnnxOfflineRecognizerConfig)
 		&c.model_config.w2v_bert_ctc,
 		&c.model_config.litert_dispatch_dir,
 		&c.model_config.litert_window,
+		&c.model_config.encoder.window.normalize,
+		&c.model_config.encoder.window.weight,
+		&c.model_config.encoder.window.blend,
+		&c.model_config.encoder.lengths,
 		&c.lm_config.model,
 		&c.decoding_method,
 		&c.hotwords_file,

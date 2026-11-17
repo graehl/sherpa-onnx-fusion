@@ -354,6 +354,46 @@ static SherpaOnnxOfflineSenseVoiceModelConfig GetOfflineSenseVoiceModelConfig(
   return c;
 }
 
+static SherpaOnnxOfflineEncoderWindowConfig GetOfflineEncoderWindowConfig(
+    Napi::Object obj) {
+  SherpaOnnxOfflineEncoderWindowConfig c;
+  memset(&c, 0, sizeof(c));
+
+  if (!obj.Has("window") || !obj.Get("window").IsObject()) {
+    return c;
+  }
+
+  Napi::Object o = obj.Get("window").As<Napi::Object>();
+
+  SHERPA_ONNX_ASSIGN_ATTR_FLOAT(seconds, seconds);
+  SHERPA_ONNX_ASSIGN_ATTR_FLOAT(overlap, overlap);
+  SHERPA_ONNX_ASSIGN_ATTR_FLOAT(slack, slack);
+  SHERPA_ONNX_ASSIGN_ATTR_STR(normalize, normalize);
+  SHERPA_ONNX_ASSIGN_ATTR_STR(weight, weight);
+  SHERPA_ONNX_ASSIGN_ATTR_STR(blend, blend);
+
+  return c;
+}
+
+static SherpaOnnxOfflineEncoderConfig GetOfflineEncoderConfig(
+    Napi::Object obj) {
+  SherpaOnnxOfflineEncoderConfig c;
+  memset(&c, 0, sizeof(c));
+
+  if (!obj.Has("encoder") || !obj.Get("encoder").IsObject()) {
+    return c;
+  }
+
+  Napi::Object o = obj.Get("encoder").As<Napi::Object>();
+
+  c.window = GetOfflineEncoderWindowConfig(o);
+
+  SHERPA_ONNX_ASSIGN_ATTR_STR(lengths, lengths);
+  SHERPA_ONNX_ASSIGN_ATTR_FLOAT(pad_to, padTo);
+
+  return c;
+}
+
 static SherpaOnnxOfflineModelConfig GetOfflineModelConfig(Napi::Object obj) {
   SherpaOnnxOfflineModelConfig c;
   memset(&c, 0, sizeof(c));
@@ -382,6 +422,7 @@ static SherpaOnnxOfflineModelConfig GetOfflineModelConfig(Napi::Object obj) {
   c.fire_red_asr_ctc = GetOfflineFireRedAsrCtcModelConfig(o);
   c.qwen3_asr = GetOfflineQwen3AsrModelConfig(o);
   c.cohere_transcribe = GetOfflineCohereTranscribeModelConfig(o);
+  c.encoder = GetOfflineEncoderConfig(o);
 
   SHERPA_ONNX_ASSIGN_ATTR_STR(tokens, tokens);
   SHERPA_ONNX_ASSIGN_ATTR_INT32(num_threads, numThreads);
@@ -526,6 +567,10 @@ static void FreeConfig(const SherpaOnnxOfflineRecognizerConfig &c) {
   SHERPA_ONNX_DELETE_C_STR(c.model_config.w2v_bert_ctc);
   SHERPA_ONNX_DELETE_C_STR(c.model_config.litert_dispatch_dir);
   SHERPA_ONNX_DELETE_C_STR(c.model_config.litert_window);
+  SHERPA_ONNX_DELETE_C_STR(c.model_config.encoder.window.normalize);
+  SHERPA_ONNX_DELETE_C_STR(c.model_config.encoder.window.weight);
+  SHERPA_ONNX_DELETE_C_STR(c.model_config.encoder.window.blend);
+  SHERPA_ONNX_DELETE_C_STR(c.model_config.encoder.lengths);
 
   SHERPA_ONNX_DELETE_C_STR(c.lm_config.model);
 
