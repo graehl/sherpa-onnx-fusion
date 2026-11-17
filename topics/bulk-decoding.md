@@ -38,6 +38,21 @@ one batch.
 - **Timing.** It reports the recognizer's own time, excluding loading and
   `--warm-up` decodes; `--pause-seconds` leaves time to attach a monitor.
 
+## Search calls apart from model batches
+
+`--search-batch-size=S` makes each search call take S recordings,
+whatever the model's `--batch-size` (graehl, 2026-11-17). Each thread
+that searches keeps the recordings whose model output is ready, in order,
+and searches S at a time, the last call taking what remains. A model batch
+is thus split into runs the search reads in place, and recordings left
+over join the next batch's, at the cost of one copy of their output. The
+search reads only each recording's valid frames, so S changes no result;
+a size that divides `--batch-size` copies nothing. 0, the default, keeps a
+model batch as one search call. Without `--decode-threads`, the model
+thread runs the model for its whole batch and then searches in calls of S.
+A model family that does not run its model apart from the search runs it
+in the search calls instead.
+
 ## Encoder output kept by reference
 
 When the model runs ahead of the search, each stream shares its encoder
@@ -57,10 +72,12 @@ the CTC model, with an unreadable file among them, in many search and
 encoder-window configurations, and requires every way of running the
 program (threads, search threads, sorting, printing as finished) to give
 the same rows and texts as one thread. Some configurations must also have
-an effect against a baseline. The fork's workflow runs it. Batches of
-several recordings are checked for their rows only, since batching changes
-what some models output; that sharing a search batch changes no transcript
-is checked apart from the model, in `sherpa-onnx/python/tests/test_fusion.py`
+an effect against a baseline. The fork's workflow runs it. Model batches
+of several recordings are checked for their rows only, since batching
+changes what some models output. That sharing a search call changes no
+transcript is checked with the model at one recording per call and search
+calls of three, against one thread, and in
+`sherpa-onnx/python/tests/test_fusion.py`
 ([inflight batching](beam-search-and-scorer-fusion.md#inflight-batching)).
 What the check does not cover is in [its gap](../gaps/parallel-check-coverage.md).
 
@@ -74,10 +91,10 @@ What the check does not cover is in [its gap](../gaps/parallel-check-coverage.md
   ([GPU decode cost](../gaps/gpu-decode-cost-outside-the-model.md)).
 - Shared executable-driver infrastructure
   ([driver reuse](../gaps/executable-driver-infrastructure.md)).
-- A search batch chosen apart from the model's batch, and transducer
-  searches that share their batch's model and scorer calls as CTC's do
-  ([search batches](../gaps/sketches/encoder-decoder-inflight-scheduling.md#search-batches-apart-from-model-batches),
-  [transducer search batching](../gaps/sketches/transducer-search-batching.md)).
+- Transducer searches that share their batch's model and scorer calls as
+  CTC's do ([transducer search batching](../gaps/sketches/transducer-search-batching.md)),
+  and the placement of search threads once the search's own calls run on a
+  GPU ([search batches](../gaps/sketches/encoder-decoder-inflight-scheduling.md#search-batches-apart-from-model-batches)).
 - Candidate designs: [a measured batch cost model](../gaps/sketches/batch-cost-model.md),
   [encoder-inclusive inflight scheduling](../gaps/sketches/encoder-decoder-inflight-scheduling.md),
   and [the throughput table](../gaps/sketches/throughput-table.md).

@@ -111,7 +111,8 @@ compares each way of running the program with one thread: a row per input
 (in list order when `--ordered-output=true` asks for it, each index once
 when rows are printed as they finish), an error row for the unreadable file
 only, and the same text
-at one recording per batch. It does this for three recognizers, so both
+at one recording per model batch, including search calls of three
+recordings (`--search-batch-size`). It does this for three recognizers, so both
 transducer implementations are covered as well as CTC:
 
 | Recognizer | Search configurations |

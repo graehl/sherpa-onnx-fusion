@@ -12,6 +12,7 @@
 #include <deque>
 #include <fstream>
 #include <functional>
+#include <iterator>
 #include <memory>
 #include <mutex>
 #include <sstream>
@@ -368,15 +369,76 @@ std::vector<Record> MakeRecords(const Batch &batch) {
   return records;
 }
 
+// Searches batches whose model output is ready, in calls of --search-batch-
+// size wave files, and prints their results. A batch is split into
+// consecutive runs, which the search reads in place from the model's output;
+// what is left over joins the next batch's files, which costs a copy. With a
+// size of 0 each batch is one call. Used by one thread.
+class SearchBatcher {
+ public:
+  // @param recognizer_seconds Increased by the seconds spent in the
+  //        recognizer.
+  SearchBatcher(sherpa_onnx::OfflineRecognizer *recognizer, int32_t size,
+                ResultOutput *output, float *recognizer_seconds)
+      : recognizer_(recognizer),
+        size_(size),
+        output_(output),
+        recognizer_seconds_(recognizer_seconds) {}
+
+  void Add(Batch batch) {
+    if (size_ <= 0) {
+      Search(std::move(batch));
+      return;
+    }
+    for (size_t i = 0; i != batch.utterances.size(); ++i) {
+      pending_.utterances.push_back(std::move(batch.utterances[i]));
+      pending_.streams.push_back(std::move(batch.streams[i]));
+    }
+    while (static_cast<int32_t>(pending_.utterances.size()) >= size_) {
+      Batch call;
+      auto u = pending_.utterances.begin();
+      auto s = pending_.streams.begin();
+      call.utterances.assign(std::make_move_iterator(u),
+                             std::make_move_iterator(u + size_));
+      call.streams.assign(std::make_move_iterator(s),
+                          std::make_move_iterator(s + size_));
+      pending_.utterances.erase(u, u + size_);
+      pending_.streams.erase(s, s + size_);
+      Search(std::move(call));
+    }
+  }
+
+  // Searches what is left once no batch follows.
+  void Flush() {
+    if (!pending_.utterances.empty()) Search(std::move(pending_));
+    pending_ = Batch();
+  }
+
+ private:
+  void Search(Batch batch) {
+    RunRecognizer(recognizer_, batch, true, recognizer_seconds_);
+    output_->Put(MakeRecords(batch));
+  }
+
+  sherpa_onnx::OfflineRecognizer *recognizer_;
+  int32_t size_;
+  ResultOutput *output_;
+  float *recognizer_seconds_;
+  Batch pending_;
+};
+
 // A thread that reads batches and runs the model on them. With a null
 // "queue" it also searches each batch and prints it; otherwise it leaves the
 // search to the SearchThreads that serve the queue.
 void AsrInference(const std::vector<std::vector<Utterance>> &chunk_wav_paths,
-                  int32_t warm_up, sherpa_onnx::OfflineRecognizer *recognizer,
+                  int32_t warm_up, int32_t search_batch_size,
+                  sherpa_onnx::OfflineRecognizer *recognizer,
                   ResultOutput *output, BatchQueue *queue, Totals *totals) {
   float duration = 0.0f;
   float elapsed_seconds_batch = 0.0f;
   float recognizer_seconds = 0.0f;
+  SearchBatcher searcher(recognizer, search_batch_size, output,
+                         &recognizer_seconds);
 
   for (int32_t i = 0; i < warm_up; ++i) {
     float unused = 0.0f;
@@ -399,14 +461,22 @@ void AsrInference(const std::vector<std::vector<Utterance>> &chunk_wav_paths,
     }
     const auto begin = std::chrono::steady_clock::now();
     Batch batch = ReadBatch(recognizer, chunk_wav_paths[chunk], &duration);
-    RunRecognizer(recognizer, batch, queue == nullptr, &recognizer_seconds);
-    if (queue != nullptr) {
-      queue->Push(std::move(batch));  // waits while the search is behind
-    } else {
+    if (queue == nullptr && search_batch_size <= 0) {
+      RunRecognizer(recognizer, batch, true, &recognizer_seconds);
       output->Put(MakeRecords(batch));
+    } else {
+      RunRecognizer(recognizer, batch, false, &recognizer_seconds);
+      if (queue != nullptr) {
+        queue->Push(std::move(batch));  // waits while the search is behind
+      } else {
+        searcher.Add(std::move(batch));
+      }
     }
     elapsed_seconds_batch += SecondsSince(begin);
   }
+  const auto flush_begin = std::chrono::steady_clock::now();
+  searcher.Flush();
+  elapsed_seconds_batch += SecondsSince(flush_begin);
 
   {
     std::lock_guard<std::mutex> guard(mtx);
@@ -419,15 +489,18 @@ void AsrInference(const std::vector<std::vector<Utterance>> &chunk_wav_paths,
 }
 
 // A thread of --decode-threads: searches the batches the model has run on.
-void SearchThread(sherpa_onnx::OfflineRecognizer *recognizer, BatchQueue *queue,
+void SearchThread(sherpa_onnx::OfflineRecognizer *recognizer,
+                  int32_t search_batch_size, BatchQueue *queue,
                   ResultOutput *output, Totals *totals) {
   float recognizer_seconds = 0.0f;
+  SearchBatcher searcher(recognizer, search_batch_size, output,
+                         &recognizer_seconds);
   Batch batch;
   while (queue->Pop(&batch)) {
-    RunRecognizer(recognizer, batch, true, &recognizer_seconds);
-    output->Put(MakeRecords(batch));
+    searcher.Add(std::move(batch));
     batch = Batch();  // frees the streams before waiting for the next one
   }
+  searcher.Flush();
   std::lock_guard<std::mutex> guard(mtx);
   totals->search_thread_recognizer_seconds += recognizer_seconds;
 }
@@ -527,7 +600,8 @@ longest wave file times its number of wave files.
 
 With --decode-threads=N the --nj threads only read files and run the model,
 and N other threads search; --decode-queue-size bounds the batches waiting
-between them.
+between them. --search-batch-size sets how many wave files a search call
+takes, apart from the model's --batch-size.
 
 foo.wav should be of single channel, 16-bit PCM encoded wave file; its
 sampling rate can be arbitrary and does not need to be 16kHz.
@@ -548,6 +622,7 @@ for a list of pre-trained models to download.
   float batch_overhead_seconds = 1e6;
   int32_t decode_threads = 0;     // 0: a --nj thread also searches its batch
   int32_t decode_queue_size = 0;  // 0: as many as decode_threads
+  int32_t search_batch_size = 0;  // 0: a search call takes a model batch
   int32_t pause_seconds = 10;     // slept before and after loading the model
   sherpa_onnx::ParseOptions po(kUsageMessage);
   sherpa_onnx::OfflineRecognizerConfig config;
@@ -581,6 +656,17 @@ for a list of pre-trained models to download.
               "threads wait while that many are waiting, which bounds the "
               "memory held by model outputs. 0 means the value of "
               "--decode-threads. default=0");
+  po.Register("search-batch-size", &search_batch_size,
+              "Wave files per search call, apart from --batch-size, the "
+              "files per model call. 0 means a search call takes a model "
+              "batch whole. A model batch is split into consecutive runs, "
+              "which the search reads in place; files left over join the "
+              "next batch's, which costs a copy of their model output, and "
+              "the last call takes what remains. A size that divides "
+              "--batch-size copies nothing. The search reads only each "
+              "file's valid frames, so any size gives the same results. For "
+              "a model family that does not run its model apart from the "
+              "search, the model runs in these calls instead. default=0");
   po.Register("pause-seconds", &pause_seconds,
               "Seconds to sleep before loading the model and again after "
               "it, which leaves time to attach a monitor. Not counted in any "
@@ -624,6 +710,11 @@ for a list of pre-trained models to download.
 
   if (!config.Validate()) {
     fprintf(stderr, "Errors in config!\n");
+    return -1;
+  }
+  if (search_batch_size < 0) {
+    fprintf(stderr, "--search-batch-size must be 0 or more. Given: %d\n",
+            search_batch_size);
     return -1;
   }
   std::this_thread::sleep_for(std::chrono::seconds(pause_seconds));
@@ -700,13 +791,14 @@ for a list of pre-trained models to download.
   bool separate_search = decode_threads > 0;
   std::vector<std::thread> search_threads;
   for (int i = 0; i < decode_threads; i++) {
-    search_threads.emplace_back(
-        std::thread(SearchThread, &recognizer, &queue, &output, &totals));
+    search_threads.emplace_back(std::thread(SearchThread, &recognizer,
+                                            search_batch_size, &queue, &output,
+                                            &totals));
   }
   for (int i = 0; i < nj; i++) {
     threads.emplace_back(std::thread(
-        AsrInference, std::cref(batch_wav_paths), warm_up, &recognizer, &output,
-        separate_search ? &queue : nullptr, &totals));
+        AsrInference, std::cref(batch_wav_paths), warm_up, search_batch_size,
+        &recognizer, &output, separate_search ? &queue : nullptr, &totals));
   }
 
   for (auto &thread : threads) {
