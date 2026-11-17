@@ -633,6 +633,7 @@ class OfflineModelConfig {
     this.modelingUnit = '',
     this.bpeVocab = '',
     this.telespeechCtc = '',
+    this.w2vBertCtc = '',
   });
 
   factory OfflineModelConfig.fromJson(Map<String, dynamic> json) {
@@ -735,12 +736,13 @@ class OfflineModelConfig {
       modelingUnit: json['modelingUnit'] as String? ?? '',
       bpeVocab: json['bpeVocab'] as String? ?? '',
       telespeechCtc: json['telespeechCtc'] as String? ?? '',
+      w2vBertCtc: json['w2vBertCtc'] as String? ?? '',
     );
   }
 
   @override
   String toString() {
-    return 'OfflineModelConfig(transducer: $transducer, paraformer: $paraformer, nemoCtc: $nemoCtc, whisper: $whisper, tdnn: $tdnn, senseVoice: $senseVoice, moonshine: $moonshine, fireRedAsr: $fireRedAsr, dolphin: $dolphin, zipformerCtc: $zipformerCtc, canary: $canary, wenetCtc: $wenetCtc, omnilingual: $omnilingual, medasr: $medasr, funasrNano: $funasrNano, fireRedAsrCtc: $fireRedAsrCtc, qwen3Asr: $qwen3Asr, cohereTranscribe: $cohereTranscribe, tokens: $tokens, numThreads: $numThreads, debug: $debug, provider: $provider, modelType: $modelType, modelingUnit: $modelingUnit, bpeVocab: $bpeVocab, telespeechCtc: $telespeechCtc)';
+    return 'OfflineModelConfig(transducer: $transducer, paraformer: $paraformer, nemoCtc: $nemoCtc, whisper: $whisper, tdnn: $tdnn, senseVoice: $senseVoice, moonshine: $moonshine, fireRedAsr: $fireRedAsr, dolphin: $dolphin, zipformerCtc: $zipformerCtc, canary: $canary, wenetCtc: $wenetCtc, omnilingual: $omnilingual, medasr: $medasr, funasrNano: $funasrNano, fireRedAsrCtc: $fireRedAsrCtc, qwen3Asr: $qwen3Asr, cohereTranscribe: $cohereTranscribe, tokens: $tokens, numThreads: $numThreads, debug: $debug, provider: $provider, modelType: $modelType, modelingUnit: $modelingUnit, bpeVocab: $bpeVocab, telespeechCtc: $telespeechCtc, w2vBertCtc: $w2vBertCtc)';
   }
 
   Map<String, dynamic> toJson() => {
@@ -770,6 +772,7 @@ class OfflineModelConfig {
     'modelingUnit': modelingUnit,
     'bpeVocab': bpeVocab,
     'telespeechCtc': telespeechCtc,
+    'w2vBertCtc': w2vBertCtc,
   };
 
   final OfflineTransducerModelConfig transducer;
@@ -799,6 +802,9 @@ class OfflineModelConfig {
   final String modelingUnit;
   final String bpeVocab;
   final String telespeechCtc;
+
+  /// Path to a w2v-BERT 2.0 CTC model exported from transformers.
+  final String w2vBertCtc;
 }
 
 /// Top-level configuration for [OfflineRecognizer].

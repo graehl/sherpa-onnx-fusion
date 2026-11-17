@@ -533,6 +533,8 @@ static sherpa_onnx::OfflineRecognizerConfig GetOfflineRecognizerConfig(
 
   recognizer_config.model_config.telespeech_ctc =
       SHERPA_ONNX_OR(config->model_config.telespeech_ctc, "");
+  recognizer_config.model_config.w2v_bert_ctc =
+      SHERPA_ONNX_OR(config->model_config.w2v_bert_ctc, "");
 
   recognizer_config.model_config.sense_voice.model =
       SHERPA_ONNX_OR(config->model_config.sense_voice.model, "");

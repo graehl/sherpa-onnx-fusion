@@ -168,6 +168,8 @@ data class OfflineModelConfig(
     var tokens: String = "",
     var modelingUnit: String = "",
     var bpeVocab: String = "",
+    // Path to a w2v-BERT 2.0 CTC model exported from transformers.
+    var w2vBertCtc: String = "",
 )
 
 data class OfflineCtcFstDecoderConfig(

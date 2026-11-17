@@ -36,6 +36,7 @@ namespace SherpaOnnx
             FireRedAsrCtc = new OfflineFireRedAsrCtcModelConfig();
             Qwen3Asr = new OfflineQwen3AsrModelConfig();
             CohereTranscribe = new OfflineCohereTranscribeModelConfig();
+            W2vBertCtc = "";
         }
         public OfflineTransducerModelConfig Transducer;
         public OfflineParaformerModelConfig Paraformer;
@@ -78,5 +79,9 @@ namespace SherpaOnnx
         public OfflineFireRedAsrCtcModelConfig FireRedAsrCtc;
         public OfflineQwen3AsrModelConfig Qwen3Asr;
         public OfflineCohereTranscribeModelConfig CohereTranscribe;
+
+        /// Path to a w2v-BERT 2.0 CTC model exported from transformers.
+        [MarshalAs(UnmanagedType.LPStr)]
+        public string W2vBertCtc;
     }
 }

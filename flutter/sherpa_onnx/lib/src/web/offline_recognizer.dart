@@ -345,6 +345,7 @@ JSObject _buildModelConfig(OfflineModelConfig model) {
   jsModel['modelingUnit'] = model.modelingUnit.toJS;
   jsModel['bpeVocab'] = model.bpeVocab.toJS;
   jsModel['telespeechCtc'] = model.telespeechCtc.toJS;
+  jsModel['w2vBertCtc'] = model.w2vBertCtc.toJS;
 
   return jsModel;
 }

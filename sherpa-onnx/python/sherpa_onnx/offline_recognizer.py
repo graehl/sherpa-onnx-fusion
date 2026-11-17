@@ -2012,6 +2012,84 @@ class OfflineRecognizer(object):
         self.config = recognizer_config
         return self
 
+    @classmethod
+    def from_w2v_bert_ctc(
+        cls,
+        model: str,
+        tokens: str,
+        num_threads: int = 1,
+        decoding_method: str = "greedy_search",
+        debug: bool = False,
+        provider: str = "cpu",
+        rule_fsts: str = "",
+        rule_fars: str = "",
+        hr_dict_dir: str = "",
+        hr_rule_fsts: str = "",
+        hr_lexicon: str = "",
+        fusion: Optional[FusionConfig] = None,
+        options_json: str = "",
+    ):
+        """
+        A w2v-BERT 2.0 CTC model exported from transformers. The recognizer
+        computes the model's own features, so there is no feature option.
+
+        Args:
+          model:
+            Path to ``model.onnx``, with the single input ``input_features``.
+          tokens:
+            Path to ``tokens.txt``. Each line in ``tokens.txt`` contains two
+            columns::
+
+                symbol integer_id
+
+          num_threads:
+            Number of threads for neural network computation.
+          decoding_method:
+            Valid values are greedy_search and prefix_beam_search.
+          debug:
+            True to show debug messages.
+          provider:
+            onnxruntime execution providers. Valid values are: cpu, cuda, coreml.
+          rule_fsts:
+            If not empty, it specifies fsts for inverse text normalization.
+            If there are multiple fsts, they are separated by a comma.
+          rule_fars:
+            If not empty, it specifies fst archives for inverse text normalization.
+            If there are multiple archives, they are separated by a comma.
+          fusion:
+            A :class:`FusionConfig`: scorers fused into the search, and search
+            options, used when decoding_method is prefix_beam_search.
+          options_json:
+            A JSON object of command-line options applied after every other
+            option, e.g. ``'{"scorer": [{"weight": 40}], "score-beam": 0}'``.
+            An error raises ``ValueError``.
+        """
+        self = cls.__new__(cls)
+        model_config = OfflineModelConfig(
+            w2v_bert_ctc=model,
+            tokens=tokens,
+            num_threads=num_threads,
+            debug=debug,
+            provider=provider,
+        )
+
+        recognizer_config = OfflineRecognizerConfig(
+            model_config=model_config,
+            decoding_method=decoding_method,
+            rule_fsts=rule_fsts,
+            rule_fars=rule_fars,
+            hr=HomophoneReplacerConfig(
+                dict_dir=hr_dict_dir,
+                lexicon=hr_lexicon,
+                rule_fsts=hr_rule_fsts,
+            ),
+            fusion=_fusion_or_default(fusion),
+            options_json=options_json,
+        )
+        self.recognizer = _Recognizer(recognizer_config)
+        self.config = recognizer_config
+        return self
+
     def create_stream(self, hotwords: Optional[str] = None):
         """Create a new offline stream for feeding audio data.
 

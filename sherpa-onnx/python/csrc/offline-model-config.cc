@@ -91,6 +91,9 @@ Args:
     The modeling unit used by the model (e.g., ``cjkchar``, ``bpe``).
   bpe_vocab:
     Path to the BPE vocabulary file.
+  w2v_bert_ctc:
+    Path to a w2v-BERT 2.0 CTC model exported from transformers, with the
+    single input ``input_features``.
 )doc";
 
 void PybindOfflineModelConfig(py::module *m) {
@@ -115,51 +118,64 @@ void PybindOfflineModelConfig(py::module *m) {
 
   using PyClass = OfflineModelConfig;
   py::class_<PyClass>(*m, "OfflineModelConfig")
-      .def(py::init<const OfflineTransducerModelConfig &,
-                    const OfflineParaformerModelConfig &,
-                    const OfflineNemoEncDecCtcModelConfig &,
-                    const OfflineWhisperModelConfig &,
-                    const OfflineFireRedAsrModelConfig &,
-                    const OfflineTdnnModelConfig &,
-                    const OfflineZipformerCtcModelConfig &,
-                    const OfflineWenetCtcModelConfig &,
-                    const OfflineSenseVoiceModelConfig &,
-                    const OfflineMoonshineModelConfig &,
-                    const OfflineDolphinModelConfig &,
-                    const OfflineCanaryModelConfig &,
-                    const OfflineCohereTranscribeModelConfig &,
-                    const OfflineOmnilingualAsrCtcModelConfig &,
-                    const OfflineFunASRNanoModelConfig &,
-                    const OfflineMedAsrCtcModelConfig &,
-                    const OfflineFireRedAsrCtcModelConfig &,
-                    const OfflineQwen3ASRModelConfig &, 
-                    const std::string &,const std::string &, int32_t, bool,
-                    const std::string &,const std::string &, 
-                    const std::string &,const std::string &>(),
-           py::arg("transducer") = OfflineTransducerModelConfig(),
-           py::arg("paraformer") = OfflineParaformerModelConfig(),
-           py::arg("nemo_ctc") = OfflineNemoEncDecCtcModelConfig(),
-           py::arg("whisper") = OfflineWhisperModelConfig(),
-           py::arg("fire_red_asr") = OfflineFireRedAsrModelConfig(),
-           py::arg("tdnn") = OfflineTdnnModelConfig(),
-           py::arg("zipformer_ctc") = OfflineZipformerCtcModelConfig(),
-           py::arg("wenet_ctc") = OfflineWenetCtcModelConfig(),
-           py::arg("sense_voice") = OfflineSenseVoiceModelConfig(),
-           py::arg("moonshine") = OfflineMoonshineModelConfig(),
-           py::arg("dolphin") = OfflineDolphinModelConfig(),
-           py::arg("canary") = OfflineCanaryModelConfig(),
-           py::arg("cohere_transcribe") =
-               OfflineCohereTranscribeModelConfig(),
-           py::arg("omnilingual") = OfflineOmnilingualAsrCtcModelConfig(),
-           py::arg("funasr_nano") = OfflineFunASRNanoModelConfig(),
-           py::arg("medasr") = OfflineMedAsrCtcModelConfig(),
-           py::arg("fire_red_asr_ctc") = OfflineFireRedAsrCtcModelConfig(),
-           py::arg("qwen3_asr") = OfflineQwen3ASRModelConfig(),
-           py::arg("telespeech_ctc") = "", py::arg("tokens") = "",
-           py::arg("num_threads") = 1, py::arg("debug") = false,
-           py::arg("provider") = "cpu", py::arg("model_type") = "",
-           py::arg("modeling_unit") = "cjkchar", py::arg("bpe_vocab") = "",
-           kOfflineModelConfigInitDoc)
+      .def(
+          py::init(
+              [](const OfflineTransducerModelConfig &transducer,
+                 const OfflineParaformerModelConfig &paraformer,
+                 const OfflineNemoEncDecCtcModelConfig &nemo_ctc,
+                 const OfflineWhisperModelConfig &whisper,
+                 const OfflineFireRedAsrModelConfig &fire_red_asr,
+                 const OfflineTdnnModelConfig &tdnn,
+                 const OfflineZipformerCtcModelConfig &zipformer_ctc,
+                 const OfflineWenetCtcModelConfig &wenet_ctc,
+                 const OfflineSenseVoiceModelConfig &sense_voice,
+                 const OfflineMoonshineModelConfig &moonshine,
+                 const OfflineDolphinModelConfig &dolphin,
+                 const OfflineCanaryModelConfig &canary,
+                 const OfflineCohereTranscribeModelConfig &cohere_transcribe,
+                 const OfflineOmnilingualAsrCtcModelConfig &omnilingual,
+                 const OfflineFunASRNanoModelConfig &funasr_nano,
+                 const OfflineMedAsrCtcModelConfig &medasr,
+                 const OfflineFireRedAsrCtcModelConfig &fire_red_asr_ctc,
+                 const OfflineQwen3ASRModelConfig &qwen3_asr,
+                 const std::string &telespeech_ctc, const std::string &tokens,
+                 int32_t num_threads, bool debug, const std::string &provider,
+                 const std::string &model_type,
+                 const std::string &modeling_unit, const std::string &bpe_vocab,
+                 const std::string &w2v_bert_ctc) {
+                PyClass c(transducer, paraformer, nemo_ctc, whisper,
+                          fire_red_asr, tdnn, zipformer_ctc, wenet_ctc,
+                          sense_voice, moonshine, dolphin, canary,
+                          cohere_transcribe, omnilingual, funasr_nano, medasr,
+                          fire_red_asr_ctc, qwen3_asr, telespeech_ctc, tokens,
+                          num_threads, debug, provider, model_type,
+                          modeling_unit, bpe_vocab);
+                c.w2v_bert_ctc = w2v_bert_ctc;
+                return c;
+              }),
+          py::arg("transducer") = OfflineTransducerModelConfig(),
+          py::arg("paraformer") = OfflineParaformerModelConfig(),
+          py::arg("nemo_ctc") = OfflineNemoEncDecCtcModelConfig(),
+          py::arg("whisper") = OfflineWhisperModelConfig(),
+          py::arg("fire_red_asr") = OfflineFireRedAsrModelConfig(),
+          py::arg("tdnn") = OfflineTdnnModelConfig(),
+          py::arg("zipformer_ctc") = OfflineZipformerCtcModelConfig(),
+          py::arg("wenet_ctc") = OfflineWenetCtcModelConfig(),
+          py::arg("sense_voice") = OfflineSenseVoiceModelConfig(),
+          py::arg("moonshine") = OfflineMoonshineModelConfig(),
+          py::arg("dolphin") = OfflineDolphinModelConfig(),
+          py::arg("canary") = OfflineCanaryModelConfig(),
+          py::arg("cohere_transcribe") = OfflineCohereTranscribeModelConfig(),
+          py::arg("omnilingual") = OfflineOmnilingualAsrCtcModelConfig(),
+          py::arg("funasr_nano") = OfflineFunASRNanoModelConfig(),
+          py::arg("medasr") = OfflineMedAsrCtcModelConfig(),
+          py::arg("fire_red_asr_ctc") = OfflineFireRedAsrCtcModelConfig(),
+          py::arg("qwen3_asr") = OfflineQwen3ASRModelConfig(),
+          py::arg("telespeech_ctc") = "", py::arg("tokens") = "",
+          py::arg("num_threads") = 1, py::arg("debug") = false,
+          py::arg("provider") = "cpu", py::arg("model_type") = "",
+          py::arg("modeling_unit") = "cjkchar", py::arg("bpe_vocab") = "",
+          py::arg("w2v_bert_ctc") = "", kOfflineModelConfigInitDoc)
       .def_readwrite("transducer", &PyClass::transducer)
       .def_readwrite("paraformer", &PyClass::paraformer)
       .def_readwrite("nemo_ctc", &PyClass::nemo_ctc)
@@ -179,6 +195,7 @@ void PybindOfflineModelConfig(py::module *m) {
       .def_readwrite("fire_red_asr_ctc", &PyClass::fire_red_asr_ctc)
       .def_readwrite("qwen3_asr", &PyClass::qwen3_asr)
       .def_readwrite("telespeech_ctc", &PyClass::telespeech_ctc)
+      .def_readwrite("w2v_bert_ctc", &PyClass::w2v_bert_ctc)
       .def_readwrite("tokens", &PyClass::tokens)
       .def_readwrite("num_threads", &PyClass::num_threads)
       .def_readwrite("debug", &PyClass::debug)

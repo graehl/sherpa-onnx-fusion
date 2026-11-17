@@ -393,6 +393,7 @@ static SherpaOnnxOfflineModelConfig GetOfflineModelConfig(Napi::Object obj) {
   SHERPA_ONNX_ASSIGN_ATTR_STR(modeling_unit, modelingUnit);
   SHERPA_ONNX_ASSIGN_ATTR_STR(bpe_vocab, bpeVocab);
   SHERPA_ONNX_ASSIGN_ATTR_STR(telespeech_ctc, teleSpeechCtc);
+  SHERPA_ONNX_ASSIGN_ATTR_STR(w2v_bert_ctc, w2vBertCtc);
 
   return c;
 }
@@ -520,6 +521,7 @@ static void FreeConfig(const SherpaOnnxOfflineRecognizerConfig &c) {
   SHERPA_ONNX_DELETE_C_STR(c.model_config.modeling_unit);
   SHERPA_ONNX_DELETE_C_STR(c.model_config.bpe_vocab);
   SHERPA_ONNX_DELETE_C_STR(c.model_config.telespeech_ctc);
+  SHERPA_ONNX_DELETE_C_STR(c.model_config.w2v_bert_ctc);
 
   SHERPA_ONNX_DELETE_C_STR(c.lm_config.model);
 
