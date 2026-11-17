@@ -196,26 +196,30 @@ class RecurrentLmScorer : public Scorer {
   // One model step for every requested node. Everything it allocates
   // belongs to this call, so calls for different utterances can overlap.
   void Compute(const std::vector<Node *> &nodes) const {
-    if (nodes.empty()) return;
-    size_t batch = nodes.size();
-    std::vector<int64_t> units(batch);
-    std::vector<RecurrentLmStep::Parent> parents(batch);
-    for (size_t i = 0; i != batch; ++i) {
-      const Node *node = nodes[i];
-      units[i] = node->unit;
-      if (node->parent != nullptr) {  // else steps from the zero state
-        parents[i] = {node->parent->result.get(), node->parent->item};
+    const size_t limit = vocabulary_.max_batch > 0
+                             ? static_cast<size_t>(vocabulary_.max_batch)
+                             : nodes.size();
+    for (size_t first = 0; first < nodes.size(); first += limit) {
+      const size_t batch = std::min(limit, nodes.size() - first);
+      std::vector<int64_t> units(batch);
+      std::vector<RecurrentLmStep::Parent> parents(batch);
+      for (size_t i = 0; i != batch; ++i) {
+        const Node *node = nodes[first + i];
+        units[i] = node->unit;
+        if (node->parent != nullptr) {  // else steps from the zero state
+          parents[i] = {node->parent->result.get(), node->parent->item};
+        }
       }
-    }
 
-    std::shared_ptr<const RecurrentLmStep::Result> result =
-        step_->Run(units, parents);
-    for (size_t i = 0; i != batch; ++i) {
-      Node *node = nodes[i];
-      node->result = result;
-      node->item = static_cast<int32_t>(i);
-      node->computed = true;
-      node->queued = false;
+      std::shared_ptr<const RecurrentLmStep::Result> result =
+          step_->Run(units, parents);
+      for (size_t i = 0; i != batch; ++i) {
+        Node *node = nodes[first + i];
+        node->result = result;
+        node->item = static_cast<int32_t>(i);
+        node->computed = true;
+        node->queued = false;
+      }
     }
     // A computed node no longer needs its parent's state.
     for (Node *node : nodes) {
