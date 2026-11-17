@@ -93,6 +93,7 @@ static SherpaOnnxFusionConfig Convert(
     sc.provider = s.provider.c_str();
     sc.weight = s.weight;
     sc.extra = s.extra.c_str();
+    sc.rescore = s.rescore;
     scorers->push_back(sc);
   }
 

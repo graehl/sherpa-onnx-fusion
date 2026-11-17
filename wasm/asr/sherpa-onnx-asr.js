@@ -466,7 +466,7 @@ function initSherpaOnnxOfflineCtcFstDecoderConfig(config, Module) {
 // The array of SherpaOnnxScorerConfig that SherpaOnnxFusionConfig points to.
 // A field left out or zero takes the C API's default.
 function initSherpaOnnxScorerConfigArray(scorers, Module) {
-  const len = 8 * 4;  // size of one SherpaOnnxScorerConfig
+  const len = 9 * 4;  // size of one SherpaOnnxScorerConfig
   const n = scorers.length;
   if (n == 0) {
     return {ptr: 0, len: 0, buffer: 0};
@@ -500,6 +500,7 @@ function initSherpaOnnxScorerConfigArray(scorers, Module) {
     Module.setValue(q + 20, p[6 * i + 4], 'i8*');  // provider
     Module.setValue(q + 24, s.weight || 0, 'float');
     Module.setValue(q + 28, p[6 * i + 5], 'i8*');  // extra
+    Module.setValue(q + 32, s.rescore ? 1 : 0, 'i32');
   }
 
   return {ptr: ptr, len: n * len, buffer: buffer};

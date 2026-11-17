@@ -27,6 +27,7 @@ ScorerOptions GetScorerOptions(const SherpaOnnxScorerConfig &c) {
   SetIfGiven(c.provider, &o.common.provider.provider);
   if (c.weight != 0) o.weight = c.weight;
   SetIfGiven(c.extra, &o.extra);
+  o.rescore = c.rescore != 0;
   return o;
 }
 

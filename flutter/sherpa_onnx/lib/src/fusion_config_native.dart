@@ -26,6 +26,7 @@ void fillFusionConfig(SherpaOnnxFusionConfig c, FusionConfig config) {
     p.provider = s.provider.toNativeUtf8();
     p.weight = s.weight;
     p.extra = s.extra.toNativeUtf8();
+    p.rescore = s.rescore ? 1 : 0;
   }
 
   c.lengthBonus = config.lengthBonus;

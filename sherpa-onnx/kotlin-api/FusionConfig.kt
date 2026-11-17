@@ -11,6 +11,9 @@ data class ScorerConfig(
     var provider: String = "cpu",
     var weight: Float = 1.0f,
     var extra: String = "{}", // JSON object of type-specific options
+    // true: apply the scorer only to the hypotheses that survive the search,
+    // as n-best rescoring does, instead of during the search.
+    var rescore: Boolean = false,
 )
 
 // Scorers and search settings for decodingMethod = "prefix_beam_search".

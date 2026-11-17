@@ -13,6 +13,9 @@ public class ScorerConfig {
     private final String provider;
     private final float weight;
     private final String extra;  // JSON object of type-specific options
+    // true: apply the scorer only to the hypotheses that survive the search,
+    // as n-best rescoring does, instead of during the search.
+    private final boolean rescore;
 
     private ScorerConfig(Builder builder) {
         this.type = builder.type;
@@ -23,6 +26,7 @@ public class ScorerConfig {
         this.provider = builder.provider;
         this.weight = builder.weight;
         this.extra = builder.extra;
+        this.rescore = builder.rescore;
     }
 
     public static Builder builder() {
@@ -61,6 +65,10 @@ public class ScorerConfig {
         return extra;
     }
 
+    public boolean getRescore() {
+        return rescore;
+    }
+
     public static class Builder {
         private String type = "";
         private String model = "";
@@ -70,6 +78,7 @@ public class ScorerConfig {
         private String provider = "cpu";
         private float weight = 1.0f;
         private String extra = "{}";
+        private boolean rescore = false;
 
         public ScorerConfig build() {
             return new ScorerConfig(this);
@@ -112,6 +121,11 @@ public class ScorerConfig {
 
         public Builder setExtra(String extra) {
             this.extra = extra;
+            return this;
+        }
+
+        public Builder setRescore(boolean rescore) {
+            this.rescore = rescore;
             return this;
         }
     }

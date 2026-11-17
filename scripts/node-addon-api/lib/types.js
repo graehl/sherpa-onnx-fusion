@@ -428,6 +428,8 @@
  *   Default 1.
  * @property {string} [extra] - JSON object text of type-specific options.
  *   Default '{}'.
+ * @property {boolean|number} [rescore] - True: apply the scorer only to the
+ *   hypotheses that survive the search, as n-best rescoring does.
  */
 
 /**
