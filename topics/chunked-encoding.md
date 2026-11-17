@@ -307,6 +307,7 @@ bf16, because weights were dequantized on each call.
 ## Not done
 
 - A word error rate comparison of the settings on long recordings.
-- Bindings for the options.
+- Bindings for the options, tracked in the
+  [fork-wide bindings gap](../gaps/fork-feature-bindings.md).
 - Starting the search on finished windows before the whole utterance is
   encoded: [hybrid chunked streaming](../gaps/sketches/hybrid-chunked-streaming.md).

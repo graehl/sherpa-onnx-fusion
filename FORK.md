@@ -141,7 +141,7 @@ present and prints a warning describing the correct result.
 - [Executable-driver infrastructure reuse](gaps/executable-driver-infrastructure.md).
 - [Typed collections of nested options](gaps/sketches/nested-option-collections.md),
   including multiple scorers and possible multiple-FST configuration.
-- [Language bindings for the fusion options](gaps/fusion-config-bindings.md).
+- [Language bindings for all fork features](gaps/fork-feature-bindings.md).
 - [Static build aborts when a model loads (GCC 15)](gaps/static-onnxruntime-abort.md).
 - [Decoding several recordings in one call changes some transcripts](gaps/offline-batch-changes-transcripts.md).
 - [Encoder batches are formed without regard to length](gaps/encoder-batches-ignore-length.md).

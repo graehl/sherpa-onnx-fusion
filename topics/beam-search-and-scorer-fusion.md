@@ -81,7 +81,7 @@ on public models except where noted; details and limits are in
 - Byte-BPE token tables, join-marker conventions the recognizer does not
   itself remove, and text normalization between recognizer and scorer.
 - The options in the language bindings
-  ([gap](../gaps/fusion-config-bindings.md)).
+  ([fork-wide bindings gap](../gaps/fork-feature-bindings.md)).
 
 ### Scope across model families
 
