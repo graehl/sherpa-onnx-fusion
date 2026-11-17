@@ -1021,6 +1021,11 @@ work is batched across utterances. `CtcInflightDecoder`
 thing: the utterances or streams handed to one decode call share each
 scorer call (`DecodeFramesTogether` in `ctc-prefix-search.h`). The
 transducer decoders run one utterance at a time for now.
+Sharing a call changes no result: with each recording's log probabilities
+computed alone, 40 LibriSpeech test-other recordings searched in calls of
+4 and 8, in two orders, gave the same transcripts as each alone, with no
+scorer, the character n-gram, the test character LSTM, and both, in sum
+and max alignment (2026-11-17); `test_fusion.py` keeps a smaller case.
 
 For offline CTC models and the zipformer and NeMo transducers the model
 run and the search are separate calls. `OfflineRecognizer::EncodeStreams`
