@@ -36,7 +36,7 @@ static_assert(sizeof(SherpaOnnxForcedAlignerConfig) == 2 * 4 + 5 * 4 + 4, "");
 static_assert(sizeof(SherpaOnnxForcedAlignmentInterval) == 3 * 4, "");
 static_assert(sizeof(SherpaOnnxForcedAlignmentTier) == 3 * 4, "");
 static_assert(sizeof(SherpaOnnxForcedAlignmentResult) == 4 * 4, "");
-static_assert(sizeof(SherpaOnnxOfflineEncoderWindowConfig) == 9 * 4, "");
+static_assert(sizeof(SherpaOnnxOfflineEncoderWindowConfig) == 10 * 4, "");
 static_assert(sizeof(SherpaOnnxOfflineEncoderConfig) ==
                   sizeof(SherpaOnnxOfflineEncoderWindowConfig) + 2 * 4,
               "");
@@ -65,7 +65,7 @@ static_assert(sizeof(SherpaOnnxOfflineModelConfig) ==
               "");
 static_assert(sizeof(SherpaOnnxFeatureConfig) == 2 * 4, "");
 static_assert(sizeof(SherpaOnnxScorerConfig) == 9 * 4, "");
-static_assert(sizeof(SherpaOnnxFusionConfig) == 12 * 4, "");
+static_assert(sizeof(SherpaOnnxFusionConfig) == 13 * 4, "");
 static_assert(sizeof(SherpaOnnxOfflineRecognizerConfig) ==
                   sizeof(SherpaOnnxFeatureConfig) +
                       sizeof(SherpaOnnxOfflineLMConfig) +

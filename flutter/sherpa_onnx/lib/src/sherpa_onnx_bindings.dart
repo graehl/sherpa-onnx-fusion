@@ -608,6 +608,9 @@ final class SherpaOnnxOfflineEncoderWindowConfig extends Struct {
 
   @Float()
   external double contextFraction;
+
+  @Int32()
+  external int literalZeros;
 }
 
 final class SherpaOnnxOfflineEncoderConfig extends Struct {
@@ -694,6 +697,9 @@ final class SherpaOnnxFusionConfig extends Struct {
 
   @Float()
   external double ctcPriorWeight;
+
+  @Int32()
+  external int literalZeros;
 }
 
 final class SherpaOnnxOfflineCtcFstDecoderConfig extends Struct {

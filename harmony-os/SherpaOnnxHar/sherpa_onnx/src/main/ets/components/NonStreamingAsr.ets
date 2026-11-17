@@ -266,7 +266,7 @@ export class FusionConfig {
   public lengthBonusUnit: string = 'token';  // 'token' or 'word'
   public ctcAlignment: string = 'sum';  // CTC models: 'sum' or 'max'
   public tokenCandidates: number = 8;
-  public scoreBeam: number = 12;  // a negative value means no limit
+  public scoreBeam: number = 12;  // 0 or less: no limit
   // Case of the text character scorers are given: 'keep' or 'lower'
   public scorerTextCase: string = 'keep';
   // Transducers: rank results by score divided by output length

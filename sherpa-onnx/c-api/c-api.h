@@ -400,6 +400,13 @@ typedef struct SherpaOnnxFusionConfig {
   const char *ctc_prior;
   /** Weight of @c ctc_prior. 0 means 1. */
   float ctc_prior_weight;
+  /**
+   * Non-zero: a 0 in a numeric field of this struct or of its scorers is
+   * taken as 0, not as the default; a NULL or empty string still means the
+   * default. For a binding that fills in every default itself, so that, for
+   * example, a score_beam of 0 means no limit, as on the command line.
+   */
+  int32_t literal_zeros;
 } SherpaOnnxFusionConfig;
 
 /**
@@ -1197,6 +1204,11 @@ typedef struct SherpaOnnxOfflineEncoderWindowConfig {
    * @c context_frames and @c context_fraction may be non-zero.
    */
   float context_fraction;
+  /**
+   * Non-zero: a 0 in a numeric field of this struct is taken as 0, not as
+   * the default, as SherpaOnnxFusionConfig::literal_zeros does.
+   */
+  int32_t literal_zeros;
 } SherpaOnnxOfflineEncoderWindowConfig;
 
 /** @brief How an offline model's encoder runs. */

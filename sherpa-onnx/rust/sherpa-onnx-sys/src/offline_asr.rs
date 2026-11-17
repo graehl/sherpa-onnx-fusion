@@ -175,6 +175,7 @@ pub struct OfflineEncoderWindowConfig {
     pub center_power: c_float,
     pub context_frames: i32,
     pub context_fraction: c_float,
+    pub literal_zeros: i32,
 }
 
 #[repr(C)]

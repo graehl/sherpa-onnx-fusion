@@ -184,6 +184,13 @@ type FusionConfig struct {
 	// subtracted from its log probability in every frame.
 	CtcPrior       string
 	CtcPriorWeight float32 // Weight of CtcPrior. 0 means 1
+
+	// 1: a 0 in a numeric field of this struct or of its Scorers is taken as
+	// 0, not as the default (e.g. ScoreBeam 0: no limit); an empty string
+	// still means the default. With it set, give every numeric field its
+	// value: a TokenCandidates of 0 leaves the search nothing to extend.
+	// Leave it 0 to keep zero values as defaults.
+	LiteralZeros int
 }
 
 func freeCString(p **C.char) {
@@ -222,6 +229,7 @@ func newCFusionConfig(config *FusionConfig, c *C.struct_SherpaOnnxFusionConfig) 
 	c.modified_beam_search_rules = C.int32_t(config.ModifiedBeamSearchRules)
 	c.ctc_prior = C.CString(config.CtcPrior)
 	c.ctc_prior_weight = C.float(config.CtcPriorWeight)
+	c.literal_zeros = C.int32_t(config.LiteralZeros)
 }
 
 func freeCFusionConfig(c *C.struct_SherpaOnnxFusionConfig) {
@@ -700,7 +708,8 @@ type OfflineLMConfig struct {
 // overlapping windows whose outputs are blended per output frame. Supported
 // for the offline CTC models, the zipformer transducer, and NeMo RNN-T and
 // TDT. A zero or empty field takes the default given beside it; set an
-// explicit zero through OptionsJson, e.g. {"encoder": {"window": {"slack": 0}}}.
+// explicit zero with LiteralZeros or through OptionsJson, e.g.
+// {"encoder": {"window": {"slack": 0}}}.
 type OfflineEncoderWindowConfig struct {
 	Seconds   float32 // Window length in seconds. 0: every utterance is encoded whole
 	Overlap   float32 // The least overlap of neighbouring windows, in seconds. 0 means 3
@@ -720,6 +729,11 @@ type OfflineEncoderWindowConfig struct {
 	// The same as a fraction of each window's output length. At most one of
 	// ContextFrames and ContextFraction may be non-zero.
 	ContextFraction float32
+
+	// 1: a 0 in a numeric field of this struct is taken as 0, not as the
+	// default (e.g. Slack 0: evenly spaced windows); an empty string still
+	// means the default. Leave it 0 to keep zero values as defaults.
+	LiteralZeros int
 }
 
 // How an offline model's encoder runs.
@@ -946,6 +960,7 @@ func newCOfflineRecognizerConfig(config *OfflineRecognizerConfig) *C.struct_Sher
 	c.model_config.encoder.window.center_power = C.float(config.ModelConfig.Encoder.Window.CenterPower)
 	c.model_config.encoder.window.context_frames = C.int32_t(config.ModelConfig.Encoder.Window.ContextFrames)
 	c.model_config.encoder.window.context_fraction = C.float(config.ModelConfig.Encoder.Window.ContextFraction)
+	c.model_config.encoder.window.literal_zeros = C.int32_t(config.ModelConfig.Encoder.Window.LiteralZeros)
 	c.model_config.encoder.lengths = C.CString(config.ModelConfig.Encoder.Lengths)
 	c.model_config.encoder.pad_to = C.float(config.ModelConfig.Encoder.PadTo)
 

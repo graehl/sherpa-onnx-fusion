@@ -23,8 +23,8 @@ use std::ffi::CString;
 #[derive(Clone, Debug)]
 /// One scorer, such as a language model, fused into `prefix_beam_search`.
 ///
-/// For a value this cannot express, such as a weight of 0, use the
-/// recognizer config's `options_json`.
+/// [`Default`] gives the real defaults, and every numeric field is passed
+/// as given: a 0 means 0. A `None` string takes the core default.
 pub struct ScorerConfig {
     /// Registered scorer type: `kenlm` or `onnx-rnn`.
     pub r#type: Option<String>,
@@ -38,7 +38,7 @@ pub struct ScorerConfig {
     pub num_threads: i32,
     /// Execution provider for the scorer's model.
     pub provider: Option<String>,
-    /// Search weight of the scorer's log score. 0 means 1.
+    /// Search weight of the scorer's log score.
     pub weight: f32,
     /// JSON object of type-specific options.
     pub extra: Option<String>,
@@ -82,7 +82,9 @@ impl ScorerConfig {
 #[derive(Clone, Debug)]
 /// Scorers and search settings for `prefix_beam_search`.
 ///
-/// The default searches with no scorer.
+/// The default searches with no scorer. Every numeric field, here and in
+/// `scorers`, is passed as given: a 0 means 0. A `None` string takes the
+/// core default.
 pub struct FusionConfig {
     /// Scorers fused with independent weights.
     pub scorers: Vec<ScorerConfig>,
@@ -95,7 +97,7 @@ pub struct FusionConfig {
     /// Most probable tokens per frame that may extend a hypothesis.
     pub token_candidates: i32,
     /// A hypothesis survives a frame only within this score of the best.
-    /// Negative: no limit.
+    /// 0 or less: no limit.
     pub score_beam: f32,
     /// Case of the text character scorers are given: `keep` or `lower`. The
     /// recognizer's output is unchanged.
@@ -166,6 +168,8 @@ impl FusionConfig {
             modified_beam_search_rules: self.modified_beam_search_rules as i32,
             ctc_prior: to_c_ptr(&self.ctc_prior, cstrings),
             ctc_prior_weight: self.ctc_prior_weight,
+            // Every numeric field above holds its real value.
+            literal_zeros: 1,
         }
     }
 }

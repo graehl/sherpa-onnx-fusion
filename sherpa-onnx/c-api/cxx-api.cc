@@ -111,6 +111,7 @@ static SherpaOnnxFusionConfig Convert(
   c.modified_beam_search_rules = config.modified_beam_search_rules;
   c.ctc_prior = config.ctc_prior.c_str();
   c.ctc_prior_weight = config.ctc_prior_weight;
+  c.literal_zeros = 1;  // Every field above holds its real value.
   return c;
 }
 
@@ -340,6 +341,7 @@ static SherpaOnnxOfflineRecognizerConfig Convert(
   c.model_config.encoder.window.center_power = window.center_power;
   c.model_config.encoder.window.context_frames = window.context_frames;
   c.model_config.encoder.window.context_fraction = window.context_fraction;
+  c.model_config.encoder.window.literal_zeros = 1;
   c.model_config.encoder.lengths = config.model_config.encoder.lengths.c_str();
   c.model_config.encoder.pad_to = config.model_config.encoder.pad_to;
 

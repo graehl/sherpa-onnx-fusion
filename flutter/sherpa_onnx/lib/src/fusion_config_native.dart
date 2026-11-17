@@ -39,6 +39,8 @@ void fillFusionConfig(SherpaOnnxFusionConfig c, FusionConfig config) {
   c.modifiedBeamSearchRules = config.modifiedBeamSearchRules ? 1 : 0;
   c.ctcPrior = config.ctcPrior.toNativeUtf8();
   c.ctcPriorWeight = config.ctcPriorWeight;
+  // Every numeric field above carries its real default, so a 0 is meant.
+  c.literalZeros = 1;
 }
 
 /// Free what [fillFusionConfig] allocated in [c].

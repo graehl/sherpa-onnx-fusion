@@ -189,8 +189,7 @@ struct ScorerConfig {
   int32_t num_threads = 1;
   /** Execution provider for the scorer's model. */
   std::string provider = "cpu";
-  /** Search weight of the scorer's log score. 0 means 1; use
-   * `options_json` for a weight of 0. */
+  /** Search weight of the scorer's log score. */
   float weight = 1.0f;
   /** JSON object of type-specific options. */
   std::string extra = "{}";
@@ -212,7 +211,7 @@ struct FusionConfig {
   /** Most probable tokens per frame that may extend a hypothesis. */
   int32_t token_candidates = 8;
   /** A hypothesis survives a frame only within this score of the best.
-   * Negative: no limit. */
+   * 0 or less: no limit. */
   float score_beam = 12.0f;
   /** Case of the text character scorers are given: `"keep"` or
    * `"lower"`. */
@@ -684,10 +683,10 @@ struct OfflineQwen3ASRModelConfig {
 struct OfflineEncoderWindowConfig {
   /** Window length in seconds. 0: every utterance is encoded whole. */
   float seconds = 0;
-  /** The least overlap of neighbouring windows, in seconds. 0 means 3. */
+  /** The least overlap of neighbouring windows, in seconds. */
   float overlap = 3;
-  /** How far an interior window may move to a quiet edge, in seconds.
-   * 0 means 1. */
+  /** How far an interior window may move to a quiet edge, in seconds;
+   * 0 keeps the windows evenly spaced. */
   float slack = 1;
   /** Scope of input normalization: `"window"` or `"utterance"`. */
   std::string normalize = "window";
@@ -695,8 +694,7 @@ struct OfflineEncoderWindowConfig {
   std::string weight = "center";
   /** CTC models: what `"center"` averages, `"log"` or `"prob"`. */
   std::string blend = "log";
-  /** Exponent of the `"center"` weight: 1 is linear. 0 means 1; use
-   * `options_json` for uniform weights. */
+  /** Exponent of the `"center"` weight: 1 is linear, 0 uniform. */
   float center_power = 1;
   /** Context-only output frames per interior window edge. */
   int32_t context_frames = 0;

@@ -35,4 +35,5 @@ pub struct FusionConfig {
     pub modified_beam_search_rules: i32,
     pub ctc_prior: *const c_char,
     pub ctc_prior_weight: c_float,
+    pub literal_zeros: i32,
 }

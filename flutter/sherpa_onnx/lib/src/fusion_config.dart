@@ -5,8 +5,8 @@
 /// One scorer, such as a language model, fused into
 /// `decodingMethod: 'prefix_beam_search'`.
 ///
-/// For a value these fields cannot express, such as a weight of 0, use the
-/// recognizer config's `optionsJson`.
+/// For a setting these fields do not cover, such as a provider's further
+/// options, use [extra] or the recognizer config's `optionsJson`.
 class ScorerConfig {
   const ScorerConfig({
     this.type = '',
@@ -69,8 +69,7 @@ class ScorerConfig {
   /// Execution provider for the scorer's model.
   final String provider;
 
-  /// Search weight of the scorer's log score. 0 means 1; use `optionsJson`
-  /// for a weight of 0.
+  /// Search weight of the scorer's log score.
   final double weight;
 
   /// JSON object of type-specific options.
@@ -152,7 +151,7 @@ class FusionConfig {
   final int tokenCandidates;
 
   /// A hypothesis survives a frame only within this score of the best.
-  /// Negative: no limit. 0 means 12; use `optionsJson` to set 0.
+  /// 0 or less: no limit.
   final double scoreBeam;
 
   /// Case of the text character scorers are given: `keep` or `lower`. The

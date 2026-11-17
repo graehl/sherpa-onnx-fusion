@@ -365,6 +365,12 @@ static SherpaOnnxOfflineEncoderWindowConfig GetOfflineEncoderWindowConfig(
 
   Napi::Object o = obj.Get("window").As<Napi::Object>();
 
+  // Fill in the real defaults so that an explicit 0 reaches the core as 0.
+  c.overlap = 3;
+  c.slack = 1;
+  c.center_power = 1;
+  c.literal_zeros = 1;
+
   SHERPA_ONNX_ASSIGN_ATTR_FLOAT(seconds, seconds);
   SHERPA_ONNX_ASSIGN_ATTR_FLOAT(overlap, overlap);
   SHERPA_ONNX_ASSIGN_ATTR_FLOAT(slack, slack);
