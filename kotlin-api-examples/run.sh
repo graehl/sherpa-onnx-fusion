@@ -169,6 +169,7 @@ function testOnlineAsr() {
     test_online_asr.kt \
     FeatureConfig.kt \
     HomophoneReplacerConfig.kt \
+    FusionConfig.kt \
     QnnConfig.kt \
     OnlineRecognizer.kt \
     OnlineStream.kt \
@@ -508,6 +509,7 @@ function testInverseTextNormalizationOnlineAsr() {
     test_itn_online_asr.kt \
     FeatureConfig.kt \
     HomophoneReplacerConfig.kt \
+    FusionConfig.kt \
     QnnConfig.kt \
     OnlineRecognizer.kt \
     OnlineStream.kt \

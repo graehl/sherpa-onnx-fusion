@@ -449,6 +449,16 @@ typedef struct SherpaOnnxOnlineRecognizerConfig {
   int32_t hotwords_buf_size;
   /** Optional homophone replacement configuration. */
   SherpaOnnxHomophoneReplacerConfig hr;
+
+  /** Scorers and search settings for prefix_beam_search. */
+  SherpaOnnxFusionConfig fusion;
+  /**
+   * Optional JSON object of options, applied after every other field, as
+   * in SherpaOnnxOfflineRecognizerConfig; the names are those
+   * `sherpa-onnx --help` prints. An error in it makes recognizer creation
+   * fail.
+   */
+  const char *options_json;
 } SherpaOnnxOnlineRecognizerConfig;
 
 /**

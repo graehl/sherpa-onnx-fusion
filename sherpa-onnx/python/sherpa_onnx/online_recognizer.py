@@ -6,6 +6,7 @@ from sherpa_onnx.lib._sherpa_onnx import (
     CudaConfig,
     EndpointConfig,
     FeatureExtractorConfig,
+    FusionConfig,
     HomophoneReplacerConfig,
     OnlineCtcFstDecoderConfig,
     OnlineLMConfig,
@@ -29,6 +30,10 @@ from sherpa_onnx.lib._sherpa_onnx import (
 
 def _assert_file_exists(f: str):
     assert Path(f).is_file(), f"{f} does not exist"
+
+
+def _fusion_or_default(fusion: Optional[FusionConfig]) -> FusionConfig:
+    return FusionConfig() if fusion is None else fusion
 
 
 class OnlineRecognizer(object):
@@ -147,6 +152,8 @@ class OnlineRecognizer(object):
         hr_lexicon: str = "",
         lodr_fst: str = "",
         lodr_scale: float = 0.0,
+        fusion: Optional[FusionConfig] = None,
+        options_json: str = "",
     ):
         """
         Please refer to
@@ -278,6 +285,13 @@ class OnlineRecognizer(object):
             Path to the LODR FST file in binary format. If empty, LODR is disabled.
           lodr_scale:
             Scale factor for LODR rescoring. Only used when lodr_fst is provided.
+          fusion:
+            A :class:`FusionConfig`: scorers fused into the search, and search
+            options, used when decoding_method is prefix_beam_search.
+          options_json:
+            A JSON object of command-line options applied after every other
+            option, e.g. ``'{"scorer": [{"weight": 40}], "score-beam": 0}'``.
+            An error raises ``ValueError``.
         """
         self = cls.__new__(cls)
         _assert_file_exists(tokens)
@@ -382,6 +396,8 @@ class OnlineRecognizer(object):
                 lexicon=hr_lexicon,
                 rule_fsts=hr_rule_fsts,
             ),
+            fusion=_fusion_or_default(fusion),
+            options_json=options_json,
         )
 
         self.recognizer = _Recognizer(recognizer_config)
@@ -540,6 +556,8 @@ class OnlineRecognizer(object):
         hr_dict_dir: str = "",
         hr_rule_fsts: str = "",
         hr_lexicon: str = "",
+        fusion: Optional[FusionConfig] = None,
+        options_json: str = "",
     ):
         """
         Please refer to
@@ -596,6 +614,13 @@ class OnlineRecognizer(object):
             If there are multiple archives, they are separated by a comma.
           device:
             onnxruntime cuda device index.
+          fusion:
+            A :class:`FusionConfig`: scorers fused into the search, and search
+            options, used when decoding_method is prefix_beam_search.
+          options_json:
+            A JSON object of command-line options applied after every other
+            option, e.g. ``'{"scorer": [{"weight": 40}], "score-beam": 0}'``.
+            An error raises ``ValueError``.
         """
         self = cls.__new__(cls)
         _assert_file_exists(tokens)
@@ -646,6 +671,8 @@ class OnlineRecognizer(object):
                 lexicon=hr_lexicon,
                 rule_fsts=hr_rule_fsts,
             ),
+            fusion=_fusion_or_default(fusion),
+            options_json=options_json,
         )
 
         self.recognizer = _Recognizer(recognizer_config)
@@ -797,6 +824,8 @@ class OnlineRecognizer(object):
         hr_dict_dir: str = "",
         hr_rule_fsts: str = "",
         hr_lexicon: str = "",
+        fusion: Optional[FusionConfig] = None,
+        options_json: str = "",
     ):
         """
         Please refer to
@@ -848,6 +877,13 @@ class OnlineRecognizer(object):
             If there are multiple archives, they are separated by a comma.
           device:
             onnxruntime cuda device index.
+          fusion:
+            A :class:`FusionConfig`: scorers fused into the search, and search
+            options, used when decoding_method is prefix_beam_search.
+          options_json:
+            A JSON object of command-line options applied after every other
+            option, e.g. ``'{"scorer": [{"weight": 40}], "score-beam": 0}'``.
+            An error raises ``ValueError``.
         """
         self = cls.__new__(cls)
         _assert_file_exists(tokens)
@@ -894,6 +930,8 @@ class OnlineRecognizer(object):
                 lexicon=hr_lexicon,
                 rule_fsts=hr_rule_fsts,
             ),
+            fusion=_fusion_or_default(fusion),
+            options_json=options_json,
         )
 
         self.recognizer = _Recognizer(recognizer_config)

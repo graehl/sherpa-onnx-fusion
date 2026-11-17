@@ -116,4 +116,9 @@ bool ApplyOptionsJsonField(JNIEnv *env, jobject config,
   return ApplyField(env, config, ans);
 }
 
+bool ApplyOptionsJsonField(JNIEnv *env, jobject config,
+                           OnlineRecognizerConfig *ans) {
+  return ApplyField(env, config, ans);
+}
+
 }  // namespace sherpa_onnx

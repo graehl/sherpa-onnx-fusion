@@ -116,6 +116,9 @@ pub struct OnlineRecognizerConfig {
     pub hotwords_buf_size: i32,
 
     pub hr: HomophoneReplacerConfig,
+
+    pub fusion: super::fusion::FusionConfig,
+    pub options_json: *const c_char,
 }
 
 #[repr(C)]

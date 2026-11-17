@@ -13,7 +13,7 @@ import {
   reset,
 } from 'libsherpa_onnx.so';
 
-import { FeatureConfig, HomophoneReplacerConfig, Samples } from './NonStreamingAsr';
+import { FeatureConfig, FusionConfig, HomophoneReplacerConfig, Samples } from './NonStreamingAsr';
 
 export class OnlineStream {
   public handle: object;
@@ -125,6 +125,10 @@ export class OnlineRecognizerConfig {
   public hotwordsBuf: string = '';
   public hotwordsBufSize: number = 0;
   public hr: HomophoneReplacerConfig = new HomophoneReplacerConfig();
+  public fusion: FusionConfig = new FusionConfig();
+  // JSON object of options applied after every other field, as in
+  // OfflineRecognizerConfig
+  public optionsJson: string = '';
 }
 
 interface OnlineRecognizerResultJson {

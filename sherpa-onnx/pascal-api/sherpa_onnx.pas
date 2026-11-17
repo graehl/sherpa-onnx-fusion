@@ -357,6 +357,10 @@ type
     HotwordsBuf: AnsiString;
     HotwordsBufSize: Integer;
     Hr: TSherpaOnnxHomophoneReplacerConfig;
+    Fusion: TSherpaOnnxFusionConfig;
+    { JSON object of command-line options applied after every other field;
+      an error in it makes recognizer creation fail. }
+    OptionsJson: AnsiString;
     function ToString: AnsiString;
     class operator Initialize({$IFDEF FPC}var{$ELSE}out{$ENDIF} Dest: TSherpaOnnxOnlineRecognizerConfig);
   end;
@@ -1103,6 +1107,8 @@ type
     HotwordsBuf: PAnsiChar;
     HotwordsBufSize: cint32;
     Hr: SherpaOnnxHomophoneReplacerConfig;
+    Fusion: SherpaOnnxFusionConfig;
+    OptionsJson: PAnsiChar;
   end;
 
   PSherpaOnnxOnlineRecognizerConfig = ^SherpaOnnxOnlineRecognizerConfig;
@@ -2001,7 +2007,9 @@ begin
     'RuleFsts := %s, ' +
     'RuleFars := %s, ' +
     'BlankPenalty := %.1f, ' +
-    'Hr := %s' +
+    'Hr := %s, ' +
+    'Fusion := %s, ' +
+    'OptionsJson := %s' +
     ')'
     ,
     [Self.FeatConfig.ToString, Self.ModelConfig.ToString,
@@ -2009,7 +2017,8 @@ begin
      Self.Rule1MinTrailingSilence, Self.Rule2MinTrailingSilence,
      Self.Rule3MinUtteranceLength, Self.HotwordsFile, Self.HotwordsScore,
      Self.CtcFstDecoderConfig.ToString, Self.RuleFsts, Self.RuleFars,
-     Self.BlankPenalty, Self.Hr.ToString
+     Self.BlankPenalty, Self.Hr.ToString, Self.Fusion.ToString,
+     Self.OptionsJson
     ]);
 end;
 
@@ -2079,6 +2088,7 @@ end;
 constructor TSherpaOnnxOnlineRecognizer.Create(Config: TSherpaOnnxOnlineRecognizerConfig);
 var
   C: SherpaOnnxOnlineRecognizerConfig;
+  Scorers: TSherpaOnnxNativeScorerArray;
 begin
   C := Default(SherpaOnnxOnlineRecognizerConfig);
   C.FeatConfig.SampleRate := Config.FeatConfig.SampleRate;
@@ -2118,6 +2128,8 @@ begin
   C.BlankPenalty := Config.BlankPenalty;
   C.Hr.Lexicon := PAnsiChar(Config.Hr.Lexicon);
   C.Hr.RuleFsts := PAnsiChar(Config.Hr.RuleFsts);
+  C.Fusion := ConvertFusionConfig(Config.Fusion, Scorers);
+  C.OptionsJson := PAnsiChar(Config.OptionsJson);
 
   Self.Handle := SherpaOnnxCreateOnlineRecognizer(@C);
   Self._Config := Config;

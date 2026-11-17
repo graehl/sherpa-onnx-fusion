@@ -8,6 +8,7 @@
 #include <string>
 
 #include "sherpa-onnx/csrc/offline-recognizer.h"
+#include "sherpa-onnx/csrc/online-recognizer.h"
 
 namespace sherpa_onnx {
 
@@ -19,6 +20,8 @@ namespace sherpa_onnx {
 // describes the problem in *error.
 bool ApplyOptionsJson(const std::string &json_text,
                       OfflineRecognizerConfig *config, std::string *error);
+bool ApplyOptionsJson(const std::string &json_text,
+                      OnlineRecognizerConfig *config, std::string *error);
 
 }  // namespace sherpa_onnx
 

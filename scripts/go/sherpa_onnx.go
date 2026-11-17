@@ -236,6 +236,14 @@ type OnlineRecognizerConfig struct {
 	HotwordsBuf             string
 	HotwordsBufSize         int
 	Hr                      HomophoneReplacerConfig
+
+	// Scorers and search settings for prefix_beam_search
+	Fusion FusionConfig
+
+	// Optional JSON object of options, applied after every other field, as
+	// in OfflineRecognizerConfig; the names are those sherpa-onnx --help
+	// prints. An error in it makes NewOnlineRecognizer return nil.
+	OptionsJson string
 }
 
 // It contains the recognition result for a online stream.
@@ -352,6 +360,12 @@ func NewOnlineRecognizer(config *OnlineRecognizerConfig) *OnlineRecognizer {
 
 	c.hr.rule_fsts = C.CString(config.Hr.RuleFsts)
 	defer C.free(unsafe.Pointer(c.hr.rule_fsts))
+
+	newCFusionConfig(&config.Fusion, &c.fusion)
+	defer freeCFusionConfig(&c.fusion)
+
+	c.options_json = C.CString(config.OptionsJson)
+	defer C.free(unsafe.Pointer(c.options_json))
 
 	impl := C.SherpaOnnxCreateOnlineRecognizer(&c)
 	if impl == nil {

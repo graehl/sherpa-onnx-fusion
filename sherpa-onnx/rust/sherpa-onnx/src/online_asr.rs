@@ -38,6 +38,7 @@
 //! }
 //! ```
 
+use crate::fusion::FusionConfig;
 use crate::utils::to_c_ptr;
 use serde::Deserialize;
 use std::ffi::{CStr, CString};
@@ -282,6 +283,15 @@ pub struct OnlineRecognizerConfig {
     pub hotwords_buf: Option<Vec<u8>>,
 
     pub hr: HomophoneReplacerConfig,
+
+    /// Scorers and search settings for `prefix_beam_search`.
+    pub fusion: FusionConfig,
+
+    /// Optional JSON object of options, applied after every other field, as
+    /// in `OfflineRecognizerConfig`; the names are those `sherpa-onnx --help`
+    /// prints. An error in it makes [`OnlineRecognizer::create`] return
+    /// `None`.
+    pub options_json: Option<String>,
 }
 
 impl Default for OnlineRecognizerConfig {
@@ -306,13 +316,19 @@ impl Default for OnlineRecognizerConfig {
             blank_penalty: 0.0,
             hotwords_buf: None,
             hr: Default::default(),
+            fusion: Default::default(),
+            options_json: None,
         }
     }
 }
 
 impl OnlineRecognizerConfig {
     /// Convert to sys struct for FFI call
-    pub(crate) fn to_sys(&self, cstrings: &mut Vec<CString>) -> sys::OnlineRecognizerConfig {
+    pub(crate) fn to_sys(
+        &self,
+        cstrings: &mut Vec<CString>,
+        scorers: &mut Vec<Vec<sys::ScorerConfig>>,
+    ) -> sys::OnlineRecognizerConfig {
         sys::OnlineRecognizerConfig {
             feat_config: self.feat_config,
             model_config: self
@@ -343,6 +359,10 @@ impl OnlineRecognizerConfig {
             hr: self
                 .hr
                 .to_sys(cstrings),
+            fusion: self
+                .fusion
+                .to_sys(cstrings, scorers),
+            options_json: to_c_ptr(&self.options_json, cstrings),
         }
     }
 }
@@ -360,8 +380,9 @@ impl OnlineRecognizer {
     /// Create a recognizer from `config`.
     pub fn create(config: &OnlineRecognizerConfig) -> Option<Self> {
         let mut cstrings = Vec::new();
+        let mut scorers = Vec::new();
 
-        let sys_config = config.to_sys(&mut cstrings);
+        let sys_config = config.to_sys(&mut cstrings, &mut scorers);
 
         let ptr = unsafe { sys::SherpaOnnxCreateOnlineRecognizer(&sys_config) };
 

@@ -4,12 +4,34 @@
 
 #include "sherpa-onnx/python/csrc/online-recognizer.h"
 
+#include <memory>
 #include <string>
 #include <vector>
 
 #include "sherpa-onnx/csrc/online-recognizer.h"
+#include "sherpa-onnx/csrc/recognizer-options-json.h"
 
 namespace sherpa_onnx {
+
+namespace {
+
+// The Python OnlineRecognizerConfig: the C++ config plus options_json, a
+// JSON object of command-line options applied when a recognizer is created.
+struct PyOnlineRecognizerConfig : public OnlineRecognizerConfig {
+  std::string options_json;
+};
+
+OnlineRecognizerConfig ApplyOptionsJsonOrThrow(
+    const PyOnlineRecognizerConfig &c) {
+  OnlineRecognizerConfig config = c;
+  std::string error;
+  if (!ApplyOptionsJson(c.options_json, &config, &error)) {
+    throw py::value_error("Error in options_json: " + error);
+  }
+  return config;
+}
+
+}  // namespace
 
 static constexpr const char *kOnlineRecognizerResultDoc = R"doc(
 Result for a streaming (online) recognizer. Call `result()` to obtain the
@@ -52,6 +74,13 @@ Args:
     If True, reset the encoder state after endpoint detection.
   hr:
     Config for homophone replacer.
+  fusion:
+    Scorers and search options for ``decoding_method="prefix_beam_search"``.
+  options_json:
+    A JSON object of command-line options, applied after every typed field
+    when the recognizer is created, e.g.
+    ``{"scorer": [{"weight": 40}], "score-beam": 0}``. An error makes
+    creation raise ``ValueError``.
 )doc";
 
 static constexpr const char *kOnlineRecognizerInitDoc = R"doc(
@@ -175,14 +204,32 @@ static void PybindOnlineRecognizerResult(py::module *m) {
 }
 
 static void PybindOnlineRecognizerConfig(py::module *m) {
-  using PyClass = OnlineRecognizerConfig;
+  using PyClass = PyOnlineRecognizerConfig;
   py::class_<PyClass>(*m, "OnlineRecognizerConfig")
-      .def(py::init<const FeatureExtractorConfig &, const OnlineModelConfig &,
-                    const OnlineLMConfig &, const EndpointConfig &,
-                    const OnlineCtcFstDecoderConfig &, bool,
-                    const std::string &, int32_t, const std::string &, float,
-                    float, float, const std::string &, const std::string &,
-                    bool, const HomophoneReplacerConfig &>(),
+      .def(py::init([](const FeatureExtractorConfig &feat_config,
+                       const OnlineModelConfig &model_config,
+                       const OnlineLMConfig &lm_config,
+                       const EndpointConfig &endpoint_config,
+                       const OnlineCtcFstDecoderConfig &ctc_fst_decoder_config,
+                       bool enable_endpoint, const std::string &decoding_method,
+                       int32_t max_active_paths,
+                       const std::string &hotwords_file, float hotwords_score,
+                       float blank_penalty, float temperature_scale,
+                       const std::string &rule_fsts,
+                       const std::string &rule_fars, bool reset_encoder,
+                       const HomophoneReplacerConfig &hr,
+                       const FusionConfig &fusion,
+                       const std::string &options_json) {
+             PyClass c;
+             static_cast<OnlineRecognizerConfig &>(c) = OnlineRecognizerConfig(
+                 feat_config, model_config, lm_config, endpoint_config,
+                 ctc_fst_decoder_config, enable_endpoint, decoding_method,
+                 max_active_paths, hotwords_file, hotwords_score, blank_penalty,
+                 temperature_scale, rule_fsts, rule_fars, reset_encoder, hr);
+             c.fusion = fusion;
+             c.options_json = options_json;
+             return c;
+           }),
            py::arg("feat_config"), py::arg("model_config"),
            py::arg("lm_config") = OnlineLMConfig(),
            py::arg("endpoint_config") = EndpointConfig(),
@@ -193,6 +240,7 @@ static void PybindOnlineRecognizerConfig(py::module *m) {
            py::arg("temperature_scale") = 2.0, py::arg("rule_fsts") = "",
            py::arg("rule_fars") = "", py::arg("reset_encoder") = false,
            py::arg("hr") = HomophoneReplacerConfig{},
+           py::arg("fusion") = FusionConfig{}, py::arg("options_json") = "",
            kOnlineRecognizerConfigInitDoc)
       .def_readwrite("feat_config", &PyClass::feat_config)
       .def_readwrite("model_config", &PyClass::model_config)
@@ -210,6 +258,8 @@ static void PybindOnlineRecognizerConfig(py::module *m) {
       .def_readwrite("rule_fars", &PyClass::rule_fars)
       .def_readwrite("reset_encoder", &PyClass::reset_encoder)
       .def_readwrite("hr", &PyClass::hr)
+      .def_readwrite("fusion", &PyClass::fusion)
+      .def_readwrite("options_json", &PyClass::options_json)
       .def("__str__", &PyClass::ToString);
 }
 
@@ -219,26 +269,29 @@ void PybindOnlineRecognizer(py::module *m) {
 
   using PyClass = OnlineRecognizer;
   py::class_<PyClass>(*m, "OnlineRecognizer")
-      .def(py::init<const OnlineRecognizerConfig &>(), py::arg("config"),
-           kOnlineRecognizerInitDoc,
+      .def(py::init([](const PyOnlineRecognizerConfig &config) {
+             return std::make_unique<PyClass>(ApplyOptionsJsonOrThrow(config));
+           }),
+           py::arg("config"), kOnlineRecognizerInitDoc,
            py::call_guard<py::gil_scoped_release>())
       .def(
           "create_stream",
           [](const PyClass &self) { return self.CreateStream(); },
-          kCreateStreamDoc,
+          // A stream's prefix_beam_search state uses the recognizer's
+          // scorers, so the stream keeps the recognizer alive.
+          py::keep_alive<0, 1>(), kCreateStreamDoc,
           py::call_guard<py::gil_scoped_release>())
       .def(
           "create_stream",
           [](PyClass &self, const std::string &hotwords) {
             return self.CreateStream(hotwords);
           },
-          py::arg("hotwords"), kCreateStreamHotwordsDoc,
+          py::arg("hotwords"), py::keep_alive<0, 1>(), kCreateStreamHotwordsDoc,
           py::call_guard<py::gil_scoped_release>())
       .def("is_ready", &PyClass::IsReady, kIsReadyDoc,
            py::call_guard<py::gil_scoped_release>())
       .def("decode_stream", &PyClass::DecodeStream, py::arg("s"),
-           kDecodeStreamDoc,
-           py::call_guard<py::gil_scoped_release>())
+           kDecodeStreamDoc, py::call_guard<py::gil_scoped_release>())
       .def(
           "decode_streams",
           [](PyClass &self, std::vector<OnlineStream *> ss) {

@@ -78,6 +78,11 @@ data class OnlineRecognizerConfig(
     var ruleFsts: String = "",
     var ruleFars: String = "",
     var blankPenalty: Float = 0.0f,
+    var fusion: FusionConfig = FusionConfig(),
+    // A JSON object of command-line options applied after every other field,
+    // as in OfflineRecognizerConfig. An error in it makes recognizer creation
+    // fail.
+    var optionsJson: String = "",
 )
 
 data class OnlineRecognizerResult(

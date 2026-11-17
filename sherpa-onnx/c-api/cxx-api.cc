@@ -167,6 +167,10 @@ OnlineRecognizer OnlineRecognizer::Create(
   c.hr.lexicon = config.hr.lexicon.c_str();
   c.hr.rule_fsts = config.hr.rule_fsts.c_str();
 
+  std::vector<SherpaOnnxScorerConfig> scorers;
+  c.fusion = Convert(config.fusion, &scorers);
+  c.options_json = config.options_json.c_str();
+
   auto p = SherpaOnnxCreateOnlineRecognizer(&c);
   return OnlineRecognizer(p);
 }

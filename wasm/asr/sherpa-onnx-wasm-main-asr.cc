@@ -26,11 +26,14 @@ static_assert(sizeof(SherpaOnnxOnlineModelConfig) ==
               "");
 static_assert(sizeof(SherpaOnnxFeatureConfig) == 2 * 4, "");
 static_assert(sizeof(SherpaOnnxOnlineCtcFstDecoderConfig) == 2 * 4, "");
+static_assert(sizeof(SherpaOnnxScorerConfig) == 8 * 4, "");
+static_assert(sizeof(SherpaOnnxFusionConfig) == 6 * 4, "");
 static_assert(sizeof(SherpaOnnxOnlineRecognizerConfig) ==
                   sizeof(SherpaOnnxFeatureConfig) +
                       sizeof(SherpaOnnxOnlineModelConfig) + 8 * 4 +
                       sizeof(SherpaOnnxOnlineCtcFstDecoderConfig) + 5 * 4 +
-                      sizeof(SherpaOnnxHomophoneReplacerConfig),
+                      sizeof(SherpaOnnxHomophoneReplacerConfig) +
+                      sizeof(SherpaOnnxFusionConfig) + 1 * 4,
               "");
 
 void MyPrint(SherpaOnnxOnlineRecognizerConfig *config) {

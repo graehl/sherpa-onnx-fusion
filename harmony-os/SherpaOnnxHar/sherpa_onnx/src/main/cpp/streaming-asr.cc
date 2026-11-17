@@ -351,6 +351,8 @@ static Napi::External<SherpaOnnxOnlineRecognizer> CreateOnlineRecognizerWrapper(
   SHERPA_ONNX_ASSIGN_ATTR_INT32(hotwords_buf_size, hotwordsBufSize);
 
   c.ctc_fst_decoder_config = GetCtcFstDecoderConfig(o);
+  c.fusion = GetFusionConfig(o);
+  SHERPA_ONNX_ASSIGN_ATTR_STR(options_json, optionsJson);
 
 #if __OHOS__
   const SherpaOnnxOnlineRecognizer *recognizer = nullptr;
@@ -394,6 +396,9 @@ static Napi::External<SherpaOnnxOnlineRecognizer> CreateOnlineRecognizerWrapper(
 
   SHERPA_ONNX_DELETE_C_STR(c.hr.lexicon);
   SHERPA_ONNX_DELETE_C_STR(c.hr.rule_fsts);
+
+  FreeFusionConfig(c.fusion);
+  SHERPA_ONNX_DELETE_C_STR(c.options_json);
 
   if (!recognizer) {
     Napi::TypeError::New(env, "Please check your config!")

@@ -98,8 +98,9 @@ struct SherpaOnnxDisplay {
   std::unique_ptr<sherpa_onnx::Display> impl;
 };
 
+// *ok, when given, is set false if config->options_json cannot be applied.
 static sherpa_onnx::OnlineRecognizerConfig GetOnlineRecognizerConfig(
-    const SherpaOnnxOnlineRecognizerConfig *config) {
+    const SherpaOnnxOnlineRecognizerConfig *config, bool *ok = nullptr) {
   sherpa_onnx::OnlineRecognizerConfig recognizer_config;
 
   recognizer_config.feat_config.sampling_rate =
@@ -200,6 +201,10 @@ static sherpa_onnx::OnlineRecognizerConfig GetOnlineRecognizerConfig(
   recognizer_config.hr.lexicon = SHERPA_ONNX_OR(config->hr.lexicon, "");
   recognizer_config.hr.rule_fsts = SHERPA_ONNX_OR(config->hr.rule_fsts, "");
 
+  recognizer_config.fusion = sherpa_onnx::GetFusionConfig(config->fusion);
+  bool json_ok = sherpa_onnx::ApplyCOptionsJson(config, &recognizer_config);
+  if (ok) *ok = json_ok;
+
   if (config->model_config.debug) {
 #if __OHOS__
     auto str_vec = sherpa_onnx::SplitString(recognizer_config.ToString(), 128);
@@ -217,10 +222,11 @@ static sherpa_onnx::OnlineRecognizerConfig GetOnlineRecognizerConfig(
 
 const SherpaOnnxOnlineRecognizer *SherpaOnnxCreateOnlineRecognizer(
     const SherpaOnnxOnlineRecognizerConfig *config) {
+  bool ok = true;
   sherpa_onnx::OnlineRecognizerConfig recognizer_config =
-      GetOnlineRecognizerConfig(config);
+      GetOnlineRecognizerConfig(config, &ok);
 
-  if (!recognizer_config.Validate()) {
+  if (!ok || !recognizer_config.Validate()) {
     SHERPA_ONNX_LOGE("Errors in config!");
     return nullptr;
   }
@@ -3702,8 +3708,10 @@ const SherpaOnnxOnlineRecognizer *SherpaOnnxCreateOnlineRecognizerOHOS(
     return SherpaOnnxCreateOnlineRecognizer(config);
   }
 
+  bool ok = true;
   sherpa_onnx::OnlineRecognizerConfig recognizer_config =
-      GetOnlineRecognizerConfig(config);
+      GetOnlineRecognizerConfig(config, &ok);
+  if (!ok) return nullptr;
 
   SherpaOnnxOnlineRecognizer *recognizer = new SherpaOnnxOnlineRecognizer;
 

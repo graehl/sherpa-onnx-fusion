@@ -11,6 +11,7 @@
 #include "sherpa-onnx/c-api/c-api.h"
 #include "sherpa-onnx/csrc/fusion-config.h"
 #include "sherpa-onnx/csrc/offline-recognizer.h"
+#include "sherpa-onnx/csrc/online-recognizer.h"
 
 namespace sherpa_onnx {
 
@@ -21,6 +22,8 @@ FusionConfig GetFusionConfig(const SherpaOnnxFusionConfig &c);
 // returns false.
 bool ApplyCOptionsJson(const SherpaOnnxOfflineRecognizerConfig *c,
                        OfflineRecognizerConfig *config);
+bool ApplyCOptionsJson(const SherpaOnnxOnlineRecognizerConfig *c,
+                       OnlineRecognizerConfig *config);
 
 }  // namespace sherpa_onnx
 

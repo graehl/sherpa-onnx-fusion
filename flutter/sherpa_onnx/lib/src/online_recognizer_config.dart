@@ -2,6 +2,7 @@
 // Shared config/data classes for online recognition -- no FFI, works on all platforms.
 
 import './feature_config.dart';
+import './fusion_config.dart';
 import './homophone_replacer_config.dart';
 
 /// Model files for a streaming transducer recognizer.
@@ -257,6 +258,8 @@ class OnlineRecognizerConfig {
     this.ruleFars = '',
     this.blankPenalty = 0.0,
     this.hr = const HomophoneReplacerConfig(),
+    this.fusion = const FusionConfig(),
+    this.optionsJson = '',
   });
 
   factory OnlineRecognizerConfig.fromJson(Map<String, dynamic> json) {
@@ -282,12 +285,15 @@ class OnlineRecognizerConfig {
       blankPenalty: (json['blankPenalty'] as num?)?.toDouble() ?? 0.0,
       hr: HomophoneReplacerConfig.fromJson(
           json['hr'] as Map<String, dynamic>? ?? const {}),
+      fusion: FusionConfig.fromJson(
+          json['fusion'] as Map<String, dynamic>? ?? const {}),
+      optionsJson: json['optionsJson'] as String? ?? '',
     );
   }
 
   @override
   String toString() {
-    return 'OnlineRecognizerConfig(feat: $feat, model: $model, decodingMethod: $decodingMethod, maxActivePaths: $maxActivePaths, enableEndpoint: $enableEndpoint, rule1MinTrailingSilence: $rule1MinTrailingSilence, rule2MinTrailingSilence: $rule2MinTrailingSilence, rule3MinUtteranceLength: $rule3MinUtteranceLength, hotwordsFile: $hotwordsFile, hotwordsScore: $hotwordsScore, ctcFstDecoderConfig: $ctcFstDecoderConfig, ruleFsts: $ruleFsts, ruleFars: $ruleFars, blankPenalty: $blankPenalty, hr: $hr)';
+    return 'OnlineRecognizerConfig(feat: $feat, model: $model, decodingMethod: $decodingMethod, maxActivePaths: $maxActivePaths, enableEndpoint: $enableEndpoint, rule1MinTrailingSilence: $rule1MinTrailingSilence, rule2MinTrailingSilence: $rule2MinTrailingSilence, rule3MinUtteranceLength: $rule3MinUtteranceLength, hotwordsFile: $hotwordsFile, hotwordsScore: $hotwordsScore, ctcFstDecoderConfig: $ctcFstDecoderConfig, ruleFsts: $ruleFsts, ruleFars: $ruleFars, blankPenalty: $blankPenalty, hr: $hr, fusion: $fusion, optionsJson: $optionsJson)';
   }
 
   Map<String, dynamic> toJson() => {
@@ -306,6 +312,8 @@ class OnlineRecognizerConfig {
         'ruleFars': ruleFars,
         'blankPenalty': blankPenalty,
         'hr': hr.toJson(),
+        'fusion': fusion.toJson(),
+        'optionsJson': optionsJson,
       };
 
   final FeatureConfig feat;
@@ -332,6 +340,15 @@ class OnlineRecognizerConfig {
 
   final double blankPenalty;
   final HomophoneReplacerConfig hr;
+
+  /// Scorers and search settings for `prefix_beam_search`.
+  final FusionConfig fusion;
+
+  /// Optional JSON object of command-line options, applied after every other
+  /// field, as in `OfflineRecognizerConfig`; the names are those
+  /// `sherpa-onnx --help` prints. An error in it makes recognizer creation
+  /// fail.
+  final String optionsJson;
 }
 
 /// Streaming recognition result returned by [OnlineRecognizer.getResult].
