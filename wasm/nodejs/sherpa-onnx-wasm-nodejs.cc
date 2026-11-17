@@ -36,7 +36,7 @@ static_assert(sizeof(SherpaOnnxForcedAlignerConfig) == 2 * 4 + 5 * 4 + 4, "");
 static_assert(sizeof(SherpaOnnxForcedAlignmentInterval) == 3 * 4, "");
 static_assert(sizeof(SherpaOnnxForcedAlignmentTier) == 3 * 4, "");
 static_assert(sizeof(SherpaOnnxForcedAlignmentResult) == 4 * 4, "");
-static_assert(sizeof(SherpaOnnxOfflineEncoderWindowConfig) == 6 * 4, "");
+static_assert(sizeof(SherpaOnnxOfflineEncoderWindowConfig) == 9 * 4, "");
 static_assert(sizeof(SherpaOnnxOfflineEncoderConfig) ==
                   sizeof(SherpaOnnxOfflineEncoderWindowConfig) + 2 * 4,
               "");

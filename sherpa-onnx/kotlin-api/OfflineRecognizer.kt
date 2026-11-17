@@ -158,6 +158,15 @@ data class OfflineEncoderWindowConfig(
     var weight: String = "center",
     // CTC models: what "center" averages, "log" probabilities or "prob".
     var blend: String = "log",
+    // Exponent of the "center" weight, (1 + distance from the nearer
+    // retained edge)^centerPower: 1 is linear, 0 uniform.
+    var centerPower: Float = 1.0f,
+    // Context-only output frames per interior window edge; they inform the
+    // window's other frames but are not themselves kept.
+    var contextFrames: Int = 0,
+    // The same as a fraction of each window's output length. At most one of
+    // contextFrames and contextFraction may be non-zero.
+    var contextFraction: Float = 0.0f,
 )
 
 // How an offline model's encoder runs.

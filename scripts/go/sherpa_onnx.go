@@ -708,6 +708,18 @@ type OfflineEncoderWindowConfig struct {
 	Normalize string  // Scope of input normalization: window (default) or utterance
 	Weight    string  // center (default): average the covering windows; cut: take the one farthest from an edge
 	Blend     string  // CTC models: what center averages, log (default) probabilities or prob
+
+	// Exponent of the center weight, (1 + distance from the nearer retained
+	// edge)^CenterPower: 1 is linear, 0 uniform. 0 here means 1.
+	CenterPower float32
+
+	// Context-only output frames per interior window edge; they inform the
+	// window's other frames but are not themselves kept.
+	ContextFrames int
+
+	// The same as a fraction of each window's output length. At most one of
+	// ContextFrames and ContextFraction may be non-zero.
+	ContextFraction float32
 }
 
 // How an offline model's encoder runs.
@@ -931,6 +943,9 @@ func newCOfflineRecognizerConfig(config *OfflineRecognizerConfig) *C.struct_Sher
 	c.model_config.encoder.window.normalize = C.CString(config.ModelConfig.Encoder.Window.Normalize)
 	c.model_config.encoder.window.weight = C.CString(config.ModelConfig.Encoder.Window.Weight)
 	c.model_config.encoder.window.blend = C.CString(config.ModelConfig.Encoder.Window.Blend)
+	c.model_config.encoder.window.center_power = C.float(config.ModelConfig.Encoder.Window.CenterPower)
+	c.model_config.encoder.window.context_frames = C.int32_t(config.ModelConfig.Encoder.Window.ContextFrames)
+	c.model_config.encoder.window.context_fraction = C.float(config.ModelConfig.Encoder.Window.ContextFraction)
 	c.model_config.encoder.lengths = C.CString(config.ModelConfig.Encoder.Lengths)
 	c.model_config.encoder.pad_to = C.float(config.ModelConfig.Encoder.PadTo)
 

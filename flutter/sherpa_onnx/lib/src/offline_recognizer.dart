@@ -307,6 +307,9 @@ class OfflineRecognizer {
     c.ref.model.encoder.window.normalize = window.normalize.toNativeUtf8();
     c.ref.model.encoder.window.weight = window.weight.toNativeUtf8();
     c.ref.model.encoder.window.blend = window.blend.toNativeUtf8();
+    c.ref.model.encoder.window.centerPower = window.centerPower;
+    c.ref.model.encoder.window.contextFrames = window.contextFrames;
+    c.ref.model.encoder.window.contextFraction = window.contextFraction;
     c.ref.model.encoder.lengths = config.model.encoder.lengths.toNativeUtf8();
     c.ref.model.encoder.padTo = config.model.encoder.padTo;
 

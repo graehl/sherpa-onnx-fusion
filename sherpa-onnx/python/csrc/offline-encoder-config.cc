@@ -35,6 +35,15 @@ Args:
   blend:
     For CTC outputs, what ``center`` averages: ``log`` (log probabilities)
     or ``prob`` (probabilities).
+  center_power:
+    Exponent of the center weight, ``(1 + distance from the nearer retained
+    edge) ** center_power``: 0 is uniform, 1 is linear.
+  context_frames:
+    Context-only output frames per interior window edge. At most one of
+    ``context_frames`` and ``context_fraction`` may be nonzero.
+  context_fraction:
+    Context-only output frames per interior edge as a fraction of each
+    window's output length.
 )doc";
 
 static constexpr const char *kOfflineEncoderConfigInitDoc = R"doc(
@@ -57,7 +66,8 @@ static void PybindOfflineEncoderWindowConfig(py::module *m) {
   py::class_<PyClass>(*m, "OfflineEncoderWindowConfig")
       .def(py::init([](float seconds, float overlap, float slack,
                        const std::string &normalize, const std::string &weight,
-                       const std::string &blend) {
+                       const std::string &blend, float center_power,
+                       int32_t context_frames, float context_fraction) {
              PyClass w;
              w.seconds = seconds;
              w.overlap = overlap;
@@ -65,11 +75,16 @@ static void PybindOfflineEncoderWindowConfig(py::module *m) {
              w.normalize = normalize;
              w.weight = weight;
              w.blend = blend;
+             w.center_power = center_power;
+             w.context_frames = context_frames;
+             w.context_fraction = context_fraction;
              return w;
            }),
            py::arg("seconds") = 0.0, py::arg("overlap") = 3.0,
            py::arg("slack") = 1.0, py::arg("normalize") = "window",
            py::arg("weight") = "center", py::arg("blend") = "log",
+           py::arg("center_power") = 1.0, py::arg("context_frames") = 0,
+           py::arg("context_fraction") = 0.0,
            kOfflineEncoderWindowConfigInitDoc)
       .def_readwrite("seconds", &PyClass::seconds)
       .def_readwrite("overlap", &PyClass::overlap)
@@ -77,6 +92,9 @@ static void PybindOfflineEncoderWindowConfig(py::module *m) {
       .def_readwrite("normalize", &PyClass::normalize)
       .def_readwrite("weight", &PyClass::weight)
       .def_readwrite("blend", &PyClass::blend)
+      .def_readwrite("center_power", &PyClass::center_power)
+      .def_readwrite("context_frames", &PyClass::context_frames)
+      .def_readwrite("context_fraction", &PyClass::context_fraction)
       .def("validate", &PyClass::Validate)
       .def("__str__", &PyClass::ToString);
 }

@@ -337,6 +337,9 @@ static SherpaOnnxOfflineRecognizerConfig Convert(
   c.model_config.encoder.window.normalize = window.normalize.c_str();
   c.model_config.encoder.window.weight = window.weight.c_str();
   c.model_config.encoder.window.blend = window.blend.c_str();
+  c.model_config.encoder.window.center_power = window.center_power;
+  c.model_config.encoder.window.context_frames = window.context_frames;
+  c.model_config.encoder.window.context_fraction = window.context_fraction;
   c.model_config.encoder.lengths = config.model_config.encoder.lengths.c_str();
   c.model_config.encoder.pad_to = config.model_config.encoder.pad_to;
 

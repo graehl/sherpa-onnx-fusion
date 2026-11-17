@@ -469,6 +469,16 @@ pub struct OfflineEncoderWindowConfig {
     pub weight: Option<String>,
     /// CTC models: what `center` averages, `log` probabilities or `prob`.
     pub blend: Option<String>,
+    /// Exponent of the `center` weight, (1 + distance from the nearer
+    /// retained edge)^center_power: 1 is linear. 0 here means 1; use
+    /// `options_json` for uniform weights.
+    pub center_power: f32,
+    /// Context-only output frames per interior window edge; they inform the
+    /// window's other frames but are not themselves kept.
+    pub context_frames: i32,
+    /// The same as a fraction of each window's output length. At most one of
+    /// `context_frames` and `context_fraction` may be non-zero.
+    pub context_fraction: f32,
 }
 
 impl Default for OfflineEncoderWindowConfig {
@@ -480,6 +490,9 @@ impl Default for OfflineEncoderWindowConfig {
             normalize: Some("window".into()),
             weight: Some("center".into()),
             blend: Some("log".into()),
+            center_power: 1.0,
+            context_frames: 0,
+            context_fraction: 0.0,
         }
     }
 }
@@ -493,6 +506,9 @@ impl OfflineEncoderWindowConfig {
             normalize: to_c_ptr(&self.normalize, cstrings),
             weight: to_c_ptr(&self.weight, cstrings),
             blend: to_c_ptr(&self.blend, cstrings),
+            center_power: self.center_power,
+            context_frames: self.context_frames,
+            context_fraction: self.context_fraction,
         }
     }
 }

@@ -613,6 +613,9 @@ class OfflineEncoderWindowConfig {
     this.normalize = 'window',
     this.weight = 'center',
     this.blend = 'log',
+    this.centerPower = 1.0,
+    this.contextFrames = 0,
+    this.contextFraction = 0.0,
   });
 
   factory OfflineEncoderWindowConfig.fromJson(Map<String, dynamic> json) {
@@ -623,12 +626,15 @@ class OfflineEncoderWindowConfig {
       normalize: json['normalize'] as String? ?? 'window',
       weight: json['weight'] as String? ?? 'center',
       blend: json['blend'] as String? ?? 'log',
+      centerPower: (json['centerPower'] as num?)?.toDouble() ?? 1.0,
+      contextFrames: json['contextFrames'] as int? ?? 0,
+      contextFraction: (json['contextFraction'] as num?)?.toDouble() ?? 0.0,
     );
   }
 
   @override
   String toString() {
-    return 'OfflineEncoderWindowConfig(seconds: $seconds, overlap: $overlap, slack: $slack, normalize: $normalize, weight: $weight, blend: $blend)';
+    return 'OfflineEncoderWindowConfig(seconds: $seconds, overlap: $overlap, slack: $slack, normalize: $normalize, weight: $weight, blend: $blend, centerPower: $centerPower, contextFrames: $contextFrames, contextFraction: $contextFraction)';
   }
 
   Map<String, dynamic> toJson() => {
@@ -638,6 +644,9 @@ class OfflineEncoderWindowConfig {
     'normalize': normalize,
     'weight': weight,
     'blend': blend,
+    'centerPower': centerPower,
+    'contextFrames': contextFrames,
+    'contextFraction': contextFraction,
   };
 
   /// Window length in seconds. 0: every utterance is encoded whole.
@@ -660,6 +669,19 @@ class OfflineEncoderWindowConfig {
 
   /// CTC models: what `center` averages, `log` probabilities or `prob`.
   final String blend;
+
+  /// Exponent of the `center` weight, (1 + distance from the nearer retained
+  /// edge)^centerPower: 1 is linear. 0 means 1; use `optionsJson` for
+  /// uniform weights.
+  final double centerPower;
+
+  /// Context-only output frames per interior window edge; they inform the
+  /// window's other frames but are not themselves kept.
+  final int contextFrames;
+
+  /// The same as a fraction of each window's output length. At most one of
+  /// [contextFrames] and [contextFraction] may be non-zero.
+  final double contextFraction;
 }
 
 /// How an offline model's encoder runs.
