@@ -100,6 +100,12 @@ pub struct FusionConfig {
     /// Case of the text character scorers are given: `keep` or `lower`. The
     /// recognizer's output is unchanged.
     pub scorer_text_case: Option<String>,
+    /// Transducers: rank results by score divided by output length, as
+    /// `modified_beam_search` does.
+    pub length_normalize: bool,
+    /// Stateless-decoder transducers: search as `modified_beam_search` does,
+    /// so that its results are reproduced, with or without scorers.
+    pub modified_beam_search_rules: bool,
 }
 
 impl Default for FusionConfig {
@@ -112,6 +118,8 @@ impl Default for FusionConfig {
             token_candidates: 8,
             score_beam: 12.0,
             scorer_text_case: Some("keep".into()),
+            length_normalize: false,
+            modified_beam_search_rules: false,
         }
     }
 }
@@ -146,6 +154,8 @@ impl FusionConfig {
             token_candidates: self.token_candidates,
             score_beam: self.score_beam,
             scorer_text_case: to_c_ptr(&self.scorer_text_case, cstrings),
+            length_normalize: self.length_normalize as i32,
+            modified_beam_search_rules: self.modified_beam_search_rules as i32,
         }
     }
 }

@@ -108,6 +108,9 @@ FusionConfig GetFusionConfig(JNIEnv *env, jobject fusion, bool *ok) {
   SHERPA_ONNX_JNI_READ_FLOAT(ans.score_beam, scoreBeam, cls, fusion);
   SHERPA_ONNX_JNI_READ_STRING(ans.scorer_text_case, scorerTextCase, cls,
                               fusion);
+  SHERPA_ONNX_JNI_READ_BOOL(ans.length_normalize, lengthNormalize, cls, fusion);
+  SHERPA_ONNX_JNI_READ_BOOL(ans.modified_beam_search_rules,
+                            modifiedBeamSearchRules, cls, fusion);
 
   env->DeleteLocalRef(cls);
   *ok = true;

@@ -525,7 +525,7 @@ function initSherpaOnnxFusionConfig(config, Module) {
       config.scorerTextCase || '',
       buffer + lengthBonusUnitLen + ctcAlignmentLen, scorerTextCaseLen);
 
-  const len = 8 * 4;
+  const len = 10 * 4;
   const ptr = Module._malloc(len);
 
   let offset = 0;
@@ -553,6 +553,12 @@ function initSherpaOnnxFusionConfig(config, Module) {
   Module.setValue(
       ptr + offset, buffer + lengthBonusUnitLen + ctcAlignmentLen,
       'i8*');  // scorer_text_case
+  offset += 4;
+
+  Module.setValue(ptr + offset, config.lengthNormalize ? 1 : 0, 'i32');
+  offset += 4;
+
+  Module.setValue(ptr + offset, config.modifiedBeamSearchRules ? 1 : 0, 'i32');
   offset += 4;
 
   return {ptr: ptr, len: len, buffer: buffer, scorers: scorers};

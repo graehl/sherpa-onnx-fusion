@@ -28,4 +28,10 @@ data class FusionConfig(
     var scoreBeam: Float = 12.0f,
     // Case of the text character scorers are given: "keep" or "lower".
     var scorerTextCase: String = "keep",
+    // Transducers: rank results by score divided by output length, as
+    // modified_beam_search does.
+    var lengthNormalize: Boolean = false,
+    // Stateless-decoder transducers: search as modified_beam_search does, so
+    // that its results are reproduced, with or without scorers.
+    var modifiedBeamSearchRules: Boolean = false,
 )

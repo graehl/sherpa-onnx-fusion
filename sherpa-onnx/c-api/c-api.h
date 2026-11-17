@@ -382,6 +382,16 @@ typedef struct SherpaOnnxFusionConfig {
    * "lower". The recognizer's output is unchanged.
    */
   const char *scorer_text_case;
+  /**
+   * Transducers, non-zero: rank results by score divided by output length,
+   * as modified_beam_search does.
+   */
+  int32_t length_normalize;
+  /**
+   * Stateless-decoder transducers, non-zero: search as modified_beam_search
+   * does, so that its results are reproduced, with or without scorers.
+   */
+  int32_t modified_beam_search_rules;
 } SherpaOnnxFusionConfig;
 
 /**

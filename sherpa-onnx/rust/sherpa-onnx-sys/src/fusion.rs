@@ -31,4 +31,6 @@ pub struct FusionConfig {
     pub token_candidates: i32,
     pub score_beam: c_float,
     pub scorer_text_case: *const c_char,
+    pub length_normalize: i32,
+    pub modified_beam_search_rules: i32,
 }

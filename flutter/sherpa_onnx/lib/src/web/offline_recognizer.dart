@@ -194,6 +194,8 @@ JSObject _buildFusionConfig(FusionConfig fusion) {
   jsFusion['tokenCandidates'] = fusion.tokenCandidates.toJS;
   jsFusion['scoreBeam'] = fusion.scoreBeam.toJS;
   jsFusion['scorerTextCase'] = fusion.scorerTextCase.toJS;
+  jsFusion['lengthNormalize'] = fusion.lengthNormalize.toJS;
+  jsFusion['modifiedBeamSearchRules'] = fusion.modifiedBeamSearchRules.toJS;
   return jsFusion;
 }
 

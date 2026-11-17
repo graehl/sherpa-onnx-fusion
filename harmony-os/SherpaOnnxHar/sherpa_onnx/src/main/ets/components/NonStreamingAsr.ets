@@ -238,6 +238,10 @@ export class FusionConfig {
   public scoreBeam: number = 12;  // a negative value means no limit
   // Case of the text character scorers are given: 'keep' or 'lower'
   public scorerTextCase: string = 'keep';
+  // Transducers: rank results by score divided by output length
+  public lengthNormalize: boolean = false;
+  // Stateless-decoder transducers: search as modified_beam_search does
+  public modifiedBeamSearchRules: boolean = false;
 }
 
 export class OfflineRecognizerConfig {

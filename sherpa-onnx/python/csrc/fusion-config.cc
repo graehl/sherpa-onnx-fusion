@@ -63,6 +63,12 @@ Args:
   scorer_text_case:
     The case of the text character scorers are given: ``keep`` or
     ``lower``. The recognizer's output is unchanged.
+  length_normalize:
+    Transducers: rank results by score divided by output length, as
+    ``modified_beam_search`` does.
+  modified_beam_search_rules:
+    Stateless-decoder transducers: search as ``modified_beam_search``
+    does, so that its results are reproduced, with or without scorers.
 )doc";
 
 static void PybindScorerConfig(py::module *m) {
@@ -124,7 +130,8 @@ void PybindFusionConfig(py::module *m) {
                        float length_bonus, const std::string &length_bonus_unit,
                        const std::string &ctc_alignment,
                        int32_t token_candidates, float score_beam,
-                       const std::string &scorer_text_case) {
+                       const std::string &scorer_text_case,
+                       bool length_normalize, bool modified_beam_search_rules) {
              PyClass f;
              f.scorers = scorers;
              f.length_bonus = length_bonus;
@@ -133,6 +140,8 @@ void PybindFusionConfig(py::module *m) {
              f.token_candidates = token_candidates;
              f.score_beam = score_beam;
              f.scorer_text_case = scorer_text_case;
+             f.length_normalize = length_normalize;
+             f.modified_beam_search_rules = modified_beam_search_rules;
              return f;
            }),
            py::arg("scorers") = std::vector<ScorerOptions>{},
@@ -140,7 +149,8 @@ void PybindFusionConfig(py::module *m) {
            py::arg("length_bonus_unit") = "token",
            py::arg("ctc_alignment") = "sum", py::arg("token_candidates") = 8,
            py::arg("score_beam") = 12.0, py::arg("scorer_text_case") = "keep",
-           kFusionConfigInitDoc)
+           py::arg("length_normalize") = false,
+           py::arg("modified_beam_search_rules") = false, kFusionConfigInitDoc)
       .def_readwrite("scorers", &PyClass::scorers)
       .def_readwrite("length_bonus", &PyClass::length_bonus)
       .def_readwrite("length_bonus_unit", &PyClass::length_bonus_unit)
@@ -148,6 +158,9 @@ void PybindFusionConfig(py::module *m) {
       .def_readwrite("token_candidates", &PyClass::token_candidates)
       .def_readwrite("score_beam", &PyClass::score_beam)
       .def_readwrite("scorer_text_case", &PyClass::scorer_text_case)
+      .def_readwrite("length_normalize", &PyClass::length_normalize)
+      .def_readwrite("modified_beam_search_rules",
+                     &PyClass::modified_beam_search_rules)
       .def("validate", &PyClass::Validate)
       .def("__str__", &PyClass::ToString);
 }

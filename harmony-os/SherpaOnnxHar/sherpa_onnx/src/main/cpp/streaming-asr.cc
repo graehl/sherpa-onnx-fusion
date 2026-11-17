@@ -255,6 +255,9 @@ SherpaOnnxFusionConfig GetFusionConfig(Napi::Object obj) {
   SHERPA_ONNX_ASSIGN_ATTR_INT32(token_candidates, tokenCandidates);
   SHERPA_ONNX_ASSIGN_ATTR_FLOAT(score_beam, scoreBeam);
   SHERPA_ONNX_ASSIGN_ATTR_STR(scorer_text_case, scorerTextCase);
+  SHERPA_ONNX_ASSIGN_ATTR_BOOL(length_normalize, lengthNormalize);
+  SHERPA_ONNX_ASSIGN_ATTR_BOOL(modified_beam_search_rules,
+                               modifiedBeamSearchRules);
 
   return c;
 }
