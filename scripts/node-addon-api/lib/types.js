@@ -448,6 +448,11 @@
  *   this score of the best. Default 12; a negative value means no limit.
  * @property {string} [scorerTextCase] - Case of the text character scorers
  *   are given: 'keep' (default) or 'lower'. The output is unchanged.
+ * @property {boolean|number} [lengthNormalize] - Transducers, true: rank
+ *   results by score divided by output length, as modified_beam_search does.
+ * @property {boolean|number} [modifiedBeamSearchRules] - Stateless-decoder
+ *   transducers, true: search as modified_beam_search does, so that its
+ *   results are reproduced, with or without scorers.
  */
 
 /**

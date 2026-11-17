@@ -107,6 +107,8 @@ static SherpaOnnxFusionConfig Convert(
   c.token_candidates = config.token_candidates;
   c.score_beam = config.score_beam;
   c.scorer_text_case = config.scorer_text_case.c_str();
+  c.length_normalize = config.length_normalize;
+  c.modified_beam_search_rules = config.modified_beam_search_rules;
   return c;
 }
 

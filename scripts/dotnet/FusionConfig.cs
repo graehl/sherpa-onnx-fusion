@@ -21,6 +21,8 @@ namespace SherpaOnnx
             TokenCandidates = 8;
             ScoreBeam = 12.0F;
             ScorerTextCase = "keep";
+            LengthNormalize = 0;
+            ModifiedBeamSearchRules = 0;
         }
 
         /// <summary>
@@ -64,6 +66,18 @@ namespace SherpaOnnx
         /// </summary>
         [MarshalAs(UnmanagedType.LPStr)]
         public string ScorerTextCase;
+
+        /// <summary>
+        /// Transducers, non-zero: rank results by score divided by output
+        /// length, as modified_beam_search does.
+        /// </summary>
+        public int LengthNormalize;
+
+        /// <summary>
+        /// Stateless-decoder transducers, non-zero: search as
+        /// modified_beam_search does, so that its results are reproduced.
+        /// </summary>
+        public int ModifiedBeamSearchRules;
     }
 
     /// Copies a ScorerConfig[] into native memory for FusionConfig.Scorers.

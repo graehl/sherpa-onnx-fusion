@@ -170,6 +170,14 @@ type FusionConfig struct {
 	// Case of the text character scorers are given: keep (default) or
 	// lower. The recognizer's output is unchanged.
 	ScorerTextCase string
+
+	// Transducers, 1: rank results by score divided by output length, as
+	// modified_beam_search does.
+	LengthNormalize int
+
+	// Stateless-decoder transducers, 1: search as modified_beam_search does,
+	// so that its results are reproduced, with or without scorers.
+	ModifiedBeamSearchRules int
 }
 
 func freeCString(p **C.char) {
@@ -204,6 +212,8 @@ func newCFusionConfig(config *FusionConfig, c *C.struct_SherpaOnnxFusionConfig) 
 	c.token_candidates = C.int32_t(config.TokenCandidates)
 	c.score_beam = C.float(config.ScoreBeam)
 	c.scorer_text_case = C.CString(config.ScorerTextCase)
+	c.length_normalize = C.int32_t(config.LengthNormalize)
+	c.modified_beam_search_rules = C.int32_t(config.ModifiedBeamSearchRules)
 }
 
 func freeCFusionConfig(c *C.struct_SherpaOnnxFusionConfig) {

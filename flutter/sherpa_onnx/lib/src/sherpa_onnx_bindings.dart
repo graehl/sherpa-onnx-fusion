@@ -646,6 +646,12 @@ final class SherpaOnnxFusionConfig extends Struct {
   external double scoreBeam;
 
   external Pointer<Utf8> scorerTextCase;
+
+  @Int32()
+  external int lengthNormalize;
+
+  @Int32()
+  external int modifiedBeamSearchRules;
 }
 
 final class SherpaOnnxOfflineCtcFstDecoderConfig extends Struct {

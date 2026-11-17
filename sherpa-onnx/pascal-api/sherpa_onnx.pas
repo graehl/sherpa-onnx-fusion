@@ -340,6 +340,10 @@ type
     TokenCandidates: Integer;
     ScoreBeam: Single; { negative: no limit }
     ScorerTextCase: AnsiString; { 'keep' or 'lower' }
+    { Transducers: rank results by score divided by output length. }
+    LengthNormalize: Boolean;
+    { Stateless-decoder transducers: search as modified_beam_search does. }
+    ModifiedBeamSearchRules: Boolean;
     function ToString: AnsiString;
     class operator Initialize({$IFDEF FPC}var{$ELSE}out{$ENDIF} Dest: TSherpaOnnxFusionConfig);
   end;
@@ -1100,6 +1104,8 @@ type
     TokenCandidates: cint32;
     ScoreBeam: cfloat;
     ScorerTextCase: PAnsiChar;
+    LengthNormalize: cint32;
+    ModifiedBeamSearchRules: cint32;
   end;
 
   SherpaOnnxOnlineRecognizerConfig = record
@@ -2106,6 +2112,8 @@ begin
   Result.TokenCandidates := Config.TokenCandidates;
   Result.ScoreBeam := Config.ScoreBeam;
   Result.ScorerTextCase := PAnsiChar(Config.ScorerTextCase);
+  Result.LengthNormalize := Ord(Config.LengthNormalize);
+  Result.ModifiedBeamSearchRules := Ord(Config.ModifiedBeamSearchRules);
 end;
 
 constructor TSherpaOnnxOnlineRecognizer.Create(Config: TSherpaOnnxOnlineRecognizerConfig);
@@ -3086,6 +3094,8 @@ begin
   Dest.TokenCandidates := 8;
   Dest.ScoreBeam := 12;
   Dest.ScorerTextCase := 'keep';
+  Dest.LengthNormalize := False;
+  Dest.ModifiedBeamSearchRules := False;
 end;
 
 function TSherpaOnnxScorerConfig.ToString: AnsiString;
@@ -3114,9 +3124,11 @@ begin
 
   Result := Format('TSherpaOnnxFusionConfig(Scorers := %s, ' +
     'LengthBonus := %.3f, LengthBonusUnit := %s, CtcAlignment := %s, ' +
-    'TokenCandidates := %d, ScoreBeam := %.3f, ScorerTextCase := %s)',
+    'TokenCandidates := %d, ScoreBeam := %.3f, ScorerTextCase := %s, ' +
+    'LengthNormalize := %s, ModifiedBeamSearchRules := %s)',
     [ScorersStr, Self.LengthBonus, Self.LengthBonusUnit, Self.CtcAlignment,
-     Self.TokenCandidates, Self.ScoreBeam, Self.ScorerTextCase]);
+     Self.TokenCandidates, Self.ScoreBeam, Self.ScorerTextCase,
+     Self.LengthNormalize.ToString, Self.ModifiedBeamSearchRules.ToString]);
 end;
 
 constructor TSherpaOnnxCircularBuffer.Create(Capacity: Integer);

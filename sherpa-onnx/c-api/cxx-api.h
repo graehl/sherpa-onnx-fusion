@@ -217,6 +217,11 @@ struct FusionConfig {
   /** Case of the text character scorers are given: `"keep"` or
    * `"lower"`. */
   std::string scorer_text_case = "keep";
+  /** Transducers: rank results by score divided by output length. */
+  bool length_normalize = false;
+  /** Stateless-decoder transducers: search as `"modified_beam_search"`
+   * does, so that its results are reproduced. */
+  bool modified_beam_search_rules = false;
 };
 
 /**

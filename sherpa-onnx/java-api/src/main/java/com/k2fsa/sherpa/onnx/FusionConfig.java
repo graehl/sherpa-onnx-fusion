@@ -14,6 +14,12 @@ public class FusionConfig {
     private final float scoreBeam;
     // Case of the text character scorers are given: "keep" or "lower".
     private final String scorerTextCase;
+    // Transducers: rank results by score divided by output length, as
+    // modified_beam_search does.
+    private final boolean lengthNormalize;
+    // Stateless-decoder transducers: search as modified_beam_search does, so
+    // that its results are reproduced, with or without scorers.
+    private final boolean modifiedBeamSearchRules;
 
     private FusionConfig(Builder builder) {
         this.scorers = builder.scorers;
@@ -23,6 +29,8 @@ public class FusionConfig {
         this.tokenCandidates = builder.tokenCandidates;
         this.scoreBeam = builder.scoreBeam;
         this.scorerTextCase = builder.scorerTextCase;
+        this.lengthNormalize = builder.lengthNormalize;
+        this.modifiedBeamSearchRules = builder.modifiedBeamSearchRules;
     }
 
     public static Builder builder() {
@@ -57,6 +65,14 @@ public class FusionConfig {
         return scorerTextCase;
     }
 
+    public boolean getLengthNormalize() {
+        return lengthNormalize;
+    }
+
+    public boolean getModifiedBeamSearchRules() {
+        return modifiedBeamSearchRules;
+    }
+
     public static class Builder {
         private ScorerConfig[] scorers = new ScorerConfig[0];
         private float lengthBonus = 0.0f;
@@ -65,6 +81,8 @@ public class FusionConfig {
         private int tokenCandidates = 8;
         private float scoreBeam = 12.0f;
         private String scorerTextCase = "keep";
+        private boolean lengthNormalize = false;
+        private boolean modifiedBeamSearchRules = false;
 
         public FusionConfig build() {
             return new FusionConfig(this);
@@ -102,6 +120,16 @@ public class FusionConfig {
 
         public Builder setScorerTextCase(String scorerTextCase) {
             this.scorerTextCase = scorerTextCase;
+            return this;
+        }
+
+        public Builder setLengthNormalize(boolean lengthNormalize) {
+            this.lengthNormalize = lengthNormalize;
+            return this;
+        }
+
+        public Builder setModifiedBeamSearchRules(boolean modifiedBeamSearchRules) {
+            this.modifiedBeamSearchRules = modifiedBeamSearchRules;
             return this;
         }
     }

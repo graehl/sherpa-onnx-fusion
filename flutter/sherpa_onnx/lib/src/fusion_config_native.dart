@@ -35,6 +35,8 @@ void fillFusionConfig(SherpaOnnxFusionConfig c, FusionConfig config) {
   c.tokenCandidates = config.tokenCandidates;
   c.scoreBeam = config.scoreBeam;
   c.scorerTextCase = config.scorerTextCase.toNativeUtf8();
+  c.lengthNormalize = config.lengthNormalize ? 1 : 0;
+  c.modifiedBeamSearchRules = config.modifiedBeamSearchRules ? 1 : 0;
 }
 
 /// Free what [fillFusionConfig] allocated in [c].

@@ -91,6 +91,8 @@ class FusionConfig {
     this.tokenCandidates = 8,
     this.scoreBeam = 12.0,
     this.scorerTextCase = 'keep',
+    this.lengthNormalize = false,
+    this.modifiedBeamSearchRules = false,
   });
 
   factory FusionConfig.fromJson(Map<String, dynamic> json) {
@@ -105,12 +107,15 @@ class FusionConfig {
       tokenCandidates: json['tokenCandidates'] as int? ?? 8,
       scoreBeam: (json['scoreBeam'] as num?)?.toDouble() ?? 12.0,
       scorerTextCase: json['scorerTextCase'] as String? ?? 'keep',
+      lengthNormalize: json['lengthNormalize'] as bool? ?? false,
+      modifiedBeamSearchRules:
+          json['modifiedBeamSearchRules'] as bool? ?? false,
     );
   }
 
   @override
   String toString() {
-    return 'FusionConfig(scorers: $scorers, lengthBonus: $lengthBonus, lengthBonusUnit: $lengthBonusUnit, ctcAlignment: $ctcAlignment, tokenCandidates: $tokenCandidates, scoreBeam: $scoreBeam, scorerTextCase: $scorerTextCase)';
+    return 'FusionConfig(scorers: $scorers, lengthBonus: $lengthBonus, lengthBonusUnit: $lengthBonusUnit, ctcAlignment: $ctcAlignment, tokenCandidates: $tokenCandidates, scoreBeam: $scoreBeam, scorerTextCase: $scorerTextCase, lengthNormalize: $lengthNormalize, modifiedBeamSearchRules: $modifiedBeamSearchRules)';
   }
 
   Map<String, dynamic> toJson() => {
@@ -121,6 +126,8 @@ class FusionConfig {
         'tokenCandidates': tokenCandidates,
         'scoreBeam': scoreBeam,
         'scorerTextCase': scorerTextCase,
+        'lengthNormalize': lengthNormalize,
+        'modifiedBeamSearchRules': modifiedBeamSearchRules,
       };
 
   /// Scorers fused with independent weights.
@@ -145,4 +152,12 @@ class FusionConfig {
   /// Case of the text character scorers are given: `keep` or `lower`. The
   /// recognizer's output is unchanged.
   final String scorerTextCase;
+
+  /// Transducers: rank results by score divided by output length, as
+  /// `modified_beam_search` does.
+  final bool lengthNormalize;
+
+  /// Stateless-decoder transducers: search as `modified_beam_search` does,
+  /// so that its results are reproduced, with or without scorers.
+  final bool modifiedBeamSearchRules;
 }
