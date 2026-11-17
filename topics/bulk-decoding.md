@@ -38,6 +38,42 @@ one batch.
 - **Timing.** It reports the recognizer's own time, excluding loading and
   `--warm-up` decodes; `--pause-seconds` leaves time to attach a monitor.
 
+## Throughput with an LSTM on one GPU
+
+A sweep on 200 LibriSpeech test-other recordings (1,349 s), the zipformer
+CTC model and icefall's LibriSpeech token LSTM (weight 0.3) fused by
+prefix search, recognizer on CUDA, `--num-threads=2`, on an RTX PRO 6000
+(96 GB) with 16 cores (2026-11-17). RTF is elapsed time from the end of
+warm-up to the last result over audio time. Other work on the host held a
+load of about 2 of 16 cores throughout, and nothing else used the GPU.
+Repeated settings varied by at most 0.0002 (five runs of batch 32 with 4
+threads, all 0.0015; four of batch 8 with one model thread and 4 search
+threads, 0.0038–0.0040); single runs otherwise.
+
+| LSTM on | Setting | RTF | Share of the best speed |
+|---|---|---:|---:|
+| GPU | `--batch-size=32 --nj=6` (best) | 0.0014 | 100% |
+| GPU | `--batch-size=32 --nj=4` (fewest threads within 90%) | 0.0015 | 93% |
+| GPU | `--batch-size=16 --nj=4` | 0.0017 | 82% |
+| GPU | `--batch-size=32 --nj=2` | 0.0023 | 61% |
+| GPU | `--batch-size=32 --nj=1` | 0.0038 | 37% |
+| CPU | `--batch-size=16 --nj=2 --decode-threads=8` (best) | 0.0112 | 100% |
+| CPU | `--batch-size=16 --nj=4` (fewest threads within 90%) | 0.0123 | 91% |
+
+So placing the LSTM on the GPU makes the whole decode 8.0 times faster at
+each placement's best setting, and 8.2 times at the cheapest within 90%.
+On the GPU, threads that each run the model and search (`--nj`) beat one
+model thread with separate search threads at every batch size (batch 32:
+4 model threads 0.0015; 1 model thread with 1, 2, 4 or 8 search threads
+0.0031–0.0035). Search calls sized apart from the model batch
+(`--search-batch-size` 1 to 64) gave no speed in this setting: at each
+model batch the best was within 0.0001–0.0002 of searching whole batches.
+Batch 64 is no faster than 32 (0.0017 at 4 and 6 threads) and with 8
+threads ran out of GPU memory; with the LSTM on the CPU that setting still
+used 87 GB, so the recognizer's batched encoding is most of it
+(`--max-batch-seconds` bounds it). Batch 32 with 4 threads peaked at 45 GB
+of GPU memory with the LSTM there and 34 GB without.
+
 ## Search calls apart from model batches
 
 `--search-batch-size=S` makes each search call take S recordings,

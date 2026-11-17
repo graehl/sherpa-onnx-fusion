@@ -86,7 +86,13 @@ tokens, § Fusion on RNN-T and TDT, § Matching the existing decoders).
 - Scorers fused during the search, several at once with independent
   weights: a KenLM character n-gram (`-DSHERPA_ONNX_ENABLE_KENLM=ON`, off by
   default because KenLM is LGPL) and an ONNX LSTM or GRU over characters or
-  over the recognizer's tokens.
+  over the recognizer's tokens. An LSTM on a GPU
+  (`--scorer.N.provider=cuda`) keeps its recurrent states there; with
+  icefall's LibriSpeech LSTM fused into the English CTC model, 200
+  test-other recordings decoded at RTF 0.0014 with the LSTM on the GPU
+  against 0.0112 with it on the CPU, 8 times faster, at the best of a
+  sweep of batch sizes and threads on one RTX PRO 6000
+  ([bulk decoding](topics/bulk-decoding.md#throughput-with-an-lstm-on-one-gpu)).
 - Scorer configuration on the command line (`--scorer.type=kenlm
   --scorer.model=lm.bin`, or `--scorer.N.<option>` for several) and from a
   JSON file ([option collections](topics/json-option-collections.md)).
