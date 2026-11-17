@@ -46,8 +46,12 @@ the CTC model, with an unreadable file among them, in many search and
 encoder-window configurations, and requires every way of running the
 program (threads, search threads, sorting, printing as finished) to give
 the same rows and texts as one thread. Some configurations must also have
-an effect against a baseline. The fork's workflow runs it. What it does not
-cover is in [its gap](../gaps/parallel-check-coverage.md).
+an effect against a baseline. The fork's workflow runs it. Batches of
+several recordings are checked for their rows only, since batching changes
+what some models output; that sharing a search batch changes no transcript
+is checked apart from the model, in `sherpa-onnx/python/tests/test_fusion.py`
+([inflight batching](beam-search-and-scorer-fusion.md#inflight-batching)).
+What the check does not cover is in [its gap](../gaps/parallel-check-coverage.md).
 
 ## Open work
 

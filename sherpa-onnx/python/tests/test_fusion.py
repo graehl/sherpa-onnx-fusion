@@ -10,6 +10,7 @@
 #
 #  ctest --verbose -R test_fusion_py
 
+import json
 import os
 import unittest
 import wave
@@ -22,6 +23,9 @@ MODELS = os.environ.get("SHERPA_ONNX_FUSION_MODELS", "")
 _models = Path(MODELS)
 CTC_DIR = _models / "zipformer-ctc-en/sherpa-onnx-zipformer-ctc-en-2023-10-02"
 LM = _models / "en-char-6gram/en-librispeech-char-6gram.bin"
+# The tiny character LSTM that repro/check_parallel.py pins; not a usable LM.
+CHAR_LSTM = _models / "test-char-lstm/en-char-lstm-256x1.onnx"
+CHAR_LSTM_UNITS = _models / "test-char-lstm-units/en-char-lstm-256x1.units.hex"
 
 
 def read_wave(filename: str) -> Tuple[List[float], int]:
@@ -114,6 +118,49 @@ class TestOfflineFusion(unittest.TestCase):
             encode=True,
         )
         self.assertIn("DISHONOURED", windowed)
+
+    def test_sharing_a_search_batch_changes_no_transcript(self):
+        # Each recording's model output is computed alone, so only the search
+        # is batched: its scorer calls then mix hypotheses of different
+        # recordings, which must not change any recording's result.
+        wavs = sorted(str(p) for p in (CTC_DIR / "test_wavs").glob("*.wav"))
+        audio = [read_wave(w) for w in wavs + wavs[::-1]]
+        fusions = {"no scorer": None, "n-gram": self.lm_fusion()}
+        if have(CHAR_LSTM, CHAR_LSTM_UNITS):
+            fusions["character LSTM"] = sherpa_onnx.FusionConfig(
+                scorers=[
+                    sherpa_onnx.ScorerConfig(
+                        type="onnx-rnn",
+                        model=str(CHAR_LSTM),
+                        weight=1.0,
+                        extra=json.dumps(
+                            {"vocab": str(CHAR_LSTM_UNITS), "vocab-encoding": "hex"}
+                        ),
+                    )
+                ]
+            )
+        for name, fusion in fusions.items():
+            for alignment in ("sum", "max"):
+                recognizer = self.recognizer(
+                    decoding_method="prefix_beam_search",
+                    fusion=fusion,
+                    options_json=f'{{"ctc-alignment": "{alignment}"}}',
+                )
+                streams = []
+                for samples, rate in audio:
+                    s = recognizer.create_stream()
+                    s.accept_waveform(rate, samples)
+                    recognizer.encode_stream(s)
+                    streams.append(s)
+                alone = []
+                for s in streams[: len(wavs)]:
+                    recognizer.decode_stream(s)
+                    alone.append(s.result.text)
+                together = streams[len(wavs) :]
+                recognizer.decode_streams(together)
+                with self.subTest(scorer=name, alignment=alignment):
+                    self.assertTrue(all(alone))
+                    self.assertEqual([s.result.text for s in together], alone[::-1])
 
     def test_bad_options_json_fails_creation(self):
         with self.assertRaises(ValueError) as e:
