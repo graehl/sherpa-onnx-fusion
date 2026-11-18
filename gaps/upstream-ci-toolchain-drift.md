@@ -22,6 +22,15 @@ patched around them on 2026-11-18 rather than fixed.
   `cmake/onnxruntime-win-x64-gpu.cmake` still downloads from it, so a
   Windows build with `SHERPA_ONNX_ENABLE_GPU=ON` cannot fetch ONNX Runtime.
   Both workflows that build it are disabled.
+- **Go's `non-streaming-tts-phonemize` on Windows x86.** It links against
+  the third-party `github.com/csukuangfj/piper-phonemize-go-windows`
+  v1.5.2, whose 32-bit DLLs lack the `PiperPhonemize*` symbols its cgo
+  code calls, so `test-go` group 3 on windows-2022 x86 fails to link.
+  Upstream's run of 2026-11-13 fails the same job.
+- **Termux i686.** Both i686 jobs of `Test rust` failed on 2026-11-18
+  because `apt` in a freshly pulled `termux/termux-docker:i686` image could
+  not resolve `packages-cf.termux.dev`, which the other architectures'
+  images reached minutes earlier. Unconfirmed whether it recurs.
 
 ## Closure
 
