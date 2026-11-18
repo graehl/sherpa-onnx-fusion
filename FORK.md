@@ -182,6 +182,8 @@ present and prints a warning describing the correct result.
 - [A public inflight decoder API](gaps/public-inflight-decoder-api.md)
   for every decoder that can keep utterances in flight.
 - [Static build aborts when a model loads (GCC 15)](gaps/static-onnxruntime-abort.md).
+- [Inherited build parts that outside changes broke](gaps/upstream-ci-toolchain-drift.md):
+  Flutter's Gradle minimum and the vanished Microsoft ONNX Runtime downloads.
 - [Decoding several recordings in one call changes some transcripts](gaps/offline-batch-changes-transcripts.md).
 - [Encoder batches are formed without regard to length](gaps/encoder-batches-ignore-length.md).
 - [Length-sorted batches in the parallel batch program](gaps/parallel-driver-batches-in-list-order.md):
