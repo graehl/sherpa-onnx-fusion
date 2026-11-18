@@ -402,6 +402,30 @@ score range, by a metadata convention or as an explicit option, and a rule
 that turns those ranges and the weights into a gap (graehl, 2026-11-13).
 Until then, anyone who cares tunes `--score-beam`.
 
+## One memory pool for the gather graphs
+
+A GPU onnx-rnn scorer runs eight small gather graphs (one per number of
+sources) in sessions of their own, and onnxruntime gives each session its
+own GPU memory pool, each keeping its own high-water mark. Registering one
+CUDA allocator with onnxruntime's environment
+(`Env::CreateAndRegisterAllocatorV2`) and setting
+`session.use_env_allocators=1` on the gather sessions only, not the LSTM's
+or the recognizer's, makes the eight share one pool. Tried on 40
+LibriSpeech test-other recordings with the 3×1536 character LSTM, batches
+of 8 (2026-11-18): with one thread the gathers held 127 MiB instead of 186,
+59 MiB less, at the same speed; with two threads 511 MiB against 490, no
+saving. Sharing the LSTM session's pool too saved about 190 MiB of process
+memory but cost 23% in time.
+
+Declined for now, though 59 MiB is not nothing on a 12 GB device: the
+saving did not hold with two threads, and the registered allocator is
+process-wide state (one per device, first registration wins, and any
+session that opts in takes it, whatever configured it). The memory that
+grows is the LSTM's own, through states kept past their use
+([state lifetime](../gaps/lm-states-outlive-their-hypotheses.md)). Revisit
+once that is fixed and the gathers are a larger share, measuring with
+`--scorer.N.stats` over several runs at each thread count.
+
 ## Original design text for parts since built
 
 Kept for the reasoning and for the pieces not built. Where this disagrees

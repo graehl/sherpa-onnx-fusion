@@ -1041,7 +1041,9 @@ GPU memory for a peak use of 743 MiB, and its eight gather sessions 186
 MiB together for 95 MiB, while the whole process held 7.0 GB against 2.8
 GB with no LM. Pool settings barely move this (same run, one thread,
 2026-11-18): one onnxruntime pool shared by the eight gathers held 127
-MiB instead of 186 at no cost in time; one pool shared with the LSTM
+MiB instead of 186 at no cost in time, and 511 against 490 with two
+threads ([declined for now](beam-search-and-scorer-fusion.sketches.md#one-memory-pool-for-the-gather-graphs));
+one pool shared with the LSTM
 session as well saved about 190 MiB of process memory and cost 23% in
 time; capping the pool's power-of-two growth at 16 or 64 MiB changed
 nothing; exact-size growth held 1973 MiB for a 559 MiB peak and cost 29%.
