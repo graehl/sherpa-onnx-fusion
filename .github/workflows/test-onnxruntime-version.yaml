@@ -23,7 +23,9 @@ jobs:
       matrix:
         os: [macos-latest]
         # version: ["1.11.0", "1.11.1", "1.12.0", "1.12.1", "1.13.1", "1.14.0", "1.14.1", "1.15.0", "1.15.1", "1.16.1", "1.16.2", "1.17.0", "1.17.1", "1.17.3", "1.18.0", "1.18.1", "1.19.0", "1.19.2", "1.20.0", "1.20.1", "1.20.2", "1.21.0", "1.21.1", "1.22.0", "1.22.1", "1.22.2", "1.23.0", "1.23.1", "1.23.2", "1.24.4"]
-        version: ["1.17.1", "1.24.4", "1.27.1", "1.28.0", "1.28.2"]
+        # Only versions csukuangfj/onnxruntime-libs has as a shared
+        # osx-arm64 zip (1.17.1 it has only as a static library).
+        version: ["1.24.4", "1.27.1", "1.28.0", "1.28.2"]
 
     steps:
       - uses: actions/checkout@v4
@@ -45,9 +47,12 @@ jobs:
         shell: bash
         run: |
           version=${{ matrix.version }}
-          curl -SL -O https://github.com/microsoft/onnxruntime/releases/download/v${version}/onnxruntime-osx-arm64-${version}.tgz
+          # github.com/microsoft/onnxruntime answers 404 (2026-11-18); the
+          # mirror the cmake/onnxruntime-*.cmake files use has the same
+          # archives as zips.
+          curl -SfL -O https://github.com/csukuangfj/onnxruntime-libs/releases/download/v${version}/onnxruntime-osx-arm64-${version}.zip
 
-          tar xvf onnxruntime-osx-arm64-${version}.tgz
+          unzip -q onnxruntime-osx-arm64-${version}.zip
           ls -lh onnxruntime-osx-arm64-${version}
 
           ls -lh onnxruntime-osx-arm64-${version}
