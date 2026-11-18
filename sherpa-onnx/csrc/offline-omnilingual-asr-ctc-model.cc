@@ -22,6 +22,7 @@
 #endif
 
 #include "Eigen/Dense"
+#include "sherpa-onnx/csrc/batching-metadata.h"
 #include "sherpa-onnx/csrc/file-utils.h"
 #include "sherpa-onnx/csrc/macros.h"
 #include "sherpa-onnx/csrc/onnx-utils.h"
@@ -86,7 +87,7 @@ class OfflineOmnilingualAsrCtcModel::Impl {
 
   int32_t VocabSize() const { return vocab_size_; }
 
-  bool TakesLengths() const { return takes_lengths_; }
+  bool Batching() const { return batching_; }
 
   OrtAllocator *Allocator() { return allocator_; }
 
@@ -150,6 +151,8 @@ class OfflineOmnilingualAsrCtcModel::Impl {
     // get vocab size from the output[0].shape, which is (N, T, vocab_size)
     vocab_size_ =
         sess_->GetOutputTypeInfo(0).GetTensorTypeAndShapeInfo().GetShape()[2];
+
+    batching_ = BatchingSupported(meta_data, allocator_, takes_lengths_);
   }
 
  private:
@@ -168,6 +171,7 @@ class OfflineOmnilingualAsrCtcModel::Impl {
 
   int32_t vocab_size_ = 0;
   bool takes_lengths_ = false;
+  bool batching_ = false;  // BatchingSupported, defaulting to takes_lengths_
 };
 
 OfflineOmnilingualAsrCtcModel::OfflineOmnilingualAsrCtcModel(
@@ -191,7 +195,7 @@ int32_t OfflineOmnilingualAsrCtcModel::VocabSize() const {
 }
 
 bool OfflineOmnilingualAsrCtcModel::SupportBatchProcessing() const {
-  return impl_->TakesLengths();
+  return impl_->Batching();
 }
 
 OrtAllocator *OfflineOmnilingualAsrCtcModel::Allocator() const {
