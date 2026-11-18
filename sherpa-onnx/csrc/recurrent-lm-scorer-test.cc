@@ -44,6 +44,10 @@ class FakeStep : public RecurrentLmStep {
 
   int32_t VocabSize() const override { return kVocab; }
 
+  // Any fixed size will do; 100 makes byte limits easy to read.
+  size_t ItemBytes() const override { return kItemBytes; }
+  static constexpr size_t kItemBytes = 100;
+
   std::shared_ptr<const Result> Run(
       const std::vector<int64_t> &units,
       const std::vector<Parent> &parents) const override {
@@ -120,11 +124,12 @@ RecurrentLmVocabulary Vocabulary() {
 }
 
 struct Fixture {
-  explicit Fixture(int32_t max_batch = 0) {
+  explicit Fixture(int32_t max_batch = 0, size_t max_batch_bytes = 0) {
     auto owned = std::make_unique<FakeStep>();
     step = owned.get();
     RecurrentLmVocabulary vocabulary = Vocabulary();
     vocabulary.max_batch = max_batch;
+    vocabulary.max_batch_bytes = max_batch_bytes;
     scorer = MakeRecurrentLmScorer(std::move(owned), std::move(vocabulary));
     utterance = scorer->NewUtterance();
   }
@@ -304,10 +309,9 @@ TEST(RecurrentLmScorer, TokenUnitsAreTheModelsOwnIds) {
   EXPECT_EQ(RecurrentLmLiveNodes(), 0);
 }
 
-// With max_batch 2, three nodes needed at once run in steps of 2 and 1,
-// with the same scores as stepping each history alone.
-TEST(RecurrentLmScorer, MaxBatchSplitsAWideStep) {
-  Fixture f(2);
+// Three nodes needed at once run in steps of `expected` sizes, with the same
+// scores as stepping each history alone.
+void ExpectSplit(Fixture &f, const std::vector<int32_t> &expected) {  // NOLINT
   alignas(8) std::byte start[8], children[3][8], grandchildren[3][8];
   f.scorer->Start(f.utterance.get(), start);
   UnitId units[3] = {'a', 'b', ' '};
@@ -322,7 +326,7 @@ TEST(RecurrentLmScorer, MaxBatchSplitsAWideStep) {
     wave[i] = {{f.utterance.get(), children[i]}, 'b', grandchildren[i]};
   }
   f.scorer->Advance({wave, 3}, results);
-  EXPECT_EQ(f.step->batch_sizes, std::vector<int32_t>({2, 1}));
+  EXPECT_EQ(f.step->batch_sizes, expected);
   const int32_t model_ids[3] = {2, 3, 4};
   for (int32_t i = 0; i != 3; ++i) {
     EXPECT_FLOAT_EQ(results[i].log_score, ReferenceLogProbs({model_ids[i]})[3]);
@@ -333,6 +337,38 @@ TEST(RecurrentLmScorer, MaxBatchSplitsAWideStep) {
   }
   f.scorer->Info().destroy_state(start);
   EXPECT_EQ(RecurrentLmLiveNodes(), 0);
+}
+
+TEST(RecurrentLmScorer, MaxBatchSplitsAWideStep) {
+  Fixture f(2);
+  ExpectSplit(f, {2, 1});
+}
+
+// 250 bytes hold two 100-byte nodes.
+TEST(RecurrentLmScorer, MaxBatchBytesSplitsAWideStep) {
+  Fixture f(0, 2 * FakeStep::kItemBytes + 50);
+  ExpectSplit(f, {2, 1});
+}
+
+// A byte limit below one node still steps one node at a time.
+TEST(RecurrentLmScorer, MaxBatchBytesBelowOneNodeStepsSingly) {
+  Fixture f(0, FakeStep::kItemBytes / 2);
+  ExpectSplit(f, {1, 1, 1});
+}
+
+// The tighter of the two limits decides, whichever it is.
+TEST(RecurrentLmScorer, TighterLimitDecides) {
+  Fixture by_count(1, 10 * FakeStep::kItemBytes);
+  ExpectSplit(by_count, {1, 1, 1});
+  Fixture by_bytes(10, 2 * FakeStep::kItemBytes);
+  ExpectSplit(by_bytes, {2, 1});
+}
+
+// The defaults leave a narrow step whole.
+TEST(RecurrentLmScorer, DefaultsTakeANarrowStepWhole) {
+  RecurrentLmVocabulary defaults;
+  Fixture f(defaults.max_batch, defaults.max_batch_bytes);
+  ExpectSplit(f, {3});
 }
 
 TEST(RecurrentLmScorer, ComputesANodeOnlyWhenScoredAfterAndInOneBatch) {

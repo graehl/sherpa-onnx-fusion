@@ -1019,9 +1019,20 @@ With the recognizer on the GPU too and the batch size and threads swept,
 0.0112 with it on the CPU, 8.0 times faster
 ([bulk decoding](bulk-decoding.md#throughput-with-an-lstm-on-one-gpu)).
 onnxruntime builds without the model editor keep states on the host.
-`"max-batch"` in the scorer's extra caps how many nodes one step takes,
-which bounds its memory on a small GPU; a wider call runs in chunks with
-the same results.
+A step's width follows every beam of a search call, so it can reach
+thousands of nodes, and its result lives while any of its nodes does. Two
+options in the scorer's extra bound it, and a wider call runs in chunks
+with the same results: `"max-batch-mb"` (default 1024) caps the MiB a
+step's nodes add, counted from the model's state and vocabulary sizes
+(gathered and new states, log probabilities), and `"max-batch"` (default
+4096) caps their number. The tighter decides, 0 lifts either, and the
+model's internal workspace is not counted. Narrow steps cost time only
+when very narrow: on 40 LibriSpeech test-other recordings, the zipformer
+CTC model and the 3×1536 English character LSTM (about 74 KB a node), both
+on the GPU, in batches of 8 with one thread, steps of one node took 64.3 s,
+of 64 nodes 3.2 s, and of 256 or 1024 nodes, the defaults and no limit all
+2.6 s, with the same transcripts (two threads: 50.2, 2.6 and 2.1 s; one
+run each, 2026-11-18).
 Keep model execution separate from the search so later implementations can
 reuse model and scorer contracts where appropriate. Search on the same GPU
 as the models is deferred; see
