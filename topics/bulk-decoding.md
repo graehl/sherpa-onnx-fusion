@@ -27,6 +27,11 @@ one batch.
   recording times its count. For some models a recording's transcript
   depends on the others in its batch
   ([batching changes transcripts](../gaps/offline-batch-changes-transcripts.md)).
+  A w2v-BERT or omnilingual CTC model whose metadata has
+  `batching_supported` (`true` or `false`, written by its exporter after
+  decoding a padded batch against each recording alone) is batched or run
+  one recording per call as that says; without it, such a model is
+  batched only if it takes `input_lengths`.
 - **Model threads and search threads.** With `--decode-threads=N` the
   `--nj` threads only read files and run the model, and N other threads run
   the search, so a GPU model can take one thread while the search takes

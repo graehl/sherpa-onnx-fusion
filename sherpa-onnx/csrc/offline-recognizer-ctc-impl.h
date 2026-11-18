@@ -288,8 +288,8 @@ class OfflineRecognizerCtcImpl : public OfflineRecognizerImpl {
       // If the model does not support batch processing,
       // we process each stream independently.
       //
-      // An omnilingual asr export batches only if it takes input_lengths;
-      // see OfflineOmnilingualAsrCtcModel::SupportBatchProcessing().
+      // An omnilingual asr export batches only if its metadata or, without
+      // that, its input_lengths say so; see BatchingSupported().
       for (int32_t i = 0; i != n; ++i) {
         DecodeStream(ss[i]);
       }

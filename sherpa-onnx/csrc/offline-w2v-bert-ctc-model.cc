@@ -21,6 +21,7 @@
 #include "rawfile/raw_file_manager.h"
 #endif
 
+#include "sherpa-onnx/csrc/batching-metadata.h"
 #include "sherpa-onnx/csrc/file-utils.h"
 #include "sherpa-onnx/csrc/macros.h"
 #include "sherpa-onnx/csrc/math.h"
@@ -133,7 +134,7 @@ class OfflineW2vBertCtcModel::Impl {
     return ans;
   }
 
-  bool TakesLengths() const { return takes_lengths_; }
+  bool Batching() const { return batching_; }
   int32_t SubsamplingFactor() const { return subsampling_factor_; }
   int32_t VocabSize() const { return vocab_size_; }
   OrtAllocator *Allocator() { return allocator_; }
@@ -165,6 +166,7 @@ class OfflineW2vBertCtcModel::Impl {
           static_cast<int32_t>(input_names_.size()));
       SHERPA_ONNX_EXIT(-1);
     }
+    batching_ = BatchingSupported(meta_data, allocator, takes_lengths_);
     vocab_size_ = static_cast<int32_t>(
         sess_->GetOutputTypeInfo(0).GetTensorTypeAndShapeInfo().GetShape()[2]);
   }
@@ -185,6 +187,7 @@ class OfflineW2vBertCtcModel::Impl {
   int32_t vocab_size_ = 0;
   int32_t subsampling_factor_ = kStack;
   bool takes_lengths_ = false;
+  bool batching_ = false;  // BatchingSupported, defaulting to takes_lengths_
 };
 
 OfflineW2vBertCtcModel::OfflineW2vBertCtcModel(const OfflineModelConfig &config)
@@ -203,7 +206,7 @@ std::vector<Ort::Value> OfflineW2vBertCtcModel::Forward(
 }
 
 bool OfflineW2vBertCtcModel::SupportBatchProcessing() const {
-  return impl_->TakesLengths();
+  return impl_->Batching();
 }
 
 int32_t OfflineW2vBertCtcModel::VocabSize() const { return impl_->VocabSize(); }

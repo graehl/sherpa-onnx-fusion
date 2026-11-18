@@ -12,6 +12,7 @@ endif()
 
 set(sources
   base64-decode.cc
+  batching-metadata.cc
   bbpe.cc
   cat.cc
   circular-buffer.cc

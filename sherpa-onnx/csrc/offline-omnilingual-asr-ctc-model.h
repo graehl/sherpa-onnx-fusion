@@ -47,8 +47,10 @@ class OfflineOmnilingualAsrCtcModel : public OfflineCtcModel {
    */
   int32_t VocabSize() const override;
 
-  /** True for an export that takes input_lengths and masks padding in the
-   * graph; the published export takes one utterance per call.
+  /** The model's batching_supported metadata when present
+   * (BatchingSupported()); else true for an export that takes input_lengths
+   * and masks padding in the graph. The published export takes one
+   * utterance per call.
    */
   bool SupportBatchProcessing() const override;
 
