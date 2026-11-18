@@ -1,4 +1,5 @@
 include_guard(GLOBAL)
+include(allow-missing-python)
 
 function(download_kaldifst)
   # Already provided by a parent project.
@@ -56,6 +57,7 @@ function(download_kaldifst)
     set(BUILD_SHARED_LIBS OFF)
   endif()
 
+  sherpa_onnx_allow_missing_python()
   add_subdirectory(${kaldifst_SOURCE_DIR} ${kaldifst_BINARY_DIR} EXCLUDE_FROM_ALL)
 
   if(_build_shared_libs_bak)

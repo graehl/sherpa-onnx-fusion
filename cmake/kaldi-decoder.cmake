@@ -1,4 +1,5 @@
 include_guard(GLOBAL)
+include(allow-missing-python)
 
 function(download_kaldi_decoder)
   include(FetchContent)
@@ -51,6 +52,7 @@ function(download_kaldi_decoder)
 
   list(APPEND CMAKE_MODULE_PATH ${kaldi_decoder_SOURCE_DIR}/cmake)
 
+  sherpa_onnx_allow_missing_python()
   add_subdirectory(${kaldi_decoder_SOURCE_DIR} ${kaldi_decoder_BINARY_DIR} EXCLUDE_FROM_ALL)
 
   if(_build_shared_libs_bak)
