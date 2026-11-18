@@ -95,7 +95,7 @@ jobs:
         shell: bash
         run: |
           docker run --rm \
-            --volume ${{ github.workspace }}/:/home/runner/work/sherpa-onnx/sherpa-onnx \
+            --volume ${{ github.workspace }}/:${{ github.workspace }} \
             quay.io/pypa/manylinux2014_x86_64 \
             bash -c '
               uname -a
@@ -129,7 +129,9 @@ jobs:
               id
               pwd
 
-              cd /home/runner/work/sherpa-onnx/sherpa-onnx
+              # The host path, so build-tree rpaths still resolve when
+              # the tests run outside the container.
+              cd ${{ github.workspace }}
 
               git clone --depth 1 --branch v1.2.12 https://github.com/alsa-project/alsa-lib
               pushd alsa-lib
