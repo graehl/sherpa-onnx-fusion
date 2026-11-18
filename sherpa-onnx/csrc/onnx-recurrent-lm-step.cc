@@ -103,29 +103,34 @@ class OnnxRecurrentLmStep : public RecurrentLmStep {
 
   // Peak bytes in use and bytes held by each place's memory pool, for the
   // model's session and, summed, the gather sessions'.
+  // Each clause is one memory pool, or several summed, as it says: what the
+  // pool holds (reserved and kept) and the most it had in use at once. A
+  // sum of peaks is an upper bound on their peak together. A pool that never
+  // held anything is left out.
   std::string MemoryStats() const override {
     std::string out;
-    auto add = [&out](const char *what, const char *where, const PoolStats &s) {
-      if (!s.known) return;
-      char line[160];
-      snprintf(line, sizeof(line),
-               "%s%s %s %.1f MiB peak in use, %.1f MiB held",
-               out.empty() ? "" : "; ", what, where, s.max_in_use / 1048576.0,
-               s.held / 1048576.0);
+    auto add = [&out](const std::string &what, const PoolStats &s,
+                      const char *peak) {
+      if (!s.known || s.held == 0) return;
+      char line[200];
+      snprintf(line, sizeof(line), "%s%s: %.1f MiB held, %s %.1f MiB",
+               out.empty() ? "" : "; ", what.c_str(), s.held / 1048576.0, peak,
+               s.max_in_use / 1048576.0);
       out += line;
     };
     auto cpu = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
-    add("model", "cpu", Pool(*session_, cpu));
-    if (device_) add("model", "gpu", Pool(*session_, *device_));
+    add("model's cpu pool", Pool(*session_, cpu), "peak in use");
+    if (device_)
+      add("model's gpu pool", Pool(*session_, *device_), "peak in use");
     if (!gather_.empty()) {
       PoolStats cpu_sum, gpu_sum;
       for (const GatherSession &g : gather_) {
         cpu_sum += Pool(*g.session, cpu);
         if (device_) gpu_sum += Pool(*g.session, *device_);
       }
-      std::string what = std::to_string(gather_.size()) + " gathers";
-      add(what.c_str(), "cpu", cpu_sum);
-      add(what.c_str(), "gpu", gpu_sum);
+      std::string n = std::to_string(gather_.size());
+      add(n + " gathers' cpu pools together", cpu_sum, "sum of their peaks");
+      add(n + " gathers' gpu pools together", gpu_sum, "sum of their peaks");
     }
     return out;
   }
