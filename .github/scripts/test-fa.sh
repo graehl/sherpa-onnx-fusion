@@ -13,6 +13,11 @@ log "------------------------------------------------------------"
 log "Test sherpa-onnx-fa (forced alignment)                      "
 log "------------------------------------------------------------"
 
+# From a file, not --text: Windows hands a program its arguments in the
+# ANSI code page, which loses the hanzi ("no tokens after text
+# normalization").
+printf '%s\n' "不要问你的国家能为你做什么，而要问你能为你的国家做什么。" > zh.txt
+
 # Models: https://github.com/k2-fsa/sherpa-onnx/releases/tag/fa-models
 # Each model package ships its own test wav (zh.wav / en.wav) whose
 # transcript is documented in the README.md of the package.
@@ -26,7 +31,7 @@ for model in zh-aishell3-pinyin zh-biaobei-pinyin zh-large-pinyin; do
     --model-dir=$model \
     --lexicon=$model/lexicon.txt \
     --wav=$model/zh.wav \
-    --text="不要问你的国家能为你做什么，而要问你能为你的国家做什么。" \
+    --text-file=zh.txt \
     --out=${model}.TextGrid
 
   ls -lh ${model}.TextGrid
