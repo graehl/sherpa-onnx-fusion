@@ -384,6 +384,25 @@ GigaAM's does not). On four recordings, with identical transcripts, the
 fused search then took 1.8 times greedy's time on the TDT model and 2.4
 times on the RNN-T model.
 
+The weight that suits a CTC model can empty a TDT model's output. On
+English LibriSpeech, Parakeet TDT 110M with the test character LSTM or
+the LibriSpeech character 8-gram at weight 0.3 (the CTC model's) gave
+empty or one-word transcripts on four recordings of four, even with a
+length bonus of 2 per token; at 0.05 the LSTM gave sensible ones
+(2026-11-18). Tune the weight per model.
+
+A TDT search's arrivals for later frames wait unpruned until their frame
+begins: thousands of entries, each holding its prefix's scorer states.
+`--prune-waiting` also cuts those lists at every round end, by default to
+`--max-active-paths` within `--score-beam`. On 600 LibriSpeech test-other
+recordings with that model and the LSTM at 0.05, it left WER at 10.04%
+against 9.97% (31 transcripts changed, 11 better and 12 worse), cut the
+most LM nodes live from 21,041 to 345 and the time by 15%; it is off by
+default until that is settled
+([waiting arrivals](../gaps/transducer-waiting-arrivals-unpruned.md)).
+`--trace-survival` measures, in one run, what such a cut at any cap and
+gap would keep.
+
 ### Matching the existing decoders
 
 **Kaldi `FasterDecoder`, CTC without a scorer.** A public NeMo CTC model
@@ -1318,6 +1337,7 @@ offline NeMo transducer models. The options are fields of `FusionConfig`
 | `--scorer.N.unit` | `char` | `token` for a scorer trained on the recognizer's tokens (`kenlm` or `onnx-rnn`) |
 | `--modified-beam-search-rules` | false | Stateless transducers: search exactly as `modified_beam_search` does |
 | `--length-normalize` | false | Transducers: rank results by score over output length |
+| `--prune-waiting`, `--waiting-max-active`, `--waiting-score-beam` | false, 0, 0 | Transducers: also cut the lists of arrivals waiting for later frames at every round end; 0 means `--max-active-paths`, `--score-beam` |
 | `--trace-survival` | false | Offline transducers: at the end, log what pruning each result needed, and what cutting the lists of arrivals waiting for later frames would cost in results and save in entries (about 12% slower) |
 
 `--ctc-prior` names a text file of `token-id log-prior` lines, where a

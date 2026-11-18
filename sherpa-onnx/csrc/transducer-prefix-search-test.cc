@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cmath>
 #include <functional>
+#include <limits>
 #include <map>
 #include <memory>
 #include <utility>
@@ -511,6 +512,45 @@ TEST(TransducerPrefixSearch, SurvivalTraceLimitsReproduceTheResult) {
     EXPECT_EQ(again.tokens, traced.tokens);
     EXPECT_NEAR(again.score, traced.score, 1e-4);
   }
+}
+
+// Cutting waiting lists at every round end changes nothing when its limits
+// cut nothing, and with the search's own limits it still finds a result while
+// holding no more prefixes.
+TEST(TransducerPrefixSearch, PruneWaitingWithoutLimitsChangesNothing) {
+  for (const Case &c : kCases) {
+    const int32_t num_frames = 40;
+    auto run = [&](const TransducerPrefixSearchOptions &options,
+                   int32_t *live) {
+      HistoryScorer scorer(ScorerUnit::kCharacter, -0.05f);
+      TransducerPrefixSearch search(options, Vocabulary(), {&scorer}, {1.0f});
+      Decode(&search, {&scorer}, c.topology, num_frames);
+      *live = search.NumLiveRecords();
+      auto best = search.Finish(1);
+      return best.empty() ? TransducerPrefixHypothesis() : best[0];
+    };
+    TransducerPrefixSearchOptions options = Exhaustive(c);
+    options.max_active = 3;
+    options.max_token_candidates = 2;
+    options.beam = 6;
+    int32_t live_plain = 0, live_open = 0, live_cut = 0;
+    TransducerPrefixHypothesis plain = run(options, &live_plain);
+
+    options.prune_waiting = true;
+    options.waiting_max_active = 1 << 30;
+    options.waiting_beam = std::numeric_limits<float>::infinity();
+    TransducerPrefixHypothesis open = run(options, &live_open);
+    EXPECT_EQ(open.tokens, plain.tokens);
+    EXPECT_FLOAT_EQ(open.score, plain.score);
+    EXPECT_EQ(live_open, live_plain);
+
+    options.waiting_max_active = 0;
+    options.waiting_beam = 0;
+    TransducerPrefixHypothesis cut = run(options, &live_cut);
+    EXPECT_FALSE(cut.tokens.empty());
+    EXPECT_LE(live_cut, live_plain);
+  }
+  EXPECT_EQ(HistoryScorer::LiveStates(), 0);
 }
 
 }  // namespace

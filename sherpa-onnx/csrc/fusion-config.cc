@@ -69,6 +69,18 @@ void FusionConfig::Register(ParseOptions *po) {
                "score beam each result needed, and how a cut of the lists "
                "waiting for later frames would have affected results and "
                "memory, and log a table of it at the end. Costs time.");
+  po->Register("prune-waiting", &prune_waiting,
+               "Used only when decoding_method is prefix_beam_search, for "
+               "transducer models. At the end of every round, also cut each "
+               "list of hypotheses waiting for a later frame to its best "
+               "--waiting-max-active within --waiting-score-beam of its best, "
+               "instead of only when that frame begins.");
+  po->Register("waiting-max-active", &waiting_max_active,
+               "With --prune-waiting: hypotheses each waiting list keeps; 0 "
+               "for --max-active-paths.");
+  po->Register("waiting-score-beam", &waiting_score_beam,
+               "With --prune-waiting: a waiting hypothesis is kept only "
+               "within this score of its list's best; 0 for --score-beam.");
 }
 
 bool FusionConfig::Validate() const {
@@ -116,7 +128,10 @@ std::string FusionConfig::ToString() const {
      << (modified_beam_search_rules ? "True" : "False") << ", ";
   os << "token_candidates=" << token_candidates << ", ";
   os << "score_beam=" << score_beam << ", ";
-  os << "trace_survival=" << (trace_survival ? "True" : "False") << ")";
+  os << "trace_survival=" << (trace_survival ? "True" : "False") << ", ";
+  os << "prune_waiting=" << (prune_waiting ? "True" : "False") << ", ";
+  os << "waiting_max_active=" << waiting_max_active << ", ";
+  os << "waiting_score_beam=" << waiting_score_beam << ")";
   return os.str();
 }
 

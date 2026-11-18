@@ -442,7 +442,16 @@ void TransducerPrefixSearch::ApplyScorerWave(
 }
 
 std::vector<uint32_t> TransducerPrefixSearch::Prune(
-    const std::vector<uint32_t> &candidates, int32_t slot) {
+    const std::vector<uint32_t> &candidates, int32_t slot, bool to_frontier) {
+  // A waiting list is cut by its own limits, which default to the frontier's.
+  int32_t max_active = options_.max_active;
+  float beam = options_.beam;
+  if (!to_frontier) {
+    if (options_.waiting_max_active > 0) {
+      max_active = options_.waiting_max_active;
+    }
+    if (options_.waiting_beam > 0) beam = options_.waiting_beam;
+  }
   auto mass_in = [slot](State *state) -> float & {
     return slot == kAgainSlot ? state->again : state->arrive[slot];
   };
@@ -455,21 +464,21 @@ std::vector<uint32_t> TransducerPrefixSearch::Prune(
   }
   std::vector<uint32_t> order(candidates.size());
   std::iota(order.begin(), order.end(), 0);
-  size_t keep = std::min(order.size(),
-                         static_cast<size_t>(std::max(options_.max_active, 0)));
+  size_t keep =
+      std::min(order.size(), static_cast<size_t>(std::max(max_active, 0)));
   std::partial_sort(order.begin(), order.begin() + keep, order.end(),
                     [&](uint32_t a, uint32_t b) {
                       if (scores[a] != scores[b]) return scores[a] > scores[b];
                       return candidates[a] < candidates[b];
                     });
   if (keep != 0) {
-    float cutoff = scores[order[0]] - options_.beam;
+    float cutoff = scores[order[0]] - beam;
     while (keep != 0 && (scores[order[keep - 1]] == kLogZero ||
                          scores[order[keep - 1]] < cutoff)) {
       --keep;
     }
   }
-  if (options_.trace_survival && !order.empty()) {
+  if (options_.trace_survival && to_frontier && !order.empty()) {
     // What each kept one needed, now that it moves to the frontier.
     for (size_t i = 0; i != keep; ++i) {
       Trace *trace = TraceOf(trie_.At(candidates[order[i]]));
@@ -503,6 +512,11 @@ bool TransducerPrefixSearch::EndRound() {
   for (uint32_t index : trie_.NewNodes()) trie_.ReleaseIfUnused(index);
   // The round's scores are complete: where a policy would cut waiting lists.
   if (options_.trace_survival) RankWaiting();
+  if (options_.prune_waiting) {
+    for (int32_t slot = 0; slot != ring_size_; ++slot) {
+      arriving_[slot] = Prune(arriving_[slot], slot, false);
+    }
+  }
 
   // The frontier is spent; it leaves through Unpin below, after the
   // next frontier is chosen, so a prefix in both is not freed in between.

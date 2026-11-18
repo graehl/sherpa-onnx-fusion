@@ -76,6 +76,16 @@ struct TransducerPrefixSearchOptions {
   // and the scores reported are unaffected.
   int32_t rank_length_offset = -1;
 
+  // kTdt and kRnnt waiting lists: an arrival for a later frame waits in
+  // that frame's list, which without this is pruned only when the frame
+  // begins. With prune_waiting, every round's end also cuts each waiting
+  // list to its best waiting_max_active within waiting_beam of its best
+  // (0 for either: max_active, beam); a cut entry that later receives
+  // probability again rejoins.
+  bool prune_waiting = false;
+  int32_t waiting_max_active = 0;
+  float waiting_beam = 0;
+
   // Survival trace, off by default; adds bytes to every prefix's record and
   // a sort of every waiting list per round only when on. For each result it
   // records what each pruning limit had to allow to keep it
@@ -261,9 +271,11 @@ class TransducerPrefixSearch {
   // Keeps the best of "candidates" by the probability each holds in "slot"
   // (an arrival slot, or kAgainSlot) plus scorer scores and bonus, and
   // clears and unpins the others. Returns the kept ones, best first.
+  // "to_frontier": they become the frontier, under max_active and beam;
+  // otherwise they keep waiting, under the waiting list's limits.
   static constexpr int32_t kAgainSlot = -1;
   std::vector<uint32_t> Prune(const std::vector<uint32_t> &candidates,
-                              int32_t slot);
+                              int32_t slot, bool to_frontier = true);
   // Every hypothesis holding probability, with its total log mass.
   void Outstanding(std::vector<uint32_t> *nodes,
                    std::vector<float> *log_mass) const;
