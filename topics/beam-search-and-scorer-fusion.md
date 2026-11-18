@@ -1047,9 +1047,21 @@ one pool shared with the LSTM
 session as well saved about 190 MiB of process memory and cost 23% in
 time; capping the pool's power-of-two growth at 16 or 64 MiB changed
 nothing; exact-size growth held 1973 MiB for a 559 MiB peak and cost 29%.
-None is applied. The slack is the LSTM pool keeping what it once used,
-and what it uses grows with what stays alive
-([state lifetime](../gaps/lm-states-outlive-their-hypotheses.md)).
+None is applied. The slack is the LSTM pool keeping what it once used.
+What it uses is not mostly states: the log also gives the most LM nodes
+live at once, 496 in that run, whose own rows come to 35 MiB, and with
+steps of one node (so a step's output is one row) the pool's peak use was
+still 654 MiB. The rest is presumably the 183 MB model's weights, which
+onnxruntime places in the same pool, and its per-step workspace.
+
+A prefix that leaves the beam while a descendant lives releases its
+scorer states then (`ScoredPrefixTrie::ReleaseIfUnused`, for every prefix
+search), instead of keeping them as long as that descendant, so live LM
+nodes stay bounded by the beam over a long utterance. If a later frame
+reaches such a prefix again, its states are scored again from its parent
+and its scores stand as first computed. On the run above, and on Parakeet
+TDT with the test character LSTM, transcripts were the same as before the
+change.
 Keep model execution separate from the search so later implementations can
 reuse model and scorer contracts where appropriate. Search on the same GPU
 as the models is deferred; see

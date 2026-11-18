@@ -450,9 +450,10 @@ TEST(TransducerPrefixSearch, PrunedSearchReleasesWrappedScorerStates) {
     for (size_t i = 1; i < best[0].timestamps.size(); ++i) {
       EXPECT_LE(best[0].timestamps[i - 1], best[0].timestamps[i]);
     }
-    // What remains is the beam, what waits at later frames, and ancestors.
+    // What remains is the beam, what waits at later frames, and ancestors;
+    // only the first two and the root keep scorer states.
     EXPECT_LE(search.NumLiveRecords(), 3 * 4 * (num_frames + 1));
-    EXPECT_EQ(HistoryScorer::LiveStates(), search.NumLiveRecords());
+    EXPECT_LE(HistoryScorer::LiveStates(), 3 * 4 + 1);
   }
   EXPECT_EQ(HistoryScorer::LiveStates(), 0);
 }

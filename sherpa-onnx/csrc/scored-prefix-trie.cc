@@ -88,7 +88,9 @@ ScoredPrefixTrie::ScoredPrefixTrie(
 ScoredPrefixTrie::~ScoredPrefixTrie() {
   for (uint32_t index = 0; index != num_records_; ++index) {
     Node *node = At(index);
-    if (node->live && node->scored) DestroyScorerStates(node);
+    if (node->live && node->scored && !node->states_released) {
+      DestroyScorerStates(node);
+    }
   }
 }
 
@@ -120,6 +122,12 @@ void ScoredPrefixTrie::DestroyScorerStates(Node *node) {
   }
 }
 
+void ScoredPrefixTrie::ReleaseScorerStates(Node *node) {
+  if (!node->scored || node->states_released || node->restoring) return;
+  DestroyScorerStates(node);
+  node->states_released = true;
+}
+
 uint32_t ScoredPrefixTrie::NewNode(uint32_t parent, int32_t token) {
   uint32_t index;
   if (!free_records_.empty()) {
@@ -146,6 +154,8 @@ uint32_t ScoredPrefixTrie::NewNode(uint32_t parent, int32_t token) {
   node->scored = false;
   node->rejected = false;
   node->pinned = false;
+  node->states_released = false;
+  node->restoring = false;
   node->live = true;
 
   if (parent != kNone) {
@@ -164,7 +174,7 @@ uint32_t ScoredPrefixTrie::NewNode(uint32_t parent, int32_t token) {
 
 void ScoredPrefixTrie::FreeNode(uint32_t index) {
   Node *node = At(index);
-  if (node->scored) DestroyScorerStates(node);
+  if (node->scored && !node->states_released) DestroyScorerStates(node);
   children_.erase(ChildKey(node->parent, node->token));
   At(node->parent)->num_children -= 1;
   node->live = false;
@@ -173,9 +183,18 @@ void ScoredPrefixTrie::FreeNode(uint32_t index) {
 }
 
 void ScoredPrefixTrie::ReleaseIfUnused(uint32_t index) {
+  if (scoring_) {
+    // A queued node may still need this one's states as its parent's.
+    deferred_releases_.push_back(index);
+    return;
+  }
   while (index != kRoot) {
     Node *node = At(index);
-    if (!node->live || node->pinned || node->num_children != 0) return;
+    if (!node->live || node->pinned) return;
+    if (node->num_children != 0) {
+      ReleaseScorerStates(node);
+      return;
+    }
     uint32_t parent = node->parent;
     FreeNode(index);
     index = parent;
@@ -187,15 +206,25 @@ uint32_t ScoredPrefixTrie::FindOrCreateChild(uint32_t parent, int32_t token,
   auto it = children_.find(ChildKey(parent, token));
   if (it != children_.end()) {
     *created = false;
+    Node *node = At(it->second);
+    if (node->states_released && !node->restoring) {
+      node->restoring = true;
+      ++num_restored_;
+      QueueScoring(it->second);
+    }
     return it->second;
   }
   *created = true;
   uint32_t index = NewNode(parent, token);
-  new_nodes_.push_back(index);
+  QueueScoring(index);
+  return index;
+}
 
+void ScoredPrefixTrie::QueueScoring(uint32_t index) {
+  new_nodes_.push_back(index);
   Node *node = At(index);
-  const SearchToken &info = vocabulary_->tokens[token];
-  bool closes_word = info.starts_word && At(parent)->word_open;
+  const SearchToken &info = vocabulary_->tokens[node->token];
+  bool closes_word = info.starts_word && At(node->parent)->word_open;
   for (size_t s = 0; s != scorers_.size(); ++s) {
     Pending pending = {index, static_cast<uint32_t>(units_.size()), 0, 0, 0,
                        false};
@@ -208,10 +237,10 @@ uint32_t ScoredPrefixTrie::FindOrCreateChild(uint32_t parent, int32_t token,
     pending.length = static_cast<uint32_t>(units_.size()) - pending.begin;
     pending_[s].push_back(pending);
   }
-  return index;
 }
 
 void ScoredPrefixTrie::StartScoring() {
+  scoring_ = true;
   new_nodes_.clear();
   units_.clear();
   for (auto &pending : pending_) pending.clear();
@@ -290,6 +319,7 @@ void ScoredPrefixTrie::FinishScoring() {
         }
       }
       node->rejected = true;
+      node->restoring = false;
       continue;
     }
     float total = parent->scorer_total;
@@ -305,13 +335,26 @@ void ScoredPrefixTrie::FinishScoring() {
                       info.state_bytes);
         }
       }
-      Subtotals(node)[s] = Subtotals(parent)[s] + pending.sum;
-      if (weights_[s] != 0) total += weights_[s] * pending.sum;
+      if (!node->restoring) {
+        Subtotals(node)[s] = Subtotals(parent)[s] + pending.sum;
+        if (weights_[s] != 0) total += weights_[s] * pending.sum;
+      }
     }
-    node->scorer_total = total;
-    node->scored = true;
+    if (node->restoring) {
+      // Its scores stand as first computed, so that a model whose results
+      // vary in the last bit with its batch cannot change them.
+      node->restoring = false;
+      node->states_released = false;
+    } else {
+      node->scorer_total = total;
+      node->scored = true;
+    }
   }
   num_scored_ += static_cast<int64_t>(new_nodes_.size());
+  scoring_ = false;
+  std::vector<uint32_t> deferred;
+  deferred.swap(deferred_releases_);
+  for (uint32_t index : deferred) ReleaseIfUnused(index);
 }
 
 void ScoredPrefixTrie::FinalScores(const std::vector<uint32_t> &nodes,

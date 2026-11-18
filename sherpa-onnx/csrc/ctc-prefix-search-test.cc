@@ -649,10 +649,42 @@ TEST(CtcPrefixSearch, WrappedScorerStatesAreAllReleased) {
     search.Decode(log_probs.data(), num_frames);
     EXPECT_FALSE(search.Finish(3).empty());
     // Pruned prefixes without surviving descendants are reclaimed: what
-    // remains is the beam and its ancestors.
+    // remains is the beam and its ancestors. Of those, only the beam and
+    // the root keep scorer states.
     EXPECT_LE(search.NumLiveRecords(), 3 * (num_frames + 1));
-    EXPECT_EQ(HistoryScorer::LiveStates(), search.NumLiveRecords());
+    EXPECT_LE(HistoryScorer::LiveStates(), 3 + 1);
   }
+  EXPECT_EQ(HistoryScorer::LiveStates(), 0);
+}
+
+// A prefix that leaves the beam while a descendant lives gives up its scorer
+// states, and gets them back from its parent when a later frame reaches it
+// again: every result's scorer score is what its own text gives.
+TEST(CtcPrefixSearch, ReleasedScorerStatesAreRestoredWhenReachedAgain) {
+  const int32_t num_frames = 60, vocab_size = 4;
+  const float per_unit = -0.01f;
+  auto vocabulary = WordPieceVocabulary();
+  int64_t restored = 0;
+  for (uint32_t seed = 300; seed != 340; ++seed) {
+    auto log_probs = RandomLogProbs(num_frames, vocab_size, seed);
+    HistoryScorer scorer(ScorerUnit::kCharacter, per_unit);
+    CtcPrefixSearchOptions options;
+    options.max_active = 3;
+    options.max_token_candidates = 3;
+    CtcPrefixSearch search(options, vocabulary, {&scorer}, {1.0f});
+    search.Decode(log_probs.data(), num_frames);
+    auto results = search.Finish(3);
+    ASSERT_FALSE(results.empty());
+    for (const auto &result : results) {
+      int32_t words = 0;
+      double n = CharsOf(*vocabulary, result.tokens, &words).size();
+      // Scoring the k-th unit of a history gives per_unit * k.
+      EXPECT_NEAR(result.scorer_log_scores[0], per_unit * n * (n + 1) / 2, 1e-3)
+          << "seed " << seed;
+    }
+    restored += search.NumStatesRestored();
+  }
+  EXPECT_GT(restored, 0);  // The case under test happened.
   EXPECT_EQ(HistoryScorer::LiveStates(), 0);
 }
 
