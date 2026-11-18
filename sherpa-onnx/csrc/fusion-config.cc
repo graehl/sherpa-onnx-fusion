@@ -63,6 +63,12 @@ void FusionConfig::Register(ParseOptions *po) {
                "Used only when decoding_method is prefix_beam_search. Number "
                "of most probable tokens per frame that may extend a "
                "hypothesis.");
+  po->Register("trace-survival", &trace_survival,
+               "Used only when decoding_method is prefix_beam_search, for "
+               "offline transducer models. Measure the hypothesis beam and "
+               "score beam each result needed, and how a cut of the lists "
+               "waiting for later frames would have affected results and "
+               "memory, and log a table of it at the end. Costs time.");
 }
 
 bool FusionConfig::Validate() const {
@@ -109,7 +115,8 @@ std::string FusionConfig::ToString() const {
   os << "modified_beam_search_rules="
      << (modified_beam_search_rules ? "True" : "False") << ", ";
   os << "token_candidates=" << token_candidates << ", ";
-  os << "score_beam=" << score_beam << ")";
+  os << "score_beam=" << score_beam << ", ";
+  os << "trace_survival=" << (trace_survival ? "True" : "False") << ")";
   return os.str();
 }
 

@@ -34,6 +34,7 @@ TransducerPrefixSearchOptions MakeTransducerPrefixSearchOptions(
     options.rank_length_offset = context_size;
   }
   options.prune_steps = config.modified_beam_search_rules;
+  options.trace_survival = config.trace_survival;
   return options;
 }
 
@@ -57,6 +58,19 @@ TransducerFusion::TransducerFusion(const FusionConfig &config,
   for (const auto &scorer : scorers_) scorer_pointers_.push_back(scorer.get());
   for (const auto &scorer : config.scorers) weights_.push_back(scorer.weight);
   PrepareScorers(*vocabulary_, scorer_pointers_);
+  if (config.trace_survival) {
+    survival_ = std::make_unique<TransducerSurvivalSummary>();
+  }
+}
+
+void TransducerFusion::RecordSurvival(
+    const std::vector<TransducerPrefixSearch *> &searches,
+    const std::vector<std::vector<TransducerPrefixHypothesis>> &results) const {
+  if (survival_ == nullptr) return;
+  for (size_t i = 0; i != searches.size(); ++i) {
+    survival_->Record(*searches[i],
+                      results[i].empty() ? nullptr : &results[i][0]);
+  }
 }
 
 std::unique_ptr<TransducerPrefixSearch> TransducerFusion::NewSearch(
@@ -190,6 +204,7 @@ OfflineTransducerPrefixBeamSearchDecoder::Decode(
   std::vector<TransducerPrefixSearch *> pointers;
   for (const auto &search : searches) pointers.push_back(search.get());
   auto finished = TransducerPrefixSearch::FinishTogether(pointers, 1);
+  fusion_.RecordSurvival(pointers, finished);
   for (int32_t b = 0; b != batch_size; ++b) {
     ans[b] = ToResult(std::move(finished[b]));
   }
@@ -256,6 +271,7 @@ OfflineTransducerPrefixBeamSearchNeMoDecoder::Decode(
   }
   // The scorers' end-of-input calls serve the whole batch at once.
   auto finished = TransducerPrefixSearch::FinishTogether(searches, 1);
+  fusion_.RecordSurvival(searches, finished);
   for (size_t i = 0; i != finished.size(); ++i) {
     ans[utterance[i]] = ToResult(std::move(finished[i]));
   }

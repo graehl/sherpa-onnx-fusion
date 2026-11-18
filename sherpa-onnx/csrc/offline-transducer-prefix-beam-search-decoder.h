@@ -16,6 +16,7 @@
 #include "sherpa-onnx/csrc/scorer.h"
 #include "sherpa-onnx/csrc/symbol-table.h"
 #include "sherpa-onnx/csrc/transducer-prefix-search.h"
+#include "sherpa-onnx/csrc/transducer-survival-summary.h"
 
 // --decoding-method=prefix_beam_search for offline transducer models:
 // TransducerPrefixSearch fused with the configured scorers, with the
@@ -50,11 +51,18 @@ class TransducerFusion {
       const TransducerPrefixSearchOptions &options) const;
   const std::vector<Scorer *> &Scorers() const { return scorer_pointers_; }
 
+  // With FusionConfig::trace_survival: adds finished searches and their
+  // results (FinishTogether's) to the summary logged when this is destroyed.
+  void RecordSurvival(const std::vector<TransducerPrefixSearch *> &searches,
+                      const std::vector<std::vector<TransducerPrefixHypothesis>>
+                          &results) const;
+
  private:
   std::shared_ptr<SearchVocabulary> vocabulary_;
   std::vector<std::unique_ptr<Scorer>> scorers_;
   std::vector<Scorer *> scorer_pointers_;
   std::vector<float> weights_;
+  std::unique_ptr<TransducerSurvivalSummary> survival_;  // Null if not traced.
 };
 
 // Fills the arrays TransducerPrefixSearch::Expand takes for the hypotheses

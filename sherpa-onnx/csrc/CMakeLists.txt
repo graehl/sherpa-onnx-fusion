@@ -177,6 +177,7 @@ set(sources
   timer.cc
   transducer-keyword-decoder.cc
   transducer-prefix-search.cc
+  transducer-survival-summary.cc
   transpose.cc
   unbind.cc
   utils.cc

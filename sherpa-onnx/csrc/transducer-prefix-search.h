@@ -75,6 +75,69 @@ struct TransducerPrefixSearchOptions {
   // hypotheses with its leading context counted. Pruning during the search
   // and the scores reported are unaffected.
   int32_t rank_length_offset = -1;
+
+  // Survival trace, off by default; adds bytes to every prefix's record and
+  // a sort of every waiting list per round only when on. For each result it
+  // records what each pruning limit had to allow to keep it
+  // (TransducerPrefixHypothesis::required), and at the end of every round
+  // it ranks each list of arrivals waiting for a later frame, for a policy
+  // that would cut those lists then (TransducerWaitHistogram).
+  bool trace_survival = false;
+};
+
+// What it took to keep a hypothesis's probability: over every queue it
+// passed through, the largest gap below that queue's best score and the
+// lowest rank (from 1) at which it was kept. "gap" and "rank" are for the
+// search's own pruning when a queue is used; "wait_gap" and "wait_rank" for
+// the waiting lists of later frames, ranked at the end of each round.
+struct TransducerSurvivalNeed {
+  float gap = 0;
+  int32_t rank = 0;
+  float wait_gap = 0;
+  int32_t wait_rank = 0;
+
+  // The most demanding of the two, field by field.
+  void Absorb(const TransducerSurvivalNeed &other);
+};
+
+// With trace_survival: at the end of every round, each entry of each list
+// waiting for a later frame, counted by its rank and gap in its list. Entry
+// (r, g) counts entries whose rank is at most kRanks[r] and above
+// kRanks[r - 1], and whose gap is at most kGaps[g] and above kGaps[g - 1];
+// the last of each is unbounded. Summing the counts with r <= R and g <= G
+// over "rounds" gives the mean number of waiting entries a policy that cut
+// each list at the end of every round to its best kRanks[R] within kGaps[G]
+// of its best would have kept.
+struct TransducerWaitHistogram {
+  static constexpr int32_t kNumRanks = 12;
+  static constexpr int32_t kNumGaps = 11;
+  static constexpr int32_t kRanks[kNumRanks] = {
+      1,  2,   4,   8,   16,   32,
+      64, 128, 256, 512, 1024, std::numeric_limits<int32_t>::max()};
+  static constexpr float kGaps[kNumGaps] = {
+      1, 2, 3, 4, 6, 8, 10, 12, 16, 24, std::numeric_limits<float>::infinity()};
+
+  std::vector<int64_t> counts =
+      std::vector<int64_t>(static_cast<size_t>(kNumRanks) * kNumGaps, 0);
+  int64_t rounds = 0;
+  int64_t peak_waiting = 0;  // The most waiting entries at a round's end.
+
+  // How prefixes of different lengths meet at one frame: an entry's length
+  // in tokens minus that of its list's best, offset by kMaxOffset and
+  // clamped to [0, 2 * kMaxOffset]. "waiting_lengths" counts the waiting
+  // lists' entries at the end of every round (as "counts" does), and
+  // "kept_lengths" and "dropped_lengths" the arrivals a frame's pruning
+  // kept and dropped, against the best arrival.
+  static constexpr int32_t kMaxOffset = 8;
+  std::vector<int64_t> waiting_lengths =
+      std::vector<int64_t>(2 * kMaxOffset + 1);
+  std::vector<int64_t> kept_lengths = std::vector<int64_t>(2 * kMaxOffset + 1);
+  std::vector<int64_t> dropped_lengths =
+      std::vector<int64_t>(2 * kMaxOffset + 1);
+
+  void Add(int32_t rank, float gap);
+  static void AddLength(int32_t offset, std::vector<int64_t> *lengths);
+  void Merge(const TransducerWaitHistogram &other);
 };
 
 struct TransducerPrefixHypothesis {
@@ -88,6 +151,24 @@ struct TransducerPrefixHypothesis {
   float model_log_prob = 0;
   // Raw, unweighted log score of each scorer, in scorer order.
   std::vector<float> scorer_log_scores;
+
+  // With TransducerPrefixSearchOptions::trace_survival (zero without it).
+  //
+  // "required": what every path that added probability to this result
+  // needed. A search whose max_active is at least required.rank and whose
+  // beam is at least required.gap gives this result with this score; one
+  // that also cut each waiting list at the end of every round to its best
+  // required.wait_rank within required.wait_gap of its best would too, to
+  // first order (cutting other entries changes what else reaches later
+  // queues). Every path counts however little it added, so this is more
+  // than a search needs.
+  //
+  // "required_dominant": the same along the result's dominant path, the one
+  // that at every queue followed the contribution that brought the most
+  // probability. Keeping it keeps the result, minus at most the probability
+  // of the paths it does not cover.
+  TransducerSurvivalNeed required;
+  TransducerSurvivalNeed required_dominant;
 };
 
 // One utterance's search. Per encoder frame the caller repeats rounds:
@@ -150,16 +231,30 @@ class TransducerPrefixSearch {
       const std::vector<TransducerPrefixSearch *> &searches, int32_t nbest = 1);
 
   int32_t NumLiveRecords() const { return trie_.NumLiveNodes(); }
+  // With trace_survival; empty otherwise.
+  const TransducerWaitHistogram &WaitHistogram() const { return waiting_; }
 
  private:
   using Node = ScoredPrefixTrie::Node;
   struct State;
+  struct QueueNeed;
+  struct Trace;
+  static const size_t kTraceOffset;  // Of the Trace in a prefix's record.
 
   State *StateOf(Node *node) const;
+  Trace *TraceOf(Node *node) const;  // With trace_survival only.
   void Pin(uint32_t index);
   void Unpin(uint32_t index);
-  void AddAgain(uint32_t index, float log_mass);
-  void AddArrival(uint32_t index, int32_t frames_ahead, float log_mass);
+  // "need" is the source queue's, with trace_survival; null otherwise.
+  void AddAgain(uint32_t index, float log_mass, const QueueNeed *need);
+  void AddArrival(uint32_t index, int32_t frames_ahead, float log_mass,
+                  const QueueNeed *need);
+  // With trace_survival, at the end of a round: ranks each waiting list.
+  void RankWaiting();
+  // What a hypothesis's probability needed over the queues holding it: on
+  // every path, and on its dominant path.
+  void NeedOf(Node *node, TransducerSurvivalNeed *all,
+              TransducerSurvivalNeed *dominant) const;
   float LengthBonus(const Node &node, bool at_end) const;
   // What results are ordered by: "score", or that over length.
   float RankKey(const Node &node, float score) const;
@@ -201,6 +296,7 @@ class TransducerPrefixSearch {
     int32_t token;
   };
   std::vector<Step> steps_;
+  TransducerWaitHistogram waiting_;
 };
 
 // After Expand: runs every scorer's waves for one search.

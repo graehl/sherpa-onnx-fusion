@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <memory>
 #include <numeric>
 #include <utility>
@@ -38,14 +39,87 @@ struct TransducerPrefixSearch::State {
   float emit_score;  // That emission's log mass.
 };
 
+// What the probability in one queue needed: on every path that added to it,
+// and on the path that added the most ("dominant"), whose term is kept.
+struct TransducerPrefixSearch::QueueNeed {
+  TransducerSurvivalNeed all;
+  TransducerSurvivalNeed dominant;
+  float dominant_term = kLogZero;
+
+  // The first contribution of "term" from a queue whose need is "from".
+  void Start(const QueueNeed &from, float term) {
+    all = from.all;
+    dominant = from.dominant;
+    dominant_term = term;
+  }
+  void Add(const QueueNeed &from, float term) {
+    all.Absorb(from.all);
+    if (term > dominant_term) {
+      dominant = from.dominant;
+      dominant_term = term;
+    }
+  }
+  // What being kept at "rank" and "gap" adds; "wait" for a waiting list.
+  void Stamp(int32_t rank, float gap, bool wait) {
+    TransducerSurvivalNeed here;
+    (wait ? here.wait_rank : here.rank) = rank;
+    (wait ? here.wait_gap : here.gap) = gap;
+    all.Absorb(here);
+    dominant.Absorb(here);
+  }
+};
+
+// With trace_survival, after the State: what the probability in each of the
+// prefix's queues needed, matching State's fields.
+struct TransducerPrefixSearch::Trace {
+  QueueNeed now;
+  QueueNeed again;
+  QueueNeed arrive[kMaxDuration + 1];
+};
+
+const size_t TransducerPrefixSearch::kTraceOffset = (sizeof(State) + 7) / 8 * 8;
+
+void TransducerSurvivalNeed::Absorb(const TransducerSurvivalNeed &other) {
+  gap = std::max(gap, other.gap);
+  rank = std::max(rank, other.rank);
+  wait_gap = std::max(wait_gap, other.wait_gap);
+  wait_rank = std::max(wait_rank, other.wait_rank);
+}
+
+void TransducerWaitHistogram::Add(int32_t rank, float gap) {
+  int32_t r = 0;
+  while (r + 1 < kNumRanks && rank > kRanks[r]) ++r;
+  int32_t g = 0;
+  while (g + 1 < kNumGaps && gap > kGaps[g]) ++g;
+  counts[static_cast<size_t>(r) * kNumGaps + g] += 1;
+}
+
+void TransducerWaitHistogram::AddLength(int32_t offset,
+                                        std::vector<int64_t> *lengths) {
+  offset = std::min(std::max(offset, -kMaxOffset), kMaxOffset);
+  (*lengths)[offset + kMaxOffset] += 1;
+}
+
+void TransducerWaitHistogram::Merge(const TransducerWaitHistogram &other) {
+  for (size_t i = 0; i != counts.size(); ++i) counts[i] += other.counts[i];
+  for (size_t i = 0; i != waiting_lengths.size(); ++i) {
+    waiting_lengths[i] += other.waiting_lengths[i];
+    kept_lengths[i] += other.kept_lengths[i];
+    dropped_lengths[i] += other.dropped_lengths[i];
+  }
+  rounds += other.rounds;
+  peak_waiting = std::max(peak_waiting, other.peak_waiting);
+}
+
 TransducerPrefixSearch::TransducerPrefixSearch(
     const TransducerPrefixSearchOptions &options,
     std::shared_ptr<const SearchVocabulary> vocabulary,
     std::vector<Scorer *> scorers, std::vector<float> scorer_weights)
     : options_(options),
-      trie_(std::move(vocabulary), std::move(scorers),
-            std::move(scorer_weights), sizeof(State),
-            options.word_boundary_char) {
+      trie_(
+          std::move(vocabulary), std::move(scorers), std::move(scorer_weights),
+          options.trace_survival ? kTraceOffset + sizeof(Trace) : sizeof(State),
+          options.word_boundary_char) {
   if (options_.topology == TransducerTopology::kTdt) {
     options_.max_duration =
         std::min(std::max(options_.max_duration, 1), kMaxDuration);
@@ -61,6 +135,10 @@ TransducerPrefixSearch::TransducerPrefixSearch(
   state->pins = 0;
   state->frame = 0;
   state->emit_score = kLogZero;
+  if (options_.trace_survival) {
+    *TraceOf(root) = Trace();
+    TraceOf(root)->now.Stamp(1, 0, false);
+  }
   Pin(ScoredPrefixTrie::kRoot);
   frontier_.push_back(ScoredPrefixTrie::kRoot);
 }
@@ -68,6 +146,65 @@ TransducerPrefixSearch::TransducerPrefixSearch(
 TransducerPrefixSearch::State *TransducerPrefixSearch::StateOf(
     Node *node) const {
   return reinterpret_cast<State *>(trie_.SearchState(node));
+}
+
+TransducerPrefixSearch::Trace *TransducerPrefixSearch::TraceOf(
+    Node *node) const {
+  return reinterpret_cast<Trace *>(trie_.SearchState(node) + kTraceOffset);
+}
+
+void TransducerPrefixSearch::NeedOf(Node *node, TransducerSurvivalNeed *all,
+                                    TransducerSurvivalNeed *dominant) const {
+  *all = TransducerSurvivalNeed();
+  *dominant = TransducerSurvivalNeed();
+  if (!options_.trace_survival) return;
+  const State &state = *StateOf(node);
+  const Trace &trace = *TraceOf(node);
+  float largest = kLogZero;
+  auto add = [&](float mass, const QueueNeed &need) {
+    if (mass == kLogZero) return;
+    all->Absorb(need.all);
+    if (mass > largest) {
+      largest = mass;
+      *dominant = need.dominant;
+    }
+  };
+  add(state.now, trace.now);
+  add(state.again, trace.again);
+  for (int32_t k = 0; k != ring_size_; ++k)
+    add(state.arrive[k], trace.arrive[k]);
+}
+
+void TransducerPrefixSearch::RankWaiting() {
+  int64_t waiting = 0;
+  std::vector<std::pair<float, uint32_t>> ranked;
+  for (int32_t slot = 0; slot != ring_size_; ++slot) {
+    ranked.clear();
+    for (uint32_t index : arriving_[slot]) {
+      Node *node = trie_.At(index);
+      if (node->rejected) continue;  // Never survives its frame.
+      ranked.emplace_back(StateOf(node)->arrive[slot] + node->scorer_total +
+                              LengthBonus(*node, false),
+                          index);
+    }
+    // As Prune orders: score, then index.
+    std::sort(ranked.begin(), ranked.end(), [](const auto &a, const auto &b) {
+      if (a.first != b.first) return a.first > b.first;
+      return a.second < b.second;
+    });
+    for (size_t i = 0; i != ranked.size(); ++i) {
+      int32_t rank = static_cast<int32_t>(i) + 1;
+      float gap = ranked[0].first - ranked[i].first;
+      TraceOf(trie_.At(ranked[i].second))->arrive[slot].Stamp(rank, gap, true);
+      waiting_.Add(rank, gap);
+      TransducerWaitHistogram::AddLength(trie_.At(ranked[i].second)->length -
+                                             trie_.At(ranked[0].second)->length,
+                                         &waiting_.waiting_lengths);
+    }
+    waiting += static_cast<int64_t>(ranked.size());
+  }
+  waiting_.rounds += 1;
+  waiting_.peak_waiting = std::max(waiting_.peak_waiting, waiting);
 }
 
 void TransducerPrefixSearch::Pin(uint32_t index) {
@@ -83,24 +220,33 @@ void TransducerPrefixSearch::Unpin(uint32_t index) {
   }
 }
 
-void TransducerPrefixSearch::AddAgain(uint32_t index, float log_mass) {
+void TransducerPrefixSearch::AddAgain(uint32_t index, float log_mass,
+                                      const QueueNeed *need) {
   if (log_mass == kLogZero) return;
-  State *state = StateOf(trie_.At(index));
+  Node *node = trie_.At(index);
+  State *state = StateOf(node);
   if (state->again == kLogZero) {
     again_.push_back(index);
     Pin(index);
+    if (need != nullptr) TraceOf(node)->again.Start(*need, log_mass);
+  } else if (need != nullptr) {
+    TraceOf(node)->again.Add(*need, log_mass);
   }
   state->again = LogAdd(state->again, log_mass);
 }
 
 void TransducerPrefixSearch::AddArrival(uint32_t index, int32_t frames_ahead,
-                                        float log_mass) {
+                                        float log_mass, const QueueNeed *need) {
   if (log_mass == kLogZero) return;
   int32_t slot = (frame_ + frames_ahead) % ring_size_;
-  State *state = StateOf(trie_.At(index));
+  Node *node = trie_.At(index);
+  State *state = StateOf(node);
   if (state->arrive[slot] == kLogZero) {
     arriving_[slot].push_back(index);
     Pin(index);
+    if (need != nullptr) TraceOf(node)->arrive[slot].Start(*need, log_mass);
+  } else if (need != nullptr) {
+    TraceOf(node)->arrive[slot].Add(*need, log_mass);
   }
   state->arrive[slot] = LogAdd(state->arrive[slot], log_mass);
 }
@@ -191,6 +337,9 @@ void TransducerPrefixSearch::Expand(const float *log_probs,
     const float *durations =
         tdt ? duration_log_probs + i * num_durations : nullptr;
     float mass = StateOf(trie_.At(index))->now;
+    // Records are never moved, so this stays valid while children are made.
+    const QueueNeed *need =
+        options_.trace_survival ? &TraceOf(trie_.At(index))->now : nullptr;
 
     // Blank: the same prefix at a later frame. A blank with no advance is
     // treated as advancing one frame.
@@ -198,15 +347,16 @@ void TransducerPrefixSearch::Expand(const float *log_probs,
       for (const Step &step : steps_) {
         if (step.position != i) continue;
         if (step.token == blank || step.token == options_.blank_like_token) {
-          AddArrival(index, 1, mass + row[step.token]);
+          AddArrival(index, 1, mass + row[step.token], need);
         }
       }
     } else if (tdt) {
       for (int32_t d = 0; d != num_durations; ++d) {
-        AddArrival(index, std::max(d, 1), mass + row[blank] + durations[d]);
+        AddArrival(index, std::max(d, 1), mass + row[blank] + durations[d],
+                   need);
       }
     } else {
-      AddArrival(index, 1, mass + row[blank]);
+      AddArrival(index, 1, mass + row[blank], need);
     }
 
     // The most probable emittable tokens, ties to the lower ID.
@@ -246,6 +396,7 @@ void TransducerPrefixSearch::Expand(const float *log_probs,
         child->pins = 0;
         child->frame = frame_;
         child->emit_score = kLogZero;
+        if (need != nullptr) *TraceOf(trie_.At(child_index)) = Trace();
       }
       float emitted = mass + row[token];
       float largest = kLogZero;
@@ -254,17 +405,17 @@ void TransducerPrefixSearch::Expand(const float *log_probs,
           float term = emitted + durations[d];
           if (d == 0 && last_round) continue;
           if (d == 0) {
-            AddAgain(child_index, term);
+            AddAgain(child_index, term, need);
           } else {
-            AddArrival(child_index, d, term);
+            AddArrival(child_index, d, term, need);
           }
           largest = std::max(largest, term);
         }
       } else if (tokens_stay) {
-        AddAgain(child_index, emitted);
+        AddAgain(child_index, emitted, need);
         largest = emitted;
       } else {
-        AddArrival(child_index, 1, emitted);
+        AddArrival(child_index, 1, emitted, need);
         largest = emitted;
       }
       if (largest > child->emit_score) {
@@ -318,6 +469,24 @@ std::vector<uint32_t> TransducerPrefixSearch::Prune(
       --keep;
     }
   }
+  if (options_.trace_survival && !order.empty()) {
+    // What each kept one needed, now that it moves to the frontier.
+    for (size_t i = 0; i != keep; ++i) {
+      Trace *trace = TraceOf(trie_.At(candidates[order[i]]));
+      QueueNeed need = slot == kAgainSlot ? trace->again : trace->arrive[slot];
+      need.Stamp(static_cast<int32_t>(i) + 1,
+                 scores[order[0]] - scores[order[i]], false);
+      trace->now = need;
+    }
+    if (slot != kAgainSlot) {
+      int32_t best = trie_.At(candidates[order[0]])->length;
+      for (size_t i = 0; i != order.size(); ++i) {
+        TransducerWaitHistogram::AddLength(
+            trie_.At(candidates[order[i]])->length - best,
+            i < keep ? &waiting_.kept_lengths : &waiting_.dropped_lengths);
+      }
+    }
+  }
   std::vector<uint32_t> kept;
   for (size_t i = 0; i != keep; ++i) kept.push_back(candidates[order[i]]);
   for (size_t i = keep; i != order.size(); ++i) {
@@ -332,6 +501,8 @@ bool TransducerPrefixSearch::EndRound() {
   trie_.FinishScoring();
   // A new prefix with no positive-probability transition joined no queue.
   for (uint32_t index : trie_.NewNodes()) trie_.ReleaseIfUnused(index);
+  // The round's scores are complete: where a policy would cut waiting lists.
+  if (options_.trace_survival) RankWaiting();
 
   // The frontier is spent; it leaves through Unpin below, after the
   // next frontier is chosen, so a prefix in both is not freed in between.
@@ -404,6 +575,7 @@ TransducerPrefixHypothesis TransducerPrefixSearch::MakeHypothesis(
     hypothesis.scorer_log_scores.push_back(
         trie_.Subtotals(node)[s] + (final_scores ? final_scores[s] : 0));
   }
+  NeedOf(node, &hypothesis.required, &hypothesis.required_dominant);
   trie_.TokensOf(index, &hypothesis.tokens);
   for (; node->parent != ScoredPrefixTrie::kNone;
        node = trie_.At(node->parent)) {
