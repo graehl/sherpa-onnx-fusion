@@ -195,7 +195,8 @@ present and prints a warning describing the correct result.
 - [A measured cost model for a batch](gaps/sketches/batch-cost-model.md).
 - [A table of the best demonstrated throughput per kind of model](gaps/sketches/throughput-table.md)
   (no rows yet: no timing has been taken on an idle machine).
-- [LSTM fusion lacks a result anyone can reproduce](gaps/public-lstm-fusion-evidence.md).- [Encoder-inclusive inflight scheduling](gaps/sketches/encoder-decoder-inflight-scheduling.md),
+- [LSTM fusion lacks a result anyone can reproduce](gaps/public-lstm-fusion-evidence.md).
+- [Encoder-inclusive inflight scheduling](gaps/sketches/encoder-decoder-inflight-scheduling.md),
   deferred beyond the decoder's own inflight batching.
 - [Tuning fusion weights and bonuses from the search's own evidence](gaps/sketches/fusion-parameter-tuning.md).
 - [Prefix search against the FST decoder on a graph with an LM](gaps/sketches/fst-decoder-lm-graph-comparison.md) (run for a character LM; what remains is in the sketch).
