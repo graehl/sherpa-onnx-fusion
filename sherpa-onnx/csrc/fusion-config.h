@@ -56,8 +56,9 @@ struct FusionConfig {
   bool trace_survival = false;
   // Transducer prefix search: also cut the lists of arrivals waiting for
   // later frames at the end of every round (TransducerPrefixSearchOptions::
-  // prune_waiting); 0 for a limit means max-active-paths or score-beam.
-  bool prune_waiting = false;
+  // prune_waiting); 0 for a limit means twice max-active-paths, or half of
+  // score-beam.
+  bool prune_waiting = true;
   int32_t waiting_max_active = 0;
   float waiting_score_beam = 0;
 

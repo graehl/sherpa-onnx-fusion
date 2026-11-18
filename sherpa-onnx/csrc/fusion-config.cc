@@ -74,13 +74,15 @@ void FusionConfig::Register(ParseOptions *po) {
                "transducer models. At the end of every round, also cut each "
                "list of hypotheses waiting for a later frame to its best "
                "--waiting-max-active within --waiting-score-beam of its best, "
-               "instead of only when that frame begins.");
+               "instead of only when that frame begins. Not applied with "
+               "--modified-beam-search-rules.");
   po->Register("waiting-max-active", &waiting_max_active,
                "With --prune-waiting: hypotheses each waiting list keeps; 0 "
-               "for --max-active-paths.");
+               "for twice --max-active-paths.");
   po->Register("waiting-score-beam", &waiting_score_beam,
                "With --prune-waiting: a waiting hypothesis is kept only "
-               "within this score of its list's best; 0 for --score-beam.");
+               "within this score of its list's best; 0 for half of "
+               "--score-beam.");
 }
 
 bool FusionConfig::Validate() const {
