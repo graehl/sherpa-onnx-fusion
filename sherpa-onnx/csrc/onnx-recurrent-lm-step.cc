@@ -353,7 +353,9 @@ class OnnxRecurrentLmStep : public RecurrentLmStep {
   std::vector<const char *> output_names_ptr_;
   std::vector<StateShape> shapes_;
   int32_t vocab_size_ = 0;
-  Ort::AllocatorWithDefaultOptions host_allocator_;
+  // Mutable: older onnxruntime headers (1.11) convert a const wrapper only
+  // to const OrtAllocator*, which CreateTensor does not take.
+  mutable Ort::AllocatorWithDefaultOptions host_allocator_;
   // Each state [layers, 1, hidden] of zeros, on the host: the state before
   // the first unit.
   std::vector<Ort::Value> zero_;
