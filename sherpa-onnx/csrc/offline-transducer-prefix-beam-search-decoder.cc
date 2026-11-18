@@ -35,6 +35,9 @@ TransducerPrefixSearchOptions MakeTransducerPrefixSearchOptions(
   }
   options.prune_steps = config.modified_beam_search_rules;
   options.trace_survival = config.trace_survival;
+  options.prune_waiting = config.prune_waiting;
+  options.waiting_max_active = config.waiting_max_active;
+  options.waiting_beam = config.waiting_score_beam;
   return options;
 }
 
