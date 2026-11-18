@@ -80,9 +80,11 @@ struct TransducerPrefixSearchOptions {
   // that frame's list, which without this is pruned only when the frame
   // begins. With prune_waiting, every round's end also cuts each waiting
   // list to its best waiting_max_active within waiting_beam of its best
-  // (0 for either: max_active, beam); a cut entry that later receives
-  // probability again rejoins.
-  bool prune_waiting = false;
+  // (0 for either: twice max_active, half of beam, where a survival trace
+  // of Parakeet TDT on LibriSpeech kept every result's dominant path); a
+  // cut entry that later receives probability again rejoins. Not applied
+  // with prune_steps, which must reproduce modified_beam_search.
+  bool prune_waiting = true;
   int32_t waiting_max_active = 0;
   float waiting_beam = 0;
 

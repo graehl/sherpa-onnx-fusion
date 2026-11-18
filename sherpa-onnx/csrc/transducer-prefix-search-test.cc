@@ -477,6 +477,8 @@ TEST(TransducerPrefixSearch, SurvivalTraceLimitsReproduceTheResult) {
     options.max_active = 3;
     options.max_token_candidates = 2;
     options.beam = 6;
+    // Its default limits follow max_active, which the rerun below lowers.
+    options.prune_waiting = false;
     TransducerPrefixHypothesis plain = run(options, nullptr);
 
     options.trace_survival = true;
@@ -533,6 +535,7 @@ TEST(TransducerPrefixSearch, PruneWaitingWithoutLimitsChangesNothing) {
     options.max_active = 3;
     options.max_token_candidates = 2;
     options.beam = 6;
+    options.prune_waiting = false;
     int32_t live_plain = 0, live_open = 0, live_cut = 0;
     TransducerPrefixHypothesis plain = run(options, &live_plain);
 

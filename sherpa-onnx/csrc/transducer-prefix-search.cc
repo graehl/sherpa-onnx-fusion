@@ -443,14 +443,14 @@ void TransducerPrefixSearch::ApplyScorerWave(
 
 std::vector<uint32_t> TransducerPrefixSearch::Prune(
     const std::vector<uint32_t> &candidates, int32_t slot, bool to_frontier) {
-  // A waiting list is cut by its own limits, which default to the frontier's.
+  // A waiting list is cut by its own limits, by default twice the
+  // frontier's count within half its beam.
   int32_t max_active = options_.max_active;
   float beam = options_.beam;
   if (!to_frontier) {
-    if (options_.waiting_max_active > 0) {
-      max_active = options_.waiting_max_active;
-    }
-    if (options_.waiting_beam > 0) beam = options_.waiting_beam;
+    max_active = options_.waiting_max_active > 0 ? options_.waiting_max_active
+                                                 : 2 * max_active;
+    beam = options_.waiting_beam > 0 ? options_.waiting_beam : beam / 2;
   }
   auto mass_in = [slot](State *state) -> float & {
     return slot == kAgainSlot ? state->again : state->arrive[slot];
@@ -512,7 +512,7 @@ bool TransducerPrefixSearch::EndRound() {
   for (uint32_t index : trie_.NewNodes()) trie_.ReleaseIfUnused(index);
   // The round's scores are complete: where a policy would cut waiting lists.
   if (options_.trace_survival) RankWaiting();
-  if (options_.prune_waiting) {
+  if (options_.prune_waiting && !options_.prune_steps) {
     for (int32_t slot = 0; slot != ring_size_; ++slot) {
       arriving_[slot] = Prune(arriving_[slot], slot, false);
     }
