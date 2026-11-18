@@ -1039,7 +1039,15 @@ allocator statistics; `--scorer.N.stats=false` turns this off. In that
 run the widest step was 200 nodes; the LSTM's session held 2049 MiB of
 GPU memory for a peak use of 743 MiB, and its eight gather sessions 186
 MiB together for 95 MiB, while the whole process held 7.0 GB against 2.8
-GB with no LM.
+GB with no LM. Pool settings barely move this (same run, one thread,
+2026-11-18): one onnxruntime pool shared by the eight gathers held 127
+MiB instead of 186 at no cost in time; one pool shared with the LSTM
+session as well saved about 190 MiB of process memory and cost 23% in
+time; capping the pool's power-of-two growth at 16 or 64 MiB changed
+nothing; exact-size growth held 1973 MiB for a 559 MiB peak and cost 29%.
+None is applied. The slack is the LSTM pool keeping what it once used,
+and what it uses grows with what stays alive
+([state lifetime](../gaps/lm-states-outlive-their-hypotheses.md)).
 Keep model execution separate from the search so later implementations can
 reuse model and scorer contracts where appropriate. Search on the same GPU
 as the models is deferred; see
