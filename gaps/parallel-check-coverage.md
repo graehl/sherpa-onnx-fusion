@@ -29,7 +29,14 @@ out:
 - **The build without KenLM.** That it skips the n-gram configuration
   was checked only by the message such a build prints.
 - **A GPU.** Both workflows are CPU only.
-- **Either workflow actually running.** Neither has.
+- **The narrow beam's effect.** On the shipped recordings the TDT's narrow
+  beam only drops a final period on two of three, even at one path and a
+  score beam of 1, and on the manylinux GCC 11 build of the linux workflow
+  not even that (2026-11-18). Its effect is therefore only noted when
+  absent; nothing checks that the beam options narrow the search.
+
+Both workflows have run since 2026-11-18: fusion-fork passed, and linux
+reached the check once its binaries could load ONNX Runtime.
 
 ## What is wanted
 
