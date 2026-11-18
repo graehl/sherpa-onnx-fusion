@@ -596,6 +596,7 @@ type
     { Else pad an input to a multiple of this many seconds. 0: no padding. }
     PadTo: Single;
     function ToString: AnsiString;
+    class operator Initialize({$IFDEF FPC}var{$ELSE}out{$ENDIF} Dest: TSherpaOnnxOfflineEncoderConfig);
   end;
 
   TSherpaOnnxOfflineModelConfig = record
@@ -3203,6 +3204,14 @@ begin
   Result := Format('TSherpaOnnxOfflineEncoderConfig(Window := %s, ' +
     'Lengths := %s, PadTo := %.3f)',
     [Self.Window.ToString, Self.Lengths, Self.PadTo]);
+end;
+
+{ Initialize clears only managed fields; PadTo would otherwise hold
+  whatever was on the stack. }
+class operator TSherpaOnnxOfflineEncoderConfig.Initialize({$IFDEF FPC}var{$ELSE}out{$ENDIF} Dest: TSherpaOnnxOfflineEncoderConfig);
+begin
+  Dest.Lengths := '';
+  Dest.PadTo := 0;
 end;
 
 class operator TSherpaOnnxScorerConfig.Initialize({$IFDEF FPC}var{$ELSE}out{$ENDIF} Dest: TSherpaOnnxScorerConfig);
