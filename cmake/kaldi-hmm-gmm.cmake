@@ -64,6 +64,16 @@ function(download_kaldi_hmm_gmm)
   endif()
 
   if(WIN32 AND MSVC)
+    # kaldi-hmm-gmm adds /MT and /MTd for every static build, which breaks
+    # linking with SHERPA_ONNX_USE_STATIC_CRT=OFF (LNK2038). Drop them so
+    # CMAKE_MSVC_RUNTIME_LIBRARY decides, as for kaldi-decoder-core.
+    get_target_property(_khg_options kaldi-hmm-gmm-core COMPILE_OPTIONS)
+    if(_khg_options)
+      list(FILTER _khg_options EXCLUDE REGEX ":/MTd?>$")
+      set_target_properties(kaldi-hmm-gmm-core PROPERTIES
+        COMPILE_OPTIONS "${_khg_options}")
+    endif()
+
     target_compile_options(kaldi-hmm-gmm-core PUBLIC
       /wd4018
       /wd4291
