@@ -22,6 +22,10 @@ void CommonScorerOptions::Register(ParseOptions *po) {
   po->Register("num-threads", &num_threads,
                "Number of threads the scorer's model runs with.");
   provider.Register(po);
+  po->Register("stats", &stats,
+               "When the scorer is destroyed, log what it measured of its "
+               "own work and memory; for onnx-rnn, its widest model step and "
+               "its sessions' peak memory.");
 }
 
 bool CommonScorerOptions::Validate() const {
@@ -45,7 +49,8 @@ std::string CommonScorerOptions::ToString() const {
   os << "model=\"" << model << "\", ";
   os << "space=\"" << space << "\", ";
   os << "num_threads=" << num_threads << ", ";
-  os << "provider=" << provider.ToString() << ")";
+  os << "provider=" << provider.ToString() << ", ";
+  os << "stats=" << (stats ? "True" : "False") << ")";
   return os.str();
 }
 
