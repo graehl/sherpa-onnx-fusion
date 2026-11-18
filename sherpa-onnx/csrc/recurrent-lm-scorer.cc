@@ -41,10 +41,27 @@ struct Node {
   const float *LogProbs() const { return result->LogProbs(item); }
 };
 
+// Live nodes of one scorer's utterances, and the most there have been.
+struct NodeCount {
+  std::atomic<int64_t> live{0};
+  std::atomic<int64_t> peak{0};
+
+  void Add(int64_t n) {
+    int64_t now = live += n;
+    int64_t peak_now = peak.load(std::memory_order_relaxed);
+    while (now > peak_now && !peak.compare_exchange_weak(peak_now, now)) {
+    }
+  }
+};
+
 // One utterance's nodes. Freed nodes are reused.
 struct NodePool : public ScorerUtterance {
+  explicit NodePool(std::shared_ptr<NodeCount> count = nullptr)
+      : count(std::move(count)) {}
   ~NodePool() override {
-    g_live_nodes -= static_cast<int32_t>(nodes.size() - free_nodes.size());
+    auto n = static_cast<int32_t>(nodes.size() - free_nodes.size());
+    g_live_nodes -= n;
+    if (count != nullptr) count->Add(-n);
   }
 
   Node *New() {
@@ -62,8 +79,12 @@ struct NodePool : public ScorerUtterance {
     node->computed = false;
     node->queued = false;
     ++g_live_nodes;
+    if (count != nullptr) count->Add(1);
     return node;
   }
+
+  // The scorer's; null for the shared root's pool.
+  std::shared_ptr<NodeCount> count;
 
   std::deque<Node> nodes;
   std::vector<Node *> free_nodes;
@@ -88,6 +109,7 @@ void Unreference(Node *node) {
     node->result.reset();  // the step's result is freed with its last node
     node->pool->free_nodes.push_back(node);
     --g_live_nodes;
+    if (node->pool->count != nullptr) node->pool->count->Add(-1);
     node = parent;
   }
 }
@@ -130,16 +152,20 @@ class RecurrentLmScorer : public Scorer {
     std::string limit = max_step_nodes_ == std::numeric_limits<size_t>::max()
                             ? "none"
                             : std::to_string(max_step_nodes_);
-    SHERPA_ONNX_LOGE("%s: %zu model steps, widest %zu nodes (limit %s)%s%s",
-                     vocabulary_.stats_name.c_str(), steps_.load(),
-                     widest_.load(), limit.c_str(), memory.empty() ? "" : "; ",
-                     memory.c_str());
+    const int64_t peak = node_count_->peak.load();
+    SHERPA_ONNX_LOGE(
+        "%s: %zu model steps, widest %zu nodes (limit %s); at most %lld LM "
+        "nodes live, %.1f MiB of their own rows%s%s",
+        vocabulary_.stats_name.c_str(), steps_.load(), widest_.load(),
+        limit.c_str(), static_cast<long long>(peak),  // NOLINT
+        peak * static_cast<double>(step_->ItemBytes()) / 1048576.0,
+        memory.empty() ? "" : "; ", memory.c_str());
   }
 
   const ScorerInfo &Info() const override { return info_; }
 
   std::unique_ptr<ScorerUtterance> NewUtterance() override {
-    return std::make_unique<NodePool>();
+    return std::make_unique<NodePool>(node_count_);
   }
 
   void Start(ScorerUtterance *utterance, std::byte *state) override {
@@ -268,6 +294,8 @@ class RecurrentLmScorer : public Scorer {
   // For the stats log; Compute may run on several threads at once.
   mutable std::atomic<size_t> steps_{0};
   mutable std::atomic<size_t> widest_{0};
+  // Of the utterances' pools, which share it: a stream may outlive its scorer.
+  std::shared_ptr<NodeCount> node_count_ = std::make_shared<NodeCount>();
   // The node after the sentence boundary, shared by every utterance.
   std::shared_ptr<const RecurrentLmStep::Result> root_result_;
 };
