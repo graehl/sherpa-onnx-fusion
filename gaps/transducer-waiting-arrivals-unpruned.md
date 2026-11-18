@@ -34,15 +34,35 @@ when inserted can still finish in them. Pruning on insertion by the same
 rule is approximate; the question is how often it would drop an entry that
 pruning on arrival keeps.
 
+## Measured
+
+`--trace-survival` (offline transducers) logs a table for the policy
+"cut each waiting list at the end of every round to its best K within B
+of its best". The same 40 recordings, 2026-11-18, with 35,730 round ends:
+
+- **Now:** 2,337 entries wait at a round end on average, at most 3,179.
+  They are mostly longer than their list's best: 36% by 8 tokens or more.
+  Arrival pruning keeps entries within a token of the best (86% at -1 or
+  0) and drops the long ones.
+- **Every path of the best result survives** (a result charged for every
+  path that added probability to it, however little): K 4 and B 12 keep
+  45% of results unchanged; only K 512 with no gap limit keeps all 40.
+- **The dominant path survives** (the path that at every queue brought
+  the most probability): K 4 and B 12, the search's own `max_active` and
+  `score-beam`, keep all 40, holding 14 entries per round end on average
+  instead of 2,337. K 4 and B 8 keep 38 of 40.
+
+Both are first-order: cutting other entries also changes what reaches
+later queues. A dominant path that survives loses only the probability of
+the paths it does not cover.
+
 ## What is wanted
 
-Measure first: waiting entries per slot, and for each pruned-on-arrival
-entry whether its insertion-time rank or gap to the slot's best so far
-would have predicted that. Then choose a bound with a controlled
-search-error rate, such as a beam against the slot's running best with a
-margin, or a cap well above `max_active`, and compare transcripts and
-live nodes against the unbounded search. `Finish` likewise need only score
-prefixes that can still rank, not every waiting entry.
+Implement the cut as an option (K and B defaulting to `max_active` and
+`score-beam`), and compare transcripts, error rate, live LM nodes and time
+against the unbounded search on a corpus large enough to see a change.
+`Finish` likewise need only score prefixes that can still rank, not every
+waiting entry.
 
 ## Closure
 

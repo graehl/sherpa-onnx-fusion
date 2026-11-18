@@ -44,6 +44,7 @@ everything is kept in the
 | `modified_beam_search` rules | `TransducerPrefixSearchOptions::prune_steps` (`--modified-beam-search-rules`) | § Transducers |
 | Multi-utterance CTC decoder | `ctc-inflight-decoder.h` | § Decoder lifecycle |
 | Survival trace | `ctc-prefix-search.h` (`trace_survival`) | § Score-gap beam sweep |
+| Transducer survival trace | `transducer-prefix-search.h` (`trace_survival`), `transducer-survival-summary.h` (`--trace-survival`) | [waiting arrivals gap](../gaps/transducer-waiting-arrivals-unpruned.md) |
 
 All of it is selected with `--decoding-method=prefix_beam_search`. Unit
 tests sit beside each file (`*-test.cc`); the searches are tested against
@@ -1317,6 +1318,7 @@ offline NeMo transducer models. The options are fields of `FusionConfig`
 | `--scorer.N.unit` | `char` | `token` for a scorer trained on the recognizer's tokens (`kenlm` or `onnx-rnn`) |
 | `--modified-beam-search-rules` | false | Stateless transducers: search exactly as `modified_beam_search` does |
 | `--length-normalize` | false | Transducers: rank results by score over output length |
+| `--trace-survival` | false | Offline transducers: at the end, log what pruning each result needed, and what cutting the lists of arrivals waiting for later frames would cost in results and save in entries (about 12% slower) |
 
 `--ctc-prior` names a text file of `token-id log-prior` lines, where a
 token's prior is the recognizer's average probability for it over some

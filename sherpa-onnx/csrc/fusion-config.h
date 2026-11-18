@@ -49,6 +49,11 @@ struct FusionConfig {
   // as blank, and length_normalize), so that decoder's results are
   // reproduced, with or without scorers.
   bool modified_beam_search_rules = false;
+  // Offline transducer prefix search: trace what pruning each result needed
+  // and how full the lists waiting for later frames are, and log a summary
+  // when the decoder is destroyed (TransducerPrefixSearchOptions::
+  // trace_survival). Costs memory and time; off by default.
+  bool trace_survival = false;
 
   void Register(ParseOptions *po);
   bool Validate() const;

@@ -458,5 +458,60 @@ TEST(TransducerPrefixSearch, PrunedSearchReleasesWrappedScorerStates) {
   EXPECT_EQ(HistoryScorer::LiveStates(), 0);
 }
 
+// The survival trace changes no result, and a search pruned to exactly the
+// limits it reports for the best result finds that result with that score.
+TEST(TransducerPrefixSearch, SurvivalTraceLimitsReproduceTheResult) {
+  for (const Case &c : kCases) {
+    const int32_t num_frames = 40;
+    auto run = [&](const TransducerPrefixSearchOptions &options,
+                   TransducerWaitHistogram *waiting) {
+      HistoryScorer scorer(ScorerUnit::kCharacter, -0.05f);
+      TransducerPrefixSearch search(options, Vocabulary(), {&scorer}, {1.0f});
+      Decode(&search, {&scorer}, c.topology, num_frames);
+      auto best = search.Finish(1);
+      if (waiting != nullptr) *waiting = search.WaitHistogram();
+      return best.empty() ? TransducerPrefixHypothesis() : best[0];
+    };
+    TransducerPrefixSearchOptions options = Exhaustive(c);
+    options.max_active = 3;
+    options.max_token_candidates = 2;
+    options.beam = 6;
+    TransducerPrefixHypothesis plain = run(options, nullptr);
+
+    options.trace_survival = true;
+    TransducerWaitHistogram waiting;
+    TransducerPrefixHypothesis traced = run(options, &waiting);
+    ASSERT_FALSE(traced.tokens.empty());
+    EXPECT_EQ(traced.tokens, plain.tokens);
+    EXPECT_FLOAT_EQ(traced.score, plain.score);
+    const TransducerSurvivalNeed &all = traced.required;
+    const TransducerSurvivalNeed &dominant = traced.required_dominant;
+    EXPECT_GE(all.rank, 1);
+    EXPECT_LE(all.rank, options.max_active);
+    EXPECT_LE(all.gap, options.beam);
+    EXPECT_GE(all.wait_rank, 1);
+    // The dominant path is one of the paths.
+    EXPECT_GE(dominant.rank, 1);
+    EXPECT_LE(dominant.rank, all.rank);
+    EXPECT_LE(dominant.gap, all.gap);
+    EXPECT_LE(dominant.wait_rank, all.wait_rank);
+    EXPECT_LE(dominant.wait_gap, all.wait_gap);
+    EXPECT_GT(waiting.rounds, 0);
+    int64_t counted = 0;
+    for (int64_t n : waiting.counts) counted += n;
+    int64_t lengths = 0;
+    for (int64_t n : waiting.waiting_lengths) lengths += n;
+    EXPECT_EQ(counted, lengths);
+
+    TransducerPrefixSearchOptions tight = options;
+    tight.trace_survival = false;
+    tight.max_active = all.rank;
+    tight.beam = all.gap + 1e-3f;
+    TransducerPrefixHypothesis again = run(tight, nullptr);
+    EXPECT_EQ(again.tokens, traced.tokens);
+    EXPECT_NEAR(again.score, traced.score, 1e-4);
+  }
+}
+
 }  // namespace
 }  // namespace sherpa_onnx
