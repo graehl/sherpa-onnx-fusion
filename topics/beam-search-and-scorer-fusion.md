@@ -1033,6 +1033,13 @@ on the GPU, in batches of 8 with one thread, steps of one node took 64.3 s,
 of 64 nodes 3.2 s, and of 256 or 1024 nodes, the defaults and no limit all
 2.6 s, with the same transcripts (two threads: 50.2, 2.6 and 2.1 s; one
 run each, 2026-11-18).
+When it is destroyed the scorer logs its step count, its widest step, and
+each of its memory pools' peak use and holding, from onnxruntime 1.23's
+allocator statistics; `--scorer.N.stats=false` turns this off. In that
+run the widest step was 200 nodes; the LSTM's session held 2049 MiB of
+GPU memory for a peak use of 743 MiB, and its eight gather sessions 186
+MiB together for 95 MiB, while the whole process held 7.0 GB against 2.8
+GB with no LM.
 Keep model execution separate from the search so later implementations can
 reuse model and scorer contracts where appropriate. Search on the same GPU
 as the models is deferred; see

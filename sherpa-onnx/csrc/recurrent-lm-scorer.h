@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <limits>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "sherpa-onnx/csrc/scorer.h"
@@ -49,6 +50,10 @@ class RecurrentLmStep {
   // (an LSTM's gate activations) is not counted.
   virtual size_t ItemBytes() const = 0;
 
+  // What the step's runtime knows of its memory, as text for a log line;
+  // empty when it knows nothing.
+  virtual std::string MemoryStats() const { return {}; }
+
   // units[b] is each item's previous unit ID and parents[b] its state; the
   // parents' results stay alive for the call. May be called from several
   // threads at once.
@@ -81,6 +86,9 @@ struct RecurrentLmVocabulary {
   static constexpr size_t kDefaultMaxBatchBytes = size_t{1} << 30;
   int32_t max_batch = kDefaultMaxBatch;
   size_t max_batch_bytes = kDefaultMaxBatchBytes;
+  // Not empty: when the scorer is destroyed, it logs its step count, widest
+  // step and the step's MemoryStats under this name.
+  std::string stats_name;
   // The model's unit ID for each character it knows. The boundary between
   // words is the entry for ' '.
   CharacterIndex id_of_char;

@@ -21,6 +21,9 @@ struct CommonScorerOptions {
   std::string space = "▁";
   int32_t num_threads = 1;
   ProviderConfig provider;
+  // When the scorer is destroyed, log what it measured of its own work and
+  // memory (what a type measures is up to the type; most measure nothing).
+  bool stats = true;
 
   void Register(ParseOptions *po);
   bool Validate() const;

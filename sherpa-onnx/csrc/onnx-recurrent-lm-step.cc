@@ -5,6 +5,8 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdio>
+#include <cstdlib>
 #include <deque>
 #include <exception>
 #include <fstream>
@@ -99,6 +101,35 @@ class OnnxRecurrentLmStep : public RecurrentLmStep {
                sizeof(float);
   }
 
+  // Peak bytes in use and bytes held by each place's memory pool, for the
+  // model's session and, summed, the gather sessions'.
+  std::string MemoryStats() const override {
+    std::string out;
+    auto add = [&out](const char *what, const char *where, const PoolStats &s) {
+      if (!s.known) return;
+      char line[160];
+      snprintf(line, sizeof(line),
+               "%s%s %s %.1f MiB peak in use, %.1f MiB held",
+               out.empty() ? "" : "; ", what, where, s.max_in_use / 1048576.0,
+               s.held / 1048576.0);
+      out += line;
+    };
+    auto cpu = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
+    add("model", "cpu", Pool(*session_, cpu));
+    if (device_) add("model", "gpu", Pool(*session_, *device_));
+    if (!gather_.empty()) {
+      PoolStats cpu_sum, gpu_sum;
+      for (const GatherSession &g : gather_) {
+        cpu_sum += Pool(*g.session, cpu);
+        if (device_) gpu_sum += Pool(*g.session, *device_);
+      }
+      std::string what = std::to_string(gather_.size()) + " gathers";
+      add(what.c_str(), "cpu", cpu_sum);
+      add(what.c_str(), "gpu", gpu_sum);
+    }
+    return out;
+  }
+
   std::shared_ptr<const Result> Run(
       const std::vector<int64_t> &units,
       const std::vector<Parent> &parents) const override {
@@ -132,6 +163,41 @@ class OnnxRecurrentLmStep : public RecurrentLmStep {
   }
 
  private:
+  struct PoolStats {
+    bool known = false;
+    double max_in_use = 0;  // bytes
+    double held = 0;        // bytes the pool has reserved
+    PoolStats &operator+=(const PoolStats &other) {
+      known = known || other.known;
+      max_in_use += other.max_in_use;
+      held += other.held;
+      return *this;
+    }
+  };
+
+  // A session's memory pool at one place, from onnxruntime's allocator
+  // statistics (1.23 and later); unknown where it has none.
+  static PoolStats Pool(const Ort::Session &session,
+                        const Ort::MemoryInfo &where) {
+    PoolStats stats;
+#if ORT_API_VERSION >= 23
+    try {
+      Ort::Allocator allocator(session, where);
+      Ort::KeyValuePairs kv = allocator.GetStats();
+      const char *max_in_use = kv.GetValue("MaxInUse");
+      const char *held = kv.GetValue("TotalAllocated");
+      if (max_in_use != nullptr && held != nullptr) {
+        stats.known = true;
+        stats.max_in_use = std::atof(max_in_use);
+        stats.held = std::atof(held);
+      }
+    } catch (const Ort::Exception &) {
+      // No allocator for that place in this session.
+    }
+#endif
+    return stats;
+  }
+
   struct StateShape {
     int32_t layers = 0;
     int32_t hidden = 0;
@@ -522,6 +588,7 @@ class OnnxRecurrentLmScorerFactory : public ScorerFactory {
     vocabulary.score_floor = extra.score_floor;
     vocabulary.max_batch = extra.max_batch;
     vocabulary.max_batch_bytes = extra.max_batch_bytes;
+    if (common.stats) vocabulary.stats_name = "onnx-rnn scorer " + common.model;
     return MakeRecurrentLmScorer(std::move(step), std::move(vocabulary));
   }
 };

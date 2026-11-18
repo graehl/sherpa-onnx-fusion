@@ -10,8 +10,11 @@
 #include <deque>
 #include <limits>
 #include <memory>
+#include <string>
 #include <utility>
 #include <vector>
+
+#include "sherpa-onnx/csrc/macros.h"
 
 namespace sherpa_onnx {
 
@@ -121,6 +124,18 @@ class RecurrentLmScorer : public Scorer {
     Unreference(root);
   }
 
+  ~RecurrentLmScorer() override {
+    if (vocabulary_.stats_name.empty()) return;
+    std::string memory = step_->MemoryStats();
+    std::string limit = max_step_nodes_ == std::numeric_limits<size_t>::max()
+                            ? "none"
+                            : std::to_string(max_step_nodes_);
+    SHERPA_ONNX_LOGE("%s: %zu model steps, widest %zu nodes (limit %s)%s%s",
+                     vocabulary_.stats_name.c_str(), steps_.load(),
+                     widest_.load(), limit.c_str(), memory.empty() ? "" : "; ",
+                     memory.c_str());
+  }
+
   const ScorerInfo &Info() const override { return info_; }
 
   std::unique_ptr<ScorerUtterance> NewUtterance() override {
@@ -214,6 +229,10 @@ class RecurrentLmScorer : public Scorer {
   void Compute(const std::vector<Node *> &nodes) const {
     for (size_t first = 0; first < nodes.size(); first += max_step_nodes_) {
       const size_t batch = std::min(max_step_nodes_, nodes.size() - first);
+      ++steps_;
+      size_t widest = widest_.load(std::memory_order_relaxed);
+      while (batch > widest && !widest_.compare_exchange_weak(widest, batch)) {
+      }
       std::vector<int64_t> units(batch);
       std::vector<RecurrentLmStep::Parent> parents(batch);
       for (size_t i = 0; i != batch; ++i) {
@@ -246,6 +265,9 @@ class RecurrentLmScorer : public Scorer {
   std::unique_ptr<RecurrentLmStep> step_;
   RecurrentLmVocabulary vocabulary_;
   size_t max_step_nodes_;
+  // For the stats log; Compute may run on several threads at once.
+  mutable std::atomic<size_t> steps_{0};
+  mutable std::atomic<size_t> widest_{0};
   // The node after the sentence boundary, shared by every utterance.
   std::shared_ptr<const RecurrentLmStep::Result> root_result_;
 };
