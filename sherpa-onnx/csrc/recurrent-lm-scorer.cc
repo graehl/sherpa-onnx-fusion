@@ -8,6 +8,7 @@
 #include <atomic>
 #include <cstring>
 #include <deque>
+#include <limits>
 #include <memory>
 #include <utility>
 #include <vector>
@@ -100,7 +101,9 @@ class RecurrentLmScorer : public Scorer {
  public:
   RecurrentLmScorer(std::unique_ptr<RecurrentLmStep> step,
                     RecurrentLmVocabulary vocabulary)
-      : step_(std::move(step)), vocabulary_(std::move(vocabulary)) {
+      : step_(std::move(step)),
+        vocabulary_(std::move(vocabulary)),
+        max_step_nodes_(MaxStepNodes(vocabulary_, step_->ItemBytes())) {
     info_.unit = vocabulary_.token_units ? ScorerUnit::kAsrToken
                                          : ScorerUnit::kCharacter;
     info_.state_bytes = sizeof(Node *);
@@ -175,6 +178,19 @@ class RecurrentLmScorer : public Scorer {
   }
 
  private:
+  // The most nodes one step takes under both limits, at least one.
+  static size_t MaxStepNodes(const RecurrentLmVocabulary &vocabulary,
+                             size_t item_bytes) {
+    size_t nodes = std::numeric_limits<size_t>::max();
+    if (vocabulary.max_batch > 0) {
+      nodes = static_cast<size_t>(vocabulary.max_batch);
+    }
+    if (vocabulary.max_batch_bytes > 0 && item_bytes > 0) {
+      nodes = std::min(nodes, vocabulary.max_batch_bytes / item_bytes);
+    }
+    return std::max<size_t>(nodes, 1);
+  }
+
   int32_t IdOf(UnitId unit) const {
     if (vocabulary_.token_units) {
       int32_t id = unit + vocabulary_.token_id_offset;
@@ -196,11 +212,8 @@ class RecurrentLmScorer : public Scorer {
   // One model step for every requested node. Everything it allocates
   // belongs to this call, so calls for different utterances can overlap.
   void Compute(const std::vector<Node *> &nodes) const {
-    const size_t limit = vocabulary_.max_batch > 0
-                             ? static_cast<size_t>(vocabulary_.max_batch)
-                             : nodes.size();
-    for (size_t first = 0; first < nodes.size(); first += limit) {
-      const size_t batch = std::min(limit, nodes.size() - first);
+    for (size_t first = 0; first < nodes.size(); first += max_step_nodes_) {
+      const size_t batch = std::min(max_step_nodes_, nodes.size() - first);
       std::vector<int64_t> units(batch);
       std::vector<RecurrentLmStep::Parent> parents(batch);
       for (size_t i = 0; i != batch; ++i) {
@@ -232,6 +245,7 @@ class RecurrentLmScorer : public Scorer {
   ScorerInfo info_;
   std::unique_ptr<RecurrentLmStep> step_;
   RecurrentLmVocabulary vocabulary_;
+  size_t max_step_nodes_;
   // The node after the sentence boundary, shared by every utterance.
   std::shared_ptr<const RecurrentLmStep::Result> root_result_;
 };

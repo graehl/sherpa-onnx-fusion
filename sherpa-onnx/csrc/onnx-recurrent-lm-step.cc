@@ -88,6 +88,17 @@ class OnnxRecurrentLmStep : public RecurrentLmStep {
 
   int32_t VocabSize() const override { return vocab_size_; }
 
+  size_t ItemBytes() const override {
+    size_t state_floats = 0;
+    for (const StateShape &s : shapes_) {
+      state_floats += static_cast<size_t>(s.layers) * s.hidden;
+    }
+    // Gathered parent states in, new states and log probabilities out.
+    return sizeof(int64_t) +
+           (2 * state_floats + static_cast<size_t>(vocab_size_)) *
+               sizeof(float);
+  }
+
   std::shared_ptr<const Result> Run(
       const std::vector<int64_t> &units,
       const std::vector<Parent> &parents) const override {
@@ -164,7 +175,7 @@ class OnnxRecurrentLmStep : public RecurrentLmStep {
   // An earlier result's state tensors, or the zero state's.
   const std::vector<Ort::Value> *StatesOf(const Result *result) const {
     if (result == nullptr) return &zero_;
-    return &static_cast<const StepResult *>(result)->values;
+    return &(static_cast<const StepResult *>(result)->values);
   }
 
   // The state tensor of a source: values[k + 1] of a result, zero_[k].
@@ -380,7 +391,8 @@ struct Extra {
   bool score_end = true;
   float score_floor = -std::numeric_limits<float>::infinity();
   int32_t id_offset = 0;
-  int32_t max_batch = 0;
+  int32_t max_batch = RecurrentLmVocabulary::kDefaultMaxBatch;
+  size_t max_batch_bytes = RecurrentLmVocabulary::kDefaultMaxBatchBytes;
 };
 
 Extra ParseExtra(const std::string &text, bool token_units) {
@@ -427,6 +439,14 @@ Extra ParseExtra(const std::string &text, bool token_units) {
         throw std::runtime_error(
             "onnx-rnn scorer: max-batch must be 0 (no limit) or more");
       }
+    } else if (key == "max-batch-mb" && value.is_number()) {
+      const double mb = value.get<double>();
+      // 2^44 MiB is 2^64 bytes, past size_t.
+      if (!std::isfinite(mb) || mb < 0 || mb >= std::ldexp(1.0, 44)) {
+        throw std::runtime_error(
+            "onnx-rnn scorer: max-batch-mb must be 0 (no limit) or more");
+      }
+      extra.max_batch_bytes = static_cast<size_t>(mb * (1 << 20));
     } else {
       throw std::runtime_error("onnx-rnn scorer: unknown or invalid option '" +
                                key + "'");
@@ -501,6 +521,7 @@ class OnnxRecurrentLmScorerFactory : public ScorerFactory {
     vocabulary.score_end = extra.score_end;
     vocabulary.score_floor = extra.score_floor;
     vocabulary.max_batch = extra.max_batch;
+    vocabulary.max_batch_bytes = extra.max_batch_bytes;
     return MakeRecurrentLmScorer(std::move(step), std::move(vocabulary));
   }
 };

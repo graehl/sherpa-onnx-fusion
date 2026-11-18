@@ -5,6 +5,7 @@
 #ifndef SHERPA_ONNX_CSRC_RECURRENT_LM_SCORER_H_
 #define SHERPA_ONNX_CSRC_RECURRENT_LM_SCORER_H_
 
+#include <cstddef>
 #include <cstdint>
 #include <limits>
 #include <memory>
@@ -43,6 +44,11 @@ class RecurrentLmStep {
 
   virtual int32_t VocabSize() const = 0;
 
+  // Bytes one item adds to a step: its unit, its parent's gathered states,
+  // its new states and its log probabilities. The model's own workspace
+  // (an LSTM's gate activations) is not counted.
+  virtual size_t ItemBytes() const = 0;
+
   // units[b] is each item's previous unit ID and parents[b] its state; the
   // parents' results stay alive for the call. May be called from several
   // threads at once.
@@ -64,11 +70,17 @@ struct RecurrentLmVocabulary {
   bool score_end = true;
   // Lower bound on each raw unit/EOS log score, before its fusion weight.
   float score_floor = -std::numeric_limits<float>::infinity();
-  // The most nodes one model step takes; a call needing more steps in
-  // chunks of this many. 0: no limit. A step's width follows the beams of
-  // every utterance of a decode call, so on a device with little memory
-  // (a phone's GPU) this bounds the step's working memory.
-  int32_t max_batch = 0;
+  // A call needing more nodes than one model step may take steps in chunks.
+  // A step's width follows the beams of every utterance of a decode call,
+  // so it can reach thousands. max_batch bounds a step's nodes and
+  // max_batch_bytes the bytes its nodes add (RecurrentLmStep::ItemBytes);
+  // the tighter one decides, and 0 makes either no limit. A step's result
+  // lives while any of its nodes does, so the byte bound also bounds what
+  // one surviving node keeps alive.
+  static constexpr int32_t kDefaultMaxBatch = 4096;
+  static constexpr size_t kDefaultMaxBatchBytes = size_t{1} << 30;
+  int32_t max_batch = kDefaultMaxBatch;
+  size_t max_batch_bytes = kDefaultMaxBatchBytes;
   // The model's unit ID for each character it knows. The boundary between
   // words is the entry for ' '.
   CharacterIndex id_of_char;
@@ -110,8 +122,12 @@ int32_t RecurrentLmLiveNodes();
 //     Default true.
 //   "floor": nonpositive natural-log score floor per unit and end of input.
 //     Omitted means no floor; recurrent state updates are unchanged.
-//   "max-batch": the most nodes one model step takes (default 0, no
+//   "max-batch": the most nodes one model step takes (default 4096; 0, no
 //     limit); a wider call runs in chunks with the same results.
+//   "max-batch-mb": the most MiB (2^20 bytes; fractions allowed) a step's
+//     nodes add, counting their units, gathered and new states and log
+//     probabilities (default 1024; 0, no limit). With "max-batch", the
+//     tighter limit decides; a step always takes at least one node.
 std::unique_ptr<ScorerFactory> MakeOnnxRecurrentLmScorerFactory();
 
 }  // namespace sherpa_onnx
