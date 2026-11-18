@@ -420,11 +420,12 @@ memory but cost 23% in time.
 Declined for now, though 59 MiB is not nothing on a 12 GB device: the
 saving did not hold with two threads, and the registered allocator is
 process-wide state (one per device, first registration wins, and any
-session that opts in takes it, whatever configured it). The memory that
-grows is the LSTM's own, through states kept past their use
-([state lifetime](../gaps/lm-states-outlive-their-hypotheses.md)). Revisit
-once that is fixed and the gathers are a larger share, measuring with
-`--scorer.N.stats` over several runs at each thread count.
+session that opts in takes it, whatever configured it). The LSTM
+session's own pool is the larger cost, and mostly its weights and
+workspace, not states (topic § Execution placement and batching). Revisit
+when the gathers are a larger share, such as with a smaller model or more
+threads, measuring with `--scorer.N.stats` over several runs at each
+thread count.
 
 ## Original design text for parts since built
 

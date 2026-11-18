@@ -61,9 +61,15 @@ class ScoredPrefixTrie {
     uint32_t serial;
     float scorer_total;  // Weighted sum of the scorers' subtotals.
     bool word_open;      // Text has been emitted since the last word boundary.
-    bool scored;         // Scorer states and subtotals are valid.
+    bool scored;         // Subtotals are valid, and states unless released.
     bool rejected;       // A scorer rejected this prefix.
-    bool pinned;         // In the search's beam; never reclaimed while set.
+    // Some hypothesis may still extend this prefix (the search's beam, or
+    // an arrival waiting for it); never reclaimed while set.
+    bool pinned;
+    // Unpinned with live descendants: its scorer states were destroyed, and
+    // are scored again from its parent if a search reaches it again.
+    bool states_released;
+    bool restoring;  // Queued to have its released states scored again.
     bool live;
   };
 
@@ -92,11 +98,13 @@ class ScoredPrefixTrie {
 
   // The prefix "parent" extended by "token": the existing node, or a new one
   // queued for scoring, in which case *created is set. A new node's search
-  // state is uninitialized.
+  // state is uninitialized. An existing node whose scorer states were
+  // released is queued to have them scored again; its subtotals and
+  // scorer_total stay as first computed.
   uint32_t FindOrCreateChild(uint32_t parent, int32_t token, bool *created);
 
-  // Scoring of the nodes created since StartScoring. A token of several
-  // scorer units takes one wave per unit.
+  // Scoring of the nodes created (or reached again) since StartScoring. A
+  // token of several scorer units takes one wave per unit.
   void StartScoring();
   // Appends the next extensions for scorer "scorer" and returns true, or
   // returns false when that scorer has no work left.
@@ -108,8 +116,12 @@ class ScoredPrefixTrie {
   void FinishScoring();
   const std::vector<uint32_t> &NewNodes() const { return new_nodes_; }
 
-  // Frees a prefix that is not pinned and has no descendants, then any
-  // ancestors that this leaves in the same condition.
+  // Call when a prefix stops being pinned. Frees it if it has no
+  // descendants, then any ancestors that this leaves in the same condition;
+  // an unpinned prefix that keeps descendants keeps its record (for their
+  // tokens and scores) but has its scorer states released, since no search
+  // extends it until FindOrCreateChild reaches it again. A release during
+  // scoring waits for FinishScoring.
   void ReleaseIfUnused(uint32_t index);
 
   // End-of-input scores of "nodes": (*final_scores)[i * NumScorers() + s],
@@ -141,6 +153,8 @@ class ScoredPrefixTrie {
 
   int32_t NumLiveNodes() const { return num_live_; }
   int64_t NumNodesScored() const { return num_scored_; }
+  // Prefixes reached again after their scorer states were released.
+  int64_t NumStatesRestored() const { return num_restored_; }
 
  private:
   struct Pending;
@@ -148,6 +162,9 @@ class ScoredPrefixTrie {
   uint32_t NewNode(uint32_t parent, int32_t token);
   void FreeNode(uint32_t index);
   void DestroyScorerStates(Node *node);
+  void ReleaseScorerStates(Node *node);
+  // Queues the scoring of "index" from its parent.
+  void QueueScoring(uint32_t index);
 
   std::shared_ptr<const SearchVocabulary> vocabulary_;
   std::vector<Scorer *> scorers_;
@@ -172,6 +189,9 @@ class ScoredPrefixTrie {
   std::vector<uint32_t> free_records_;
   int32_t num_live_ = 0;
   int64_t num_scored_ = 0;
+  int64_t num_restored_ = 0;
+  bool scoring_ = false;  // Between StartScoring and FinishScoring.
+  std::vector<uint32_t> deferred_releases_;  // Asked for while scoring_.
   std::unordered_map<uint64_t, uint32_t> children_;  // (parent, token) -> index
 
   std::vector<uint32_t> new_nodes_;

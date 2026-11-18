@@ -162,6 +162,9 @@ class CtcPrefixSearch {
   int64_t NumPrefixesScored() const { return trie_.NumNodesScored(); }
   // Prefix records currently held, for tests of reclamation.
   int32_t NumLiveRecords() const { return trie_.NumLiveNodes(); }
+  // Prefixes reached again after leaving the beam with descendants, whose
+  // released scorer states were scored again.
+  int64_t NumStatesRestored() const { return trie_.NumStatesRestored(); }
 
  private:
   using Node = ScoredPrefixTrie::Node;
