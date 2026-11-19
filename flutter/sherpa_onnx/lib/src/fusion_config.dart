@@ -198,8 +198,8 @@ class FusionConfig {
   /// what cutting the lists waiting for later frames would cost.
   final bool traceSurvival;
 
-  /// Transducers: at every round's end also cut each list of arrivals
-  /// waiting for a later frame to its best [waitingMaxActive] within
+  /// TDT: at every round's end also cut each list of arrivals
+  /// waiting past the next frame to its best [waitingMaxActive] within
   /// [waitingScoreBeam] of its best.
   final bool pruneWaiting;
 

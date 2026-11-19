@@ -45,7 +45,7 @@ everything is kept in the
 | Multi-utterance CTC decoder | `ctc-inflight-decoder.h` | § Decoder lifecycle |
 | Survival trace | `ctc-prefix-search.h` (`trace_survival`) | § Score-gap beam sweep |
 | Transducer survival trace | `transducer-prefix-search.h` (`trace_survival`), `transducer-survival-summary.h` (`--trace-survival`) | § Fusion on RNN-T and TDT |
-| Transducer waiting-list cut | `TransducerPrefixSearchOptions::prune_waiting` (`--prune-waiting`) | § Fusion on RNN-T and TDT |
+| TDT waiting-list cut | `TransducerPrefixSearchOptions::prune_waiting` (`--prune-waiting`) | § Fusion on RNN-T and TDT |
 
 All of it is selected with `--decoding-method=prefix_beam_search`. Unit
 tests sit beside each file (`*-test.cc`); the searches are tested against
@@ -399,11 +399,11 @@ every round's end also cuts each waiting list (`--prune-waiting`, on by
 default) to its best `--waiting-max-active` within `--waiting-score-beam`
 of its best, by default twice `--max-active-paths` within half the
 `--score-beam` (8 within 6 at the defaults); a cut entry that later
-receives probability rejoins. The next frame's list is cut no tighter than
-`--max-active-paths` within `--score-beam`, the pruning that frame begins
-with, and not at all after the frame's last round, when that pruning
-follows at once; so those two options keep their meaning, and with one
-symbol per frame (the zipformer transducer) nothing is cut early.
+receives probability rejoins. The next frame's list is never cut: that
+frame's own pruning at `--max-active-paths` within `--score-beam` follows,
+and a cut while its frame still has rounds would drop the mass of entries
+that gain more later. So only TDT, whose durations wait further ahead, is
+cut; the zipformer transducer and RNN-T search as with no cut.
 `--modified-beam-search-rules` does not cut,
 since it must reproduce that decoder. The default limits are where
 `--trace-survival`, which measures in one run what a cut at any cap and
@@ -419,15 +419,27 @@ threads of 2 on the CPU, 2026-11-18):
 | Widest LM step | 3,054 nodes | 32 | 32 |
 | Time | 147.4 s | 123.2 s | 120.1 s |
 
-That table was taken when the next frame's list was cut at half the score
-beam too. Leaving that list to the frame's own limits, on the repro
-script's 600-recording sample of test-other (a different sample, same
-model, LSTM and settings, 2026-11-19), changed 6 transcripts, mostly
-punctuation, for 786 word errors against 785 (7.36% against 7.35%), with
-the same peak of about 320 LM nodes live, the same widest step of 32 nodes,
-and LM steps within 0.01%. Two runs of each gave identical transcripts;
-their times are not comparable, as the host's load moved between 8 and 24
-during them.
+That table was taken when the next frame's list was cut too, at half the
+score beam. Leaving it whole, on the repro script's 600-recording sample of
+test-other (a different sample, same model, LSTM and settings, max active
+paths 4, 2026-11-19), against cutting it mid-frame at the frame's own
+limits:
+
+| | Uncut | Next frame cut mid-frame | Next frame never cut (default) |
+|---|---:|---:|---:|
+| WER (errors) | 7.47% (798) | 7.36% (786) | 7.36% (786) |
+| Transcripts changed against uncut | | 4 | 4, the same |
+| LM nodes live, median recording | 2,047 | 84 | 579 |
+| Most LM nodes live | 2,254 | 101 | 620 |
+| Widest LM step | 797 nodes | 32 | 32 |
+
+Both cuts give the same 600 transcripts; leaving the next frame's list
+whole holds about 6 times the LM nodes, still a quarter of uncut. Most of
+the uncut arm's 12 extra errors are one recording whose transcript stops
+13 words early. Times are not comparable: the host's load moved between 10
+and 20 during the runs. On GigaAM v3 RNN-T (FLEURS Russian test, 743 clips,
+character 6-gram at 0.2, word bonus 1, beam 4), cutting the next frame's
+list mid-frame and not cutting it gave byte-identical transcripts (4.37%).
 
 The waiting entries a cut removes are mostly prefixes longer than their
 list's best (by 8 or more tokens for 19% of them); the frame's own pruning
@@ -1367,7 +1379,7 @@ offline NeMo transducer models. The options are fields of `FusionConfig`
 | `--scorer.N.unit` | `char` | `token` for a scorer trained on the recognizer's tokens (`kenlm` or `onnx-rnn`) |
 | `--modified-beam-search-rules` | false | Stateless transducers: search exactly as `modified_beam_search` does |
 | `--length-normalize` | false | Transducers: rank results by score over output length |
-| `--prune-waiting`, `--waiting-max-active`, `--waiting-score-beam` | true, 0, 0 | Transducers: also cut the lists of arrivals waiting for later frames at every round end; 0 means twice `--max-active-paths`, half the `--score-beam` (§ Fusion on RNN-T and TDT) |
+| `--prune-waiting`, `--waiting-max-active`, `--waiting-score-beam` | true, 0, 0 | TDT: also cut the lists of arrivals waiting for frames after the next at every round end; 0 means twice `--max-active-paths`, half the `--score-beam` (§ Fusion on RNN-T and TDT) |
 | `--trace-survival` | false | Offline transducers: at the end, log what pruning each result needed, and what cutting the lists of arrivals waiting for later frames would cost in results and save in entries (about 12% slower); streaming searches ignore it, with a warning |
 
 `--ctc-prior` names a text file of `token-id log-prior` lines, where a

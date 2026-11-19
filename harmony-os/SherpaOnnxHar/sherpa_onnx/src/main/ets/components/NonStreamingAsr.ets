@@ -280,8 +280,8 @@ export class FusionConfig {
   public ctcPriorWeight: number = 1.0;
   // Offline transducers: log at the end what pruning each result needed
   public traceSurvival: boolean = false;
-  // Transducers: at every round's end also cut each list waiting for a
-  // later frame to its best waitingMaxActive (0: twice the max active
+  // TDT: at every round's end also cut each list waiting past the next
+  // frame to its best waitingMaxActive (0: twice the max active
   // paths) within waitingScoreBeam (0: half of scoreBeam) of its best
   public pruneWaiting: boolean = true;
   public waitingMaxActive: number = 0;

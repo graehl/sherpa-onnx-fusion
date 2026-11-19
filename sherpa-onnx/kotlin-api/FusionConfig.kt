@@ -45,8 +45,8 @@ data class FusionConfig(
     // Offline transducers: log at the end what pruning each result needed
     // and what cutting the lists waiting for later frames would cost.
     var traceSurvival: Boolean = false,
-    // Transducers: at every round's end also cut each list of arrivals
-    // waiting for a later frame to its best waitingMaxActive within
+    // TDT: at every round's end also cut each list of arrivals
+    // waiting past the next frame to its best waitingMaxActive within
     // waitingScoreBeam of its best.
     var pruneWaiting: Boolean = true,
     var waitingMaxActive: Int = 0, // 0: twice the max active paths

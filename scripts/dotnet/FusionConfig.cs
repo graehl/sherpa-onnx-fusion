@@ -114,8 +114,8 @@ namespace SherpaOnnx
         public int TraceSurvival;
 
         /// <summary>
-        /// Transducers, non-zero: at every round's end also cut each list of
-        /// arrivals waiting for a later frame to its best WaitingMaxActive
+        /// TDT, non-zero: at every round's end also cut each list of
+        /// arrivals waiting past the next frame to its best WaitingMaxActive
         /// within WaitingScoreBeam of its best.
         /// </summary>
         public int PruneWaiting;

@@ -83,8 +83,8 @@ Args:
     and what cutting the lists of arrivals waiting for later frames would
     cost in results and save in entries. Costs time.
   prune_waiting:
-    Transducers: at every round's end also cut each list of arrivals
-    waiting for a later frame to its best ``waiting_max_active`` within
+    TDT: at every round's end also cut each list of arrivals
+    waiting past the next frame to its best ``waiting_max_active`` within
     ``waiting_score_beam`` of its best.
   waiting_max_active:
     Entries each waiting list keeps; 0 for twice the max active paths.
