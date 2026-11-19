@@ -72,6 +72,24 @@ class OfflineOmnilingualAsrCtcModel::Impl {
         out_vec[0].GetTensorTypeAndShapeInfo().GetShape();
 
     std::vector<int64_t> num_frames(logits_shape[0], logits_shape[1]);
+    if (logits_shape[0] > 1) {
+      // A batch the metadata allows without lengths: each utterance's valid
+      // frames are its samples through the convolutional frontend.
+      const int64_t *samples = features_length.GetTensorData<int64_t>();
+      int64_t padded = features.GetTensorTypeAndShapeInfo().GetShape()[1];
+      if (FramesOfSamples(padded) != logits_shape[1]) {
+        SHERPA_ONNX_LOGE(
+            "Omnilingual asr model without input_lengths: %d samples gave "
+            "%d frames, not the %d of the wav2vec2 frontend, so a batch "
+            "cannot tell each utterance's valid frames",
+            static_cast<int32_t>(padded), static_cast<int32_t>(logits_shape[1]),
+            static_cast<int32_t>(FramesOfSamples(padded)));
+        SHERPA_ONNX_EXIT(-1);
+      }
+      for (int64_t b = 0; b != logits_shape[0]; ++b) {
+        num_frames[b] = FramesOfSamples(samples[b]);
+      }
+    }
 
     int64_t shape = logits_shape[0];
 
@@ -133,7 +151,9 @@ class OfflineOmnilingualAsrCtcModel::Impl {
 
     // An export with a second input, input_lengths (valid samples of each
     // utterance), masks padding in the graph and has a second output, the
-    // valid frames of each utterance. Only such an export can be batched.
+    // valid frames of each utterance. Without metadata, only such an export
+    // is batched; one whose metadata says it batches without them gets its
+    // valid frames from FramesOfSamples.
     takes_lengths_ = input_names_.size() == 2 && output_names_.size() == 2;
 
     // get meta data
@@ -153,14 +173,16 @@ class OfflineOmnilingualAsrCtcModel::Impl {
         sess_->GetOutputTypeInfo(0).GetTensorTypeAndShapeInfo().GetShape()[2];
 
     batching_ = BatchingSupported(meta_data, allocator_, takes_lengths_);
-    if (batching_ && !takes_lengths_) {
-      // Without them every item's output is taken at the padded length.
-      SHERPA_ONNX_LOGE(
-          "Model metadata batching_supported is true, but the omnilingual "
-          "asr model takes no input_lengths and returns no output lengths, "
-          "so a batch cannot tell each utterance's valid frames");
-      SHERPA_ONNX_EXIT(-1);
-    }
+  }
+
+  // Output frames of the wav2vec2 convolutional frontend for this many
+  // samples (kernels 10,3,3,3,3,2,2, strides 5,2,2,2,2,2,2, no padding),
+  // checked against the published export from 400 to 48000 samples.
+  static int64_t FramesOfSamples(int64_t n) {
+    static constexpr int32_t kKernel[] = {10, 3, 3, 3, 3, 2, 2};
+    static constexpr int32_t kStride[] = {5, 2, 2, 2, 2, 2, 2};
+    for (int32_t i = 0; i != 7; ++i) n = (n - kKernel[i]) / kStride[i] + 1;
+    return n;
   }
 
  private:

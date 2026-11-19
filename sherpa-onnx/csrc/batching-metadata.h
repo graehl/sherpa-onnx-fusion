@@ -11,11 +11,12 @@ namespace sherpa_onnx {
 
 // Whether a model may decode several utterances in one padded call. The
 // model's metadata "batching_supported", "true" or "false", decides when
-// present: its exporter decoded a padded batch against each utterance alone
-// and wrote what it found, which an input's presence cannot show (a graph
-// can take lengths yet not mask every layer, or quantize with ranges taken
-// over the whole batch). Absent, `fallback` decides, usually whether the
-// graph takes lengths. Any other value exits with an error.
+// present: its exporter decoded a batch padded with zeros, as the recognizer
+// pads it, against each utterance alone and wrote what it found, which an
+// input's presence cannot show (a graph can take lengths yet not mask every
+// layer, or quantize with ranges taken over the whole batch). Absent,
+// `fallback` decides, usually whether the graph takes lengths. Any other
+// value exits with an error.
 bool BatchingSupported(const Ort::ModelMetadata &meta_data,
                        OrtAllocator *allocator, bool fallback);
 
