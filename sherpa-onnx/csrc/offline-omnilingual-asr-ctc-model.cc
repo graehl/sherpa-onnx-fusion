@@ -153,6 +153,14 @@ class OfflineOmnilingualAsrCtcModel::Impl {
         sess_->GetOutputTypeInfo(0).GetTensorTypeAndShapeInfo().GetShape()[2];
 
     batching_ = BatchingSupported(meta_data, allocator_, takes_lengths_);
+    if (batching_ && !takes_lengths_) {
+      // Without them every item's output is taken at the padded length.
+      SHERPA_ONNX_LOGE(
+          "Model metadata batching_supported is true, but the omnilingual "
+          "asr model takes no input_lengths and returns no output lengths, "
+          "so a batch cannot tell each utterance's valid frames");
+      SHERPA_ONNX_EXIT(-1);
+    }
   }
 
  private:
