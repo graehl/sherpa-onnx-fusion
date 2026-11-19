@@ -399,7 +399,12 @@ every round's end also cuts each waiting list (`--prune-waiting`, on by
 default) to its best `--waiting-max-active` within `--waiting-score-beam`
 of its best, by default twice `--max-active-paths` within half the
 `--score-beam` (8 within 6 at the defaults); a cut entry that later
-receives probability rejoins. `--modified-beam-search-rules` does not cut,
+receives probability rejoins. The next frame's list is cut no tighter than
+`--max-active-paths` within `--score-beam`, the pruning that frame begins
+with, and not at all after the frame's last round, when that pruning
+follows at once; so those two options keep their meaning, and with one
+symbol per frame (the zipformer transducer) nothing is cut early.
+`--modified-beam-search-rules` does not cut,
 since it must reproduce that decoder. The default limits are where
 `--trace-survival`, which measures in one run what a cut at any cap and
 gap would keep, found every result's dominant path kept on 600 LibriSpeech
@@ -413,6 +418,16 @@ threads of 2 on the CPU, 2026-11-18):
 | Most LM nodes live | 22,218 | 399 | 345 |
 | Widest LM step | 3,054 nodes | 32 | 32 |
 | Time | 147.4 s | 123.2 s | 120.1 s |
+
+That table was taken when the next frame's list was cut at half the score
+beam too. Leaving that list to the frame's own limits, on the repro
+script's 600-recording sample of test-other (a different sample, same
+model, LSTM and settings, 2026-11-19), changed 6 transcripts, mostly
+punctuation, for 786 word errors against 785 (7.36% against 7.35%), with
+the same peak of about 320 LM nodes live, the same widest step of 32 nodes,
+and LM steps within 0.01%. Two runs of each gave identical transcripts;
+their times are not comparable, as the host's load moved between 8 and 24
+during them.
 
 The waiting entries a cut removes are mostly prefixes longer than their
 list's best (by 8 or more tokens for 19% of them); the frame's own pruning
