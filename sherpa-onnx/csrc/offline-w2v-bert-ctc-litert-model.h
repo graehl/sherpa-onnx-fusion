@@ -43,6 +43,10 @@ namespace sherpa_onnx {
 // (for a Pixel's Tensor processor, with libLiteRtDispatch_GoogleTensor.so
 // in --litert-dispatch-dir). Any other provider runs a portable graph on
 // LiteRT's CPU kernels.
+//
+// The model builds its graphs in a LiteRT environment it creates, or, when
+// config.litert_environment is set, in that caller-owned one, which it
+// never destroys.
 class OfflineW2vBertCtcLiteRtModel : public OfflineCtcModel {
  public:
   explicit OfflineW2vBertCtcLiteRtModel(const OfflineModelConfig &config);

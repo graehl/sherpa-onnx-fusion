@@ -27,6 +27,15 @@ Topic: litert-backend
 - **Bindings.** `litert_dispatch_dir` and `litert_window` are fields of
   the offline model config in every binding
   ([language bindings](language-bindings.md)).
+- **A caller's environment.** By default the model creates and destroys
+  its own LiteRT environment. `SherpaOnnxCreateOfflineRecognizerWithLiteRtEnvironment`
+  (C), `OfflineRecognizer::Create(config, env)` (C++ wrapper) and
+  `OfflineRecognizer::create_with_litert_environment` (Rust) build it in
+  a `LiteRtEnvironment` the caller owns instead, so it shares that
+  environment's device context with, say, an MT engine on LiteRT. The
+  environment is borrowed and must outlive the recognizer;
+  `litert_dispatch_dir` must then be empty, since the dispatch library is
+  set when the environment is created. A null environment is the default.
 
 Smoke-scale accuracy checks on one model, and phone timings, are recorded
 in the [design sketch](../gaps/sketches/litert-model-backend.md#built).

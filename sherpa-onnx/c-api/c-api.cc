@@ -722,9 +722,17 @@ static sherpa_onnx::OfflineRecognizerConfig GetOfflineRecognizerConfig(
 
 const SherpaOnnxOfflineRecognizer *SherpaOnnxCreateOfflineRecognizer(
     const SherpaOnnxOfflineRecognizerConfig *config) {
+  return SherpaOnnxCreateOfflineRecognizerWithLiteRtEnvironment(config,
+                                                                nullptr);
+}
+
+const SherpaOnnxOfflineRecognizer *
+SherpaOnnxCreateOfflineRecognizerWithLiteRtEnvironment(
+    const SherpaOnnxOfflineRecognizerConfig *config, void *litert_environment) {
   bool ok = true;
   sherpa_onnx::OfflineRecognizerConfig recognizer_config =
       GetOfflineRecognizerConfig(config, &ok);
+  recognizer_config.model_config.litert_environment = litert_environment;
 
   if (!ok || !recognizer_config.Validate()) {
     SHERPA_ONNX_LOGE("Errors in config");

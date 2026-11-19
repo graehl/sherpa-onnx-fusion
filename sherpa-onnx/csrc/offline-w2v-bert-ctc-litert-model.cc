@@ -306,12 +306,17 @@ class OfflineW2vBertCtcLiteRtModel::Impl {
         windows_(ParseWindowSchedule(config)),
         window_config_(config.encoder.window) {
     bool npu = config.provider == "npu";
-    LiteRtEnvOption env_option;
-    env_option.tag = kLiteRtEnvOptionTagDispatchLibraryDir;
-    env_option.value.type = kLiteRtAnyTypeString;
-    env_option.value.str_value = config.litert_dispatch_dir.c_str();
-    SHERPA_ONNX_LITERT_OK(LiteRtCreateEnvironment(
-        config.litert_dispatch_dir.empty() ? 0 : 1, &env_option, &env_));
+    if (config.litert_environment) {
+      env_ = static_cast<LiteRtEnvironment>(config.litert_environment);
+      owns_env_ = false;
+    } else {
+      LiteRtEnvOption env_option;
+      env_option.tag = kLiteRtEnvOptionTagDispatchLibraryDir;
+      env_option.value.type = kLiteRtAnyTypeString;
+      env_option.value.str_value = config.litert_dispatch_dir.c_str();
+      SHERPA_ONNX_LITERT_OK(LiteRtCreateEnvironment(
+          config.litert_dispatch_dir.empty() ? 0 : 1, &env_option, &env_));
+    }
 
     std::vector<std::string> paths;
     SplitStringToVector(config.w2v_bert_ctc, ",", true, &paths);
@@ -395,7 +400,7 @@ class OfflineW2vBertCtcLiteRtModel::Impl {
     graphs_.clear();
     for (auto compiled : compiled_) LiteRtDestroyCompiledModel(compiled);
     for (auto model : models_) LiteRtDestroyModel(model);
-    LiteRtDestroyEnvironment(env_);
+    if (owns_env_) LiteRtDestroyEnvironment(env_);
   }
 
   // features: (1, T, 80) filterbank frames as the recognizer computed them,
@@ -502,6 +507,8 @@ class OfflineW2vBertCtcLiteRtModel::Impl {
   // Normalization scope, weight and blend.
   OfflineEncoderWindowConfig window_config_;
   LiteRtEnvironment env_ = nullptr;
+  // False when env_ is the caller's (OfflineModelConfig::litert_environment).
+  bool owns_env_ = true;
   std::vector<LiteRtModel> models_;
   std::vector<LiteRtCompiledModel> compiled_;
   // Every signature of every file, shortest first.

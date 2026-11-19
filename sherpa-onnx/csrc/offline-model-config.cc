@@ -214,6 +214,20 @@ bool OfflineModelConfig::Validate() const {
     }
   }
 
+  if (litert_environment && !EndsWith(w2v_bert_ctc, ".tflite")) {
+    SHERPA_ONNX_LOGE(
+        "A LiteRT environment was given, but w2v_bert_ctc names no .tflite "
+        "model to use it");
+    return false;
+  }
+  if (litert_environment && !litert_dispatch_dir.empty()) {
+    SHERPA_ONNX_LOGE(
+        "litert_dispatch_dir must be empty with a caller's LiteRT "
+        "environment: the dispatch library is set when the environment is "
+        "created");
+    return false;
+  }
+
   if (!telespeech_ctc.empty() && !FileExists(telespeech_ctc)) {
     SHERPA_ONNX_LOGE("telespeech_ctc: '%s' does not exist",
                      telespeech_ctc.c_str());
@@ -277,6 +291,7 @@ std::string OfflineModelConfig::ToString() const {
   os << "w2v_bert_ctc=\"" << w2v_bert_ctc << "\", ";
   os << "litert_dispatch_dir=\"" << litert_dispatch_dir << "\", ";
   os << "litert_window=\"" << litert_window << "\", ";
+  if (litert_environment) os << "litert_environment=borrowed, ";
   os << "encoder=" << encoder.ToString() << ", ";
   os << "tokens=\"" << tokens << "\", ";
   os << "num_threads=" << num_threads << ", ";

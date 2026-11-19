@@ -38,6 +38,13 @@ Topic: language-bindings
 - **Lifetimes.** A stream may outlive its recognizer: a streaming search
   keeps the scorers it uses alive.
 
+- **Process handles are not options.** A handle to an object in the
+  caller's process, such as a borrowed LiteRT environment
+  ([LiteRT backend](litert-backend.md)), is an argument of its own
+  creation function, not a config member, so no binding mirrors it in a
+  struct. Only the bindings with a consumer carry it: C, the C++ wrapper
+  and Rust.
+
 ## Where each language lives
 
 | Binding | Over | Files |

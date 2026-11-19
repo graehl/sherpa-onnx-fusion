@@ -58,6 +58,13 @@ struct OfflineModelConfig {
   // WINDOW_S:OVERLAP_S:SLACK_S, how a .tflite model runs an utterance longer
   // than its window length; empty: windows of its longest length.
   std::string litert_window;
+  // A LiteRtEnvironment the caller owns, for a .tflite model to be built in
+  // instead of its own, so that it shares the caller's device context (e.g.
+  // with an MT engine). Borrowed: it must outlive the recognizer, and the
+  // caller configures it, so litert_dispatch_dir must be empty. Set only
+  // through the API (SherpaOnnxCreateOfflineRecognizerWithLiteRtEnvironment),
+  // not an option; nullptr: the model creates and owns its environment.
+  void *litert_environment = nullptr;
   // --encoder.*: how the encoder runs, e.g. a long utterance in windows.
   OfflineEncoderConfig encoder;
 
