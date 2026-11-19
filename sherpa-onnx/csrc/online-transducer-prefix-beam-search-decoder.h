@@ -39,15 +39,14 @@ class OnlineTransducerPrefixBeamSearchDecoder : public OnlineTransducerDecoder {
                                           const SymbolTable &symbol_table,
                                           float blank_penalty)
       : model_(model),
+        config_(StreamingFusionConfig(config)),
         options_(MakeTransducerPrefixSearchOptions(
-            config, max_active, TransducerTopology::kOneSymbolPerFrame,
+            config_, max_active, TransducerTopology::kOneSymbolPerFrame,
             model->ContextSize())),
-        fusion_(std::make_shared<TransducerFusion>(
-            StreamingFusionConfig(config), symbol_table, 0,
-            model->VocabSize())),
+        fusion_(std::make_shared<TransducerFusion>(config_, symbol_table, 0,
+                                                   model->VocabSize())),
         blank_penalty_(blank_penalty) {
-    options_.blank_like_token = UnknownTokenAsBlank(config, symbol_table);
-    options_.trace_survival = false;  // as StreamingFusionConfig drops it
+    options_.blank_like_token = UnknownTokenAsBlank(config_, symbol_table);
   }
 
   OnlineTransducerDecoderResult GetEmptyResult() const override;
@@ -62,6 +61,7 @@ class OnlineTransducerPrefixBeamSearchDecoder : public OnlineTransducerDecoder {
 
  private:
   OnlineTransducerModel *model_;
+  FusionConfig config_;  // StreamingFusionConfig; declared before its users
   TransducerPrefixSearchOptions options_;
   // Shared with each stream's search, which may outlive the decoder.
   std::shared_ptr<TransducerFusion> fusion_;

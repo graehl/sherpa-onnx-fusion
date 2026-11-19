@@ -36,7 +36,9 @@ TransducerPrefixSearchOptions MakeTransducerPrefixSearchOptions(
 
 // "config" for a streaming transducer decoder: without trace_survival, whose
 // summary only the offline decoders record, so a streaming search does not
-// pay for a trace nothing reports. Logs when it drops the option.
+// pay for a trace nothing reports. Logs when it drops the option. The
+// streaming decoders (online-transducer-prefix-beam-search-decoder.h and its
+// NeMo counterpart) build everything from its result.
 FusionConfig StreamingFusionConfig(const FusionConfig &config);
 
 // TransducerPrefixSearchOptions::blank_like_token for a configuration: the
