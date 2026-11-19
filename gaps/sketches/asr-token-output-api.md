@@ -73,6 +73,26 @@ execution mode never uses the inter-op pool. There is nothing to share;
 the caller schedules the tagger on whichever thread it likes. Sharing
 matters only for multi-threaded server use.
 
+What can be shared at one thread is memory for intermediate tensors.
+Each session's CPU arena grows to that session's peak and keeps it, so
+the ASR model and a tagger run one after the other on the same thread
+hold the sum of their peaks. Two ways to get nearer the larger one, both
+reachable without changing sherpa, since a provider string of the form
+`cpu:<file>` reads ONNX Runtime settings from a file
+(`ParseConfigFile` in `session.cc`), untried here:
+
+- `EnableCpuMemArena=0` in that file, and no arena on the tagger's
+  session, so freed tensors go back to the system allocator.
+- One arena for both: the caller registers a CPU allocator on the ONNX
+  Runtime environment before creating the recognizer, and both sessions
+  set `session.use_env_allocators=1` (for sherpa,
+  `SessionConfig.session.use_env_allocators=1` in the file). This relies
+  on ONNX Runtime keeping one environment per process, so that sherpa's
+  environment objects and the caller's are the same one.
+
+The tagger's intermediate tensors are a few megabytes against the
+encoder's, so measure resident memory before choosing either.
+
 ## Not wanted
 
 A callback inside sherpa that rewrites text. For offline recognition
