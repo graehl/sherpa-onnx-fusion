@@ -39,6 +39,9 @@ Args:
   rescore:
     Apply the scorer only to the hypotheses that survive the search, as
     n-best rescoring does, instead of during the search.
+  stats:
+    When the scorer is destroyed, log what it measured of its own work and
+    memory (``onnx-rnn``: its widest model step and peak memory).
 )doc";
 
 static constexpr const char *kFusionConfigInitDoc = R"doc(
@@ -75,6 +78,18 @@ Args:
     prior subtracted from its log probability in every frame.
   ctc_prior_weight:
     The weight of ``ctc_prior``.
+  trace_survival:
+    Offline transducers: log at the end what pruning each result needed,
+    and what cutting the lists of arrivals waiting for later frames would
+    cost in results and save in entries. Costs time.
+  prune_waiting:
+    Transducers: at every round's end also cut each list of arrivals
+    waiting for a later frame to its best ``waiting_max_active`` within
+    ``waiting_score_beam`` of its best.
+  waiting_max_active:
+    Entries each waiting list keeps; 0 for twice the max active paths.
+  waiting_score_beam:
+    Score gap a waiting list keeps; 0 for half of ``score_beam``.
 )doc";
 
 static void PybindScorerConfig(py::module *m) {
@@ -83,7 +98,8 @@ static void PybindScorerConfig(py::module *m) {
       .def(py::init([](const std::string &type, const std::string &model,
                        const std::string &unit, const std::string &space,
                        int32_t num_threads, const std::string &provider,
-                       float weight, const std::string &extra, bool rescore) {
+                       float weight, const std::string &extra, bool rescore,
+                       bool stats) {
              PyClass o;
              o.type = type;
              o.common.model = model;
@@ -94,13 +110,15 @@ static void PybindScorerConfig(py::module *m) {
              o.weight = weight;
              o.extra = extra;
              o.rescore = rescore;
+             o.common.stats = stats;
              return o;
            }),
            py::arg("type") = "", py::arg("model") = "",
            py::arg("unit") = "char", py::arg("space") = "▁",
            py::arg("num_threads") = 1, py::arg("provider") = "cpu",
            py::arg("weight") = 1.0, py::arg("extra") = "{}",
-           py::arg("rescore") = false, kScorerConfigInitDoc)
+           py::arg("rescore") = false, py::arg("stats") = true,
+           kScorerConfigInitDoc)
       .def_readwrite("type", &PyClass::type)
       .def_property(
           "model", [](const PyClass &o) { return o.common.model; },
@@ -123,6 +141,9 @@ static void PybindScorerConfig(py::module *m) {
       .def_readwrite("weight", &PyClass::weight)
       .def_readwrite("extra", &PyClass::extra)
       .def_readwrite("rescore", &PyClass::rescore)
+      .def_property(
+          "stats", [](const PyClass &o) { return o.common.stats; },
+          [](PyClass &o, bool v) { o.common.stats = v; })
       .def("validate", &PyClass::Validate)
       .def("__str__", &PyClass::ToString);
 }
@@ -138,7 +159,9 @@ void PybindFusionConfig(py::module *m) {
                        int32_t token_candidates, float score_beam,
                        const std::string &scorer_text_case,
                        bool length_normalize, bool modified_beam_search_rules,
-                       const std::string &ctc_prior, float ctc_prior_weight) {
+                       const std::string &ctc_prior, float ctc_prior_weight,
+                       bool trace_survival, bool prune_waiting,
+                       int32_t waiting_max_active, float waiting_score_beam) {
              PyClass f;
              f.scorers = scorers;
              f.length_bonus = length_bonus;
@@ -151,6 +174,10 @@ void PybindFusionConfig(py::module *m) {
              f.modified_beam_search_rules = modified_beam_search_rules;
              f.ctc_prior = ctc_prior;
              f.ctc_prior_weight = ctc_prior_weight;
+             f.trace_survival = trace_survival;
+             f.prune_waiting = prune_waiting;
+             f.waiting_max_active = waiting_max_active;
+             f.waiting_score_beam = waiting_score_beam;
              return f;
            }),
            py::arg("scorers") = std::vector<ScorerOptions>{},
@@ -161,7 +188,9 @@ void PybindFusionConfig(py::module *m) {
            py::arg("length_normalize") = false,
            py::arg("modified_beam_search_rules") = false,
            py::arg("ctc_prior") = "", py::arg("ctc_prior_weight") = 1.0,
-           kFusionConfigInitDoc)
+           py::arg("trace_survival") = false, py::arg("prune_waiting") = true,
+           py::arg("waiting_max_active") = 0,
+           py::arg("waiting_score_beam") = 0.0, kFusionConfigInitDoc)
       .def_readwrite("scorers", &PyClass::scorers)
       .def_readwrite("length_bonus", &PyClass::length_bonus)
       .def_readwrite("length_bonus_unit", &PyClass::length_bonus_unit)
@@ -174,6 +203,10 @@ void PybindFusionConfig(py::module *m) {
                      &PyClass::modified_beam_search_rules)
       .def_readwrite("ctc_prior", &PyClass::ctc_prior)
       .def_readwrite("ctc_prior_weight", &PyClass::ctc_prior_weight)
+      .def_readwrite("trace_survival", &PyClass::trace_survival)
+      .def_readwrite("prune_waiting", &PyClass::prune_waiting)
+      .def_readwrite("waiting_max_active", &PyClass::waiting_max_active)
+      .def_readwrite("waiting_score_beam", &PyClass::waiting_score_beam)
       .def("validate", &PyClass::Validate)
       .def("__str__", &PyClass::ToString);
 }

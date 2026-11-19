@@ -183,6 +183,7 @@ JSObject _buildFusionConfig(FusionConfig fusion) {
     js['weight'] = s.weight.toJS;
     js['extra'] = s.extra.toJS;
     js['rescore'] = s.rescore.toJS;
+    js['stats'] = s.stats.toJS;
     scorers.add(js);
   }
 
@@ -198,6 +199,10 @@ JSObject _buildFusionConfig(FusionConfig fusion) {
   jsFusion['modifiedBeamSearchRules'] = fusion.modifiedBeamSearchRules.toJS;
   jsFusion['ctcPrior'] = fusion.ctcPrior.toJS;
   jsFusion['ctcPriorWeight'] = fusion.ctcPriorWeight.toJS;
+  jsFusion['traceSurvival'] = fusion.traceSurvival.toJS;
+  jsFusion['pruneWaiting'] = fusion.pruneWaiting.toJS;
+  jsFusion['waitingMaxActive'] = fusion.waitingMaxActive.toJS;
+  jsFusion['waitingScoreBeam'] = fusion.waitingScoreBeam.toJS;
   return jsFusion;
 }
 

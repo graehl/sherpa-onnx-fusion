@@ -94,6 +94,7 @@ static SherpaOnnxFusionConfig Convert(
     sc.weight = s.weight;
     sc.extra = s.extra.c_str();
     sc.rescore = s.rescore;
+    sc.stats = s.stats;
     scorers->push_back(sc);
   }
 
@@ -111,7 +112,11 @@ static SherpaOnnxFusionConfig Convert(
   c.modified_beam_search_rules = config.modified_beam_search_rules;
   c.ctc_prior = config.ctc_prior.c_str();
   c.ctc_prior_weight = config.ctc_prior_weight;
-  c.literal_zeros = 1;  // Every field above holds its real value.
+  c.literal_zeros = 1;  // Every field holds its real value.
+  c.trace_survival = config.trace_survival;
+  c.prune_waiting = config.prune_waiting;
+  c.waiting_max_active = config.waiting_max_active;
+  c.waiting_score_beam = config.waiting_score_beam;
   return c;
 }
 

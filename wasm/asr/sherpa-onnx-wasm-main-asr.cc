@@ -26,8 +26,8 @@ static_assert(sizeof(SherpaOnnxOnlineModelConfig) ==
               "");
 static_assert(sizeof(SherpaOnnxFeatureConfig) == 2 * 4, "");
 static_assert(sizeof(SherpaOnnxOnlineCtcFstDecoderConfig) == 2 * 4, "");
-static_assert(sizeof(SherpaOnnxScorerConfig) == 9 * 4, "");
-static_assert(sizeof(SherpaOnnxFusionConfig) == 13 * 4, "");
+static_assert(sizeof(SherpaOnnxScorerConfig) == 10 * 4, "");
+static_assert(sizeof(SherpaOnnxFusionConfig) == 17 * 4, "");
 static_assert(sizeof(SherpaOnnxOnlineRecognizerConfig) ==
                   sizeof(SherpaOnnxFeatureConfig) +
                       sizeof(SherpaOnnxOnlineModelConfig) + 8 * 4 +

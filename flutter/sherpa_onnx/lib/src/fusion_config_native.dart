@@ -27,6 +27,7 @@ void fillFusionConfig(SherpaOnnxFusionConfig c, FusionConfig config) {
     p.weight = s.weight;
     p.extra = s.extra.toNativeUtf8();
     p.rescore = s.rescore ? 1 : 0;
+    p.stats = s.stats ? 1 : 0;
   }
 
   c.lengthBonus = config.lengthBonus;
@@ -39,7 +40,11 @@ void fillFusionConfig(SherpaOnnxFusionConfig c, FusionConfig config) {
   c.modifiedBeamSearchRules = config.modifiedBeamSearchRules ? 1 : 0;
   c.ctcPrior = config.ctcPrior.toNativeUtf8();
   c.ctcPriorWeight = config.ctcPriorWeight;
-  // Every numeric field above carries its real default, so a 0 is meant.
+  c.traceSurvival = config.traceSurvival ? 1 : 0;
+  c.pruneWaiting = config.pruneWaiting ? 1 : 0;
+  c.waitingMaxActive = config.waitingMaxActive;
+  c.waitingScoreBeam = config.waitingScoreBeam;
+  // Every numeric field carries its real default, so a 0 is meant.
   c.literalZeros = 1;
 }
 

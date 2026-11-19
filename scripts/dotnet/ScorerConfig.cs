@@ -25,6 +25,7 @@ namespace SherpaOnnx
             Weight = 1.0F;
             Extra = "{}";
             Rescore = 0;
+            Stats = 1;
         }
 
         /// <summary>Registered scorer type: "kenlm" or "onnx-rnn".</summary>
@@ -65,5 +66,12 @@ namespace SherpaOnnx
         /// search, as n-best rescoring does, instead of during the search.
         /// </summary>
         public int Rescore;
+
+        /// <summary>
+        /// Non-zero: when the scorer is destroyed, log what it measured of
+        /// its own work and memory. 0 turns it off under the default
+        /// FusionConfig.LiteralZeros of 1.
+        /// </summary>
+        public int Stats;
     }
 }

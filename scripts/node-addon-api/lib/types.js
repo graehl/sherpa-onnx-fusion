@@ -477,6 +477,8 @@
  *   Default '{}'.
  * @property {boolean|number} [rescore] - True: apply the scorer only to the
  *   hypotheses that survive the search, as n-best rescoring does.
+ * @property {boolean|number} [stats] - True (default): when the scorer is
+ *   destroyed, log what it measured of its own work and memory.
  */
 
 /**
@@ -505,6 +507,15 @@
  *   ctcPriorWeight times its log prior subtracted from its log probability
  *   in every frame.
  * @property {number} [ctcPriorWeight] - Weight of ctcPrior. Default 1.
+ * @property {boolean|number} [traceSurvival] - Offline transducers, true:
+ *   log at the end what pruning each result needed and what cutting the
+ *   lists waiting for later frames would cost.
+ * @property {boolean|number} [pruneWaiting] - Transducers, true (default):
+ *   at every round's end also cut each list of arrivals waiting for a later
+ *   frame to its best waitingMaxActive within waitingScoreBeam of its best.
+ * @property {number} [waitingMaxActive] - Default 0: twice the max active
+ *   paths.
+ * @property {number} [waitingScoreBeam] - Default 0: half of scoreBeam.
  */
 
 /**

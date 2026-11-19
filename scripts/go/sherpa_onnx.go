@@ -152,6 +152,11 @@ type ScorerConfig struct {
 	// 1: apply the scorer only to the hypotheses that survive the search, as
 	// n-best rescoring does, instead of during the search.
 	Rescore int
+
+	// 1: when the scorer is destroyed, log what it measured of its own work
+	// and memory. 0 means the default, on; turn it off with the fusion
+	// config's LiteralZeros set, or through OptionsJson.
+	Stats int
 }
 
 // Scorers and search settings for the decoding method prefix_beam_search.
@@ -191,6 +196,18 @@ type FusionConfig struct {
 	// value: a TokenCandidates of 0 leaves the search nothing to extend.
 	// Leave it 0 to keep zero values as defaults.
 	LiteralZeros int
+
+	// Offline transducers, 1: log at the end what pruning each result
+	// needed and what cutting the lists waiting for later frames would cost.
+	TraceSurvival int
+
+	// Transducers, 1: at every round's end also cut each list of arrivals
+	// waiting for a later frame to its best WaitingMaxActive within
+	// WaitingScoreBeam of its best. 0 means the default, on; turn it off
+	// with LiteralZeros set, or through OptionsJson.
+	PruneWaiting     int
+	WaitingMaxActive int     // 0: twice the max active paths
+	WaitingScoreBeam float32 // 0: half of ScoreBeam
 }
 
 func freeCString(p **C.char) {
@@ -215,6 +232,7 @@ func newCFusionConfig(config *FusionConfig, c *C.struct_SherpaOnnxFusionConfig) 
 			scorers[i].weight = C.float(s.Weight)
 			scorers[i].extra = C.CString(s.Extra)
 			scorers[i].rescore = C.int32_t(s.Rescore)
+			scorers[i].stats = C.int32_t(s.Stats)
 		}
 		c.scorers = p
 		c.num_scorers = C.int32_t(n)
@@ -230,6 +248,10 @@ func newCFusionConfig(config *FusionConfig, c *C.struct_SherpaOnnxFusionConfig) 
 	c.ctc_prior = C.CString(config.CtcPrior)
 	c.ctc_prior_weight = C.float(config.CtcPriorWeight)
 	c.literal_zeros = C.int32_t(config.LiteralZeros)
+	c.trace_survival = C.int32_t(config.TraceSurvival)
+	c.prune_waiting = C.int32_t(config.PruneWaiting)
+	c.waiting_max_active = C.int32_t(config.WaitingMaxActive)
+	c.waiting_score_beam = C.float(config.WaitingScoreBeam)
 }
 
 func freeCFusionConfig(c *C.struct_SherpaOnnxFusionConfig) {

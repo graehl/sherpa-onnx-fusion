@@ -23,6 +23,12 @@ void SetNumber(T value, bool literal, T *out) {
   if (literal || value != 0) *out = value;
 }
 
+// The same for a flag whose default is on: a zero means the default unless
+// "literal" is set.
+void SetFlag(int32_t value, bool literal, bool *out) {
+  if (literal || value != 0) *out = value != 0;
+}
+
 ScorerOptions GetScorerOptions(const SherpaOnnxScorerConfig &c, bool literal) {
   ScorerOptions o;
   SetIfGiven(c.type, &o.type);
@@ -34,6 +40,7 @@ ScorerOptions GetScorerOptions(const SherpaOnnxScorerConfig &c, bool literal) {
   SetNumber(c.weight, literal, &o.weight);
   SetIfGiven(c.extra, &o.extra);
   o.rescore = c.rescore != 0;
+  SetFlag(c.stats, literal, &o.common.stats);
   return o;
 }
 
@@ -68,6 +75,10 @@ FusionConfig GetFusionConfig(const SherpaOnnxFusionConfig &c) {
   f.modified_beam_search_rules = c.modified_beam_search_rules != 0;
   SetIfGiven(c.ctc_prior, &f.ctc_prior);
   SetNumber(c.ctc_prior_weight, literal, &f.ctc_prior_weight);
+  f.trace_survival = c.trace_survival != 0;
+  SetFlag(c.prune_waiting, literal, &f.prune_waiting);
+  f.waiting_max_active = c.waiting_max_active;
+  f.waiting_score_beam = c.waiting_score_beam;
   return f;
 }
 

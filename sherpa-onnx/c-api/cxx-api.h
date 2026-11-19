@@ -196,6 +196,9 @@ struct ScorerConfig {
   /** Apply the scorer only to the hypotheses that survive the search, as
    * n-best rescoring does. */
   bool rescore = false;
+  /** When the scorer is destroyed, log what it measured of its own work
+   * and memory. */
+  bool stats = true;
 };
 
 /** @brief Settings for `"prefix_beam_search"`. */
@@ -226,6 +229,16 @@ struct FusionConfig {
   std::string ctc_prior;
   /** Weight of `ctc_prior`. */
   float ctc_prior_weight = 1.0f;
+  /** Offline transducers: log what pruning each result needed and what
+   * cutting the lists waiting for later frames would cost. Costs time. */
+  bool trace_survival = false;
+  /** Transducers: also cut each list of arrivals waiting for a later frame
+   * at every round's end. */
+  bool prune_waiting = true;
+  /** Entries each waiting list keeps; 0: twice the max active paths. */
+  int32_t waiting_max_active = 0;
+  /** Score gap a waiting list keeps; 0: half of `score_beam`. */
+  float waiting_score_beam = 0;
 };
 
 /**

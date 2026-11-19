@@ -23,7 +23,9 @@ Topic: language-bindings
   `SherpaOnnxOfflineEncoderWindowConfig` makes a 0 in their numeric fields
   (and the scorers') mean 0. A binding that carries the real defaults sets
   it, so 0 means the same as on the command line; one that cannot tell a
-  set 0 from an unset field (Go) leaves it clear.
+  set 0 from an unset field (Go) leaves it clear. A flag whose default is
+  on (`prune_waiting`, a scorer's `stats`) follows the same rule: 0 is the
+  default unless `literal_zeros` is set, when it turns the flag off.
 - **`options_json`.** Both recognizer configs take a JSON object of
   command-line options, applied after every typed field through
   `ApplyOptionsJson` (`sherpa-onnx/csrc/recognizer-options-json.h`, over

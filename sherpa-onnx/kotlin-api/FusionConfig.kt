@@ -14,6 +14,9 @@ data class ScorerConfig(
     // true: apply the scorer only to the hypotheses that survive the search,
     // as n-best rescoring does, instead of during the search.
     var rescore: Boolean = false,
+    // When the scorer is destroyed, log what it measured of its own work and
+    // memory (onnx-rnn: its widest model step and peak memory).
+    var stats: Boolean = true,
 )
 
 // Scorers and search settings for decodingMethod = "prefix_beam_search".
@@ -39,4 +42,13 @@ data class FusionConfig(
     // subtracted from its log probability in every frame.
     var ctcPrior: String = "",
     var ctcPriorWeight: Float = 1.0f,
+    // Offline transducers: log at the end what pruning each result needed
+    // and what cutting the lists waiting for later frames would cost.
+    var traceSurvival: Boolean = false,
+    // Transducers: at every round's end also cut each list of arrivals
+    // waiting for a later frame to its best waitingMaxActive within
+    // waitingScoreBeam of its best.
+    var pruneWaiting: Boolean = true,
+    var waitingMaxActive: Int = 0, // 0: twice the max active paths
+    var waitingScoreBeam: Float = 0.0f, // 0: half of scoreBeam
 )

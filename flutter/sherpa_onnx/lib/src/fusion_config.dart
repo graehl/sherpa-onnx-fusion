@@ -18,6 +18,7 @@ class ScorerConfig {
     this.weight = 1.0,
     this.extra = '{}',
     this.rescore = false,
+    this.stats = true,
   });
 
   factory ScorerConfig.fromJson(Map<String, dynamic> json) {
@@ -31,12 +32,13 @@ class ScorerConfig {
       weight: (json['weight'] as num?)?.toDouble() ?? 1.0,
       extra: json['extra'] as String? ?? '{}',
       rescore: json['rescore'] as bool? ?? false,
+      stats: json['stats'] as bool? ?? true,
     );
   }
 
   @override
   String toString() {
-    return 'ScorerConfig(type: $type, model: $model, unit: $unit, space: $space, numThreads: $numThreads, provider: $provider, weight: $weight, extra: $extra, rescore: $rescore)';
+    return 'ScorerConfig(type: $type, model: $model, unit: $unit, space: $space, numThreads: $numThreads, provider: $provider, weight: $weight, extra: $extra, rescore: $rescore, stats: $stats)';
   }
 
   Map<String, dynamic> toJson() => {
@@ -49,6 +51,7 @@ class ScorerConfig {
         'weight': weight,
         'extra': extra,
         'rescore': rescore,
+        'stats': stats,
       };
 
   /// Registered scorer type: `kenlm` or `onnx-rnn`.
@@ -78,6 +81,10 @@ class ScorerConfig {
   /// Apply the scorer only to the hypotheses that survive the search, as
   /// n-best rescoring does, instead of during the search.
   final bool rescore;
+
+  /// When the scorer is destroyed, log what it measured of its own work and
+  /// memory (`onnx-rnn`: its widest model step and peak memory).
+  final bool stats;
 }
 
 /// Settings for `decodingMethod: 'prefix_beam_search'`.
@@ -94,6 +101,10 @@ class FusionConfig {
     this.modifiedBeamSearchRules = false,
     this.ctcPrior = '',
     this.ctcPriorWeight = 1.0,
+    this.traceSurvival = false,
+    this.pruneWaiting = true,
+    this.waitingMaxActive = 0,
+    this.waitingScoreBeam = 0.0,
   });
 
   factory FusionConfig.fromJson(Map<String, dynamic> json) {
@@ -113,12 +124,17 @@ class FusionConfig {
           json['modifiedBeamSearchRules'] as bool? ?? false,
       ctcPrior: json['ctcPrior'] as String? ?? '',
       ctcPriorWeight: (json['ctcPriorWeight'] as num?)?.toDouble() ?? 1.0,
+      traceSurvival: json['traceSurvival'] as bool? ?? false,
+      pruneWaiting: json['pruneWaiting'] as bool? ?? true,
+      waitingMaxActive: json['waitingMaxActive'] as int? ?? 0,
+      waitingScoreBeam:
+          (json['waitingScoreBeam'] as num?)?.toDouble() ?? 0.0,
     );
   }
 
   @override
   String toString() {
-    return 'FusionConfig(scorers: $scorers, lengthBonus: $lengthBonus, lengthBonusUnit: $lengthBonusUnit, ctcAlignment: $ctcAlignment, tokenCandidates: $tokenCandidates, scoreBeam: $scoreBeam, scorerTextCase: $scorerTextCase, lengthNormalize: $lengthNormalize, modifiedBeamSearchRules: $modifiedBeamSearchRules, ctcPrior: $ctcPrior, ctcPriorWeight: $ctcPriorWeight)';
+    return 'FusionConfig(scorers: $scorers, lengthBonus: $lengthBonus, lengthBonusUnit: $lengthBonusUnit, ctcAlignment: $ctcAlignment, tokenCandidates: $tokenCandidates, scoreBeam: $scoreBeam, scorerTextCase: $scorerTextCase, lengthNormalize: $lengthNormalize, modifiedBeamSearchRules: $modifiedBeamSearchRules, ctcPrior: $ctcPrior, ctcPriorWeight: $ctcPriorWeight, traceSurvival: $traceSurvival, pruneWaiting: $pruneWaiting, waitingMaxActive: $waitingMaxActive, waitingScoreBeam: $waitingScoreBeam)';
   }
 
   Map<String, dynamic> toJson() => {
@@ -133,6 +149,10 @@ class FusionConfig {
         'modifiedBeamSearchRules': modifiedBeamSearchRules,
         'ctcPrior': ctcPrior,
         'ctcPriorWeight': ctcPriorWeight,
+        'traceSurvival': traceSurvival,
+        'pruneWaiting': pruneWaiting,
+        'waitingMaxActive': waitingMaxActive,
+        'waitingScoreBeam': waitingScoreBeam,
       };
 
   /// Scorers fused with independent weights.
@@ -173,4 +193,19 @@ class FusionConfig {
 
   /// Weight of [ctcPrior].
   final double ctcPriorWeight;
+
+  /// Offline transducers: log at the end what pruning each result needed and
+  /// what cutting the lists waiting for later frames would cost.
+  final bool traceSurvival;
+
+  /// Transducers: at every round's end also cut each list of arrivals
+  /// waiting for a later frame to its best [waitingMaxActive] within
+  /// [waitingScoreBeam] of its best.
+  final bool pruneWaiting;
+
+  /// Entries each waiting list keeps; 0: twice the max active paths.
+  final int waitingMaxActive;
+
+  /// Score gap a waiting list keeps; 0: half of [scoreBeam].
+  final double waitingScoreBeam;
 }

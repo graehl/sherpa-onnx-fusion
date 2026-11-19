@@ -325,6 +325,9 @@ type
     { Apply the scorer only to the hypotheses that survive the search, as
       n-best rescoring does. }
     Rescore: Boolean;
+    { When the scorer is destroyed, log what it measured of its own work and
+      memory. }
+    Stats: Boolean;
     function ToString: AnsiString;
     class operator Initialize({$IFDEF FPC}var{$ELSE}out{$ENDIF} Dest: TSherpaOnnxScorerConfig);
   end;
@@ -352,6 +355,15 @@ type
       in a numeric field here or in Scorers is taken as 0. False: as in the
       C API, a numeric 0 means the default. }
     LiteralZeros: Boolean;
+    { Offline transducers: log at the end what pruning each result needed
+      and what cutting the lists waiting for later frames would cost. }
+    TraceSurvival: Boolean;
+    { Transducers: at every round's end also cut each list of arrivals
+      waiting for a later frame to its best WaitingMaxActive within
+      WaitingScoreBeam of its best. }
+    PruneWaiting: Boolean;
+    WaitingMaxActive: Integer; { 0: twice the max active paths }
+    WaitingScoreBeam: Single; { 0: half of ScoreBeam }
     function ToString: AnsiString;
     class operator Initialize({$IFDEF FPC}var{$ELSE}out{$ENDIF} Dest: TSherpaOnnxFusionConfig);
   end;
@@ -1139,6 +1151,7 @@ type
     Weight: cfloat;
     Extra: PAnsiChar;
     Rescore: cint32;
+    Stats: cint32;
   end;
 
   PSherpaOnnxScorerConfig = ^SherpaOnnxScorerConfig;
@@ -1158,6 +1171,10 @@ type
     CtcPrior: PAnsiChar;
     CtcPriorWeight: cfloat;
     LiteralZeros: cint32;
+    TraceSurvival: cint32;
+    PruneWaiting: cint32;
+    WaitingMaxActive: cint32;
+    WaitingScoreBeam: cfloat;
   end;
 
   SherpaOnnxOnlineRecognizerConfig = record
@@ -2175,6 +2192,7 @@ begin
     Scorers[I].Weight := Config.Scorers[I].Weight;
     Scorers[I].Extra := PAnsiChar(Config.Scorers[I].Extra);
     Scorers[I].Rescore := Ord(Config.Scorers[I].Rescore);
+    Scorers[I].Stats := Ord(Config.Scorers[I].Stats);
   end;
   if Length(Scorers) > 0 then
     Result.Scorers := @Scorers[0];
@@ -2190,6 +2208,10 @@ begin
   Result.CtcPrior := PAnsiChar(Config.CtcPrior);
   Result.CtcPriorWeight := Config.CtcPriorWeight;
   Result.LiteralZeros := Ord(Config.LiteralZeros);
+  Result.TraceSurvival := Ord(Config.TraceSurvival);
+  Result.PruneWaiting := Ord(Config.PruneWaiting);
+  Result.WaitingMaxActive := Config.WaitingMaxActive;
+  Result.WaitingScoreBeam := Config.WaitingScoreBeam;
 end;
 
 constructor TSherpaOnnxOnlineRecognizer.Create(Config: TSherpaOnnxOnlineRecognizerConfig);
@@ -3223,6 +3245,7 @@ begin
   Dest.Weight := 1;
   Dest.Extra := '{}';
   Dest.Rescore := False;
+  Dest.Stats := True;
 end;
 
 class operator TSherpaOnnxFusionConfig.Initialize({$IFDEF FPC}var{$ELSE}out{$ENDIF} Dest: TSherpaOnnxFusionConfig);
@@ -3237,15 +3260,20 @@ begin
   Dest.ModifiedBeamSearchRules := False;
   Dest.CtcPriorWeight := 1;
   Dest.LiteralZeros := True;
+  Dest.TraceSurvival := False;
+  Dest.PruneWaiting := True;
+  Dest.WaitingMaxActive := 0;
+  Dest.WaitingScoreBeam := 0;
 end;
 
 function TSherpaOnnxScorerConfig.ToString: AnsiString;
 begin
   Result := Format('TSherpaOnnxScorerConfig(Type := %s, Model := %s, ' +
     'Unit := %s, Space := %s, NumThreads := %d, Provider := %s, ' +
-    'Weight := %.3f, Extra := %s, Rescore := %s)',
+    'Weight := %.3f, Extra := %s, Rescore := %s, Stats := %s)',
     [Self.&Type, Self.Model, Self.&Unit, Self.Space, Self.NumThreads,
-     Self.Provider, Self.Weight, Self.Extra, Self.Rescore.ToString]);
+     Self.Provider, Self.Weight, Self.Extra, Self.Rescore.ToString,
+     Self.Stats.ToString]);
 end;
 
 function TSherpaOnnxFusionConfig.ToString: AnsiString;
@@ -3267,11 +3295,15 @@ begin
     'LengthBonus := %.3f, LengthBonusUnit := %s, CtcAlignment := %s, ' +
     'TokenCandidates := %d, ScoreBeam := %.3f, ScorerTextCase := %s, ' +
     'LengthNormalize := %s, ModifiedBeamSearchRules := %s, ' +
-    'CtcPrior := %s, CtcPriorWeight := %.3f, LiteralZeros := %s)',
+    'CtcPrior := %s, CtcPriorWeight := %.3f, LiteralZeros := %s, ' +
+    'TraceSurvival := %s, PruneWaiting := %s, WaitingMaxActive := %d, ' +
+    'WaitingScoreBeam := %.3f)',
     [ScorersStr, Self.LengthBonus, Self.LengthBonusUnit, Self.CtcAlignment,
      Self.TokenCandidates, Self.ScoreBeam, Self.ScorerTextCase,
      Self.LengthNormalize.ToString, Self.ModifiedBeamSearchRules.ToString,
-     Self.CtcPrior, Self.CtcPriorWeight, Self.LiteralZeros.ToString]);
+     Self.CtcPrior, Self.CtcPriorWeight, Self.LiteralZeros.ToString,
+     Self.TraceSurvival.ToString, Self.PruneWaiting.ToString,
+     Self.WaitingMaxActive, Self.WaitingScoreBeam]);
 end;
 
 constructor TSherpaOnnxCircularBuffer.Create(Capacity: Integer);
