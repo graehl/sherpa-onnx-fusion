@@ -358,8 +358,8 @@ type
     { Offline transducers: log at the end what pruning each result needed
       and what cutting the lists waiting for later frames would cost. }
     TraceSurvival: Boolean;
-    { Transducers: at every round's end also cut each list of arrivals
-      waiting for a later frame to its best WaitingMaxActive within
+    { TDT: at every round's end also cut each list of arrivals
+      waiting past the next frame to its best WaitingMaxActive within
       WaitingScoreBeam of its best. }
     PruneWaiting: Boolean;
     WaitingMaxActive: Integer; { 0: twice the max active paths }

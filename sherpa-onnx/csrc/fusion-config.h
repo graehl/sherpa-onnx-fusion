@@ -54,8 +54,8 @@ struct FusionConfig {
   // when the decoder is destroyed (TransducerPrefixSearchOptions::
   // trace_survival). Costs memory and time; off by default.
   bool trace_survival = false;
-  // Transducer prefix search: also cut the lists of arrivals waiting for
-  // later frames at the end of every round (TransducerPrefixSearchOptions::
+  // TDT prefix search: also cut the lists of arrivals waiting past the next
+  // frame at the end of every round (TransducerPrefixSearchOptions::
   // prune_waiting); 0 for a limit means twice max-active-paths, or half of
   // score-beam.
   bool prune_waiting = true;

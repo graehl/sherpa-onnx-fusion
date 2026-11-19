@@ -122,8 +122,8 @@ pub struct FusionConfig {
     /// Offline transducers: log at the end what pruning each result needed
     /// and what cutting the lists waiting for later frames would cost.
     pub trace_survival: bool,
-    /// Transducers: at every round's end also cut each list of arrivals
-    /// waiting for a later frame to its best `waiting_max_active` within
+    /// TDT: at every round's end also cut each list of arrivals
+    /// waiting past the next frame to its best `waiting_max_active` within
     /// `waiting_score_beam` of its best.
     pub prune_waiting: bool,
     /// Entries each waiting list keeps; 0: twice the max active paths.

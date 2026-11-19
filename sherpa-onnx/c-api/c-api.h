@@ -421,8 +421,8 @@ typedef struct SherpaOnnxFusionConfig {
    */
   int32_t trace_survival;
   /**
-   * Transducers, non-zero: at every round's end also cut each list of
-   * arrivals waiting for a later frame to its best @c waiting_max_active
+   * TDT, non-zero: at every round's end also cut each list of
+   * arrivals waiting past the next frame to its best @c waiting_max_active
    * within @c waiting_score_beam of its best. 0 means the default, on,
    * unless @c literal_zeros is set, when it turns the cut off.
    */

@@ -556,30 +556,34 @@ TEST(TransducerPrefixSearch, PruneWaitingWithoutLimitsChangesNothing) {
   EXPECT_EQ(HistoryScorer::LiveStates(), 0);
 }
 
-// With one symbol per frame the only waiting list is the next frame's, which
-// the default cut leaves to that frame's own pruning: the search, beam and
-// hypothesis count included, is the same as with no cut.
-TEST(TransducerPrefixSearch, DefaultWaitingCutKeepsTheFrameBeam) {
-  const Case c = kCases[0];
-  ASSERT_EQ(c.topology, TransducerTopology::kOneSymbolPerFrame);
+// Without TDT durations the only waiting list is the next frame's, which the
+// cut leaves to that frame's own pruning, so the search is the same as with
+// no cut. RNN-T checks it across a frame's several rounds.
+TEST(TransducerPrefixSearch, WaitingCutLeavesTheNextFrame) {
   const int32_t num_frames = 40;
-  auto run = [&](bool prune_waiting, float beam) {
-    TransducerPrefixSearchOptions options = Exhaustive(c);
-    options.max_active = 4;
-    options.max_token_candidates = 3;
-    options.beam = beam;
-    options.prune_waiting = prune_waiting;
-    HistoryScorer scorer(ScorerUnit::kCharacter, -0.05f);
-    TransducerPrefixSearch search(options, Vocabulary(), {&scorer}, {1.0f});
-    Decode(&search, {&scorer}, c.topology, num_frames);
-    std::vector<std::pair<Tokens, float>> nbest;
-    for (const auto &h : search.Finish(4)) nbest.push_back({h.tokens, h.score});
-    return nbest;
-  };
-  for (float beam : {1.0f, 2.0f, 4.0f}) {
-    auto plain = run(false, beam);
-    ASSERT_FALSE(plain.empty());
-    EXPECT_EQ(run(true, beam), plain) << "beam " << beam;
+  for (const Case &c : kCases) {
+    if (c.topology == TransducerTopology::kTdt) continue;
+    auto run = [&](bool prune_waiting, float beam) {
+      TransducerPrefixSearchOptions options = Exhaustive(c);
+      options.max_active = 4;
+      options.max_token_candidates = 3;
+      options.beam = beam;
+      options.prune_waiting = prune_waiting;
+      HistoryScorer scorer(ScorerUnit::kCharacter, -0.05f);
+      TransducerPrefixSearch search(options, Vocabulary(), {&scorer}, {1.0f});
+      Decode(&search, {&scorer}, c.topology, num_frames);
+      std::vector<std::pair<Tokens, float>> nbest;
+      for (const auto &h : search.Finish(4)) {
+        nbest.push_back({h.tokens, h.score});
+      }
+      return nbest;
+    };
+    for (float beam : {1.0f, 2.0f, 4.0f}) {
+      auto plain = run(false, beam);
+      ASSERT_FALSE(plain.empty());
+      EXPECT_EQ(run(true, beam), plain)
+          << "topology " << static_cast<int>(c.topology) << ", beam " << beam;
+    }
   }
   EXPECT_EQ(HistoryScorer::LiveStates(), 0);
 }

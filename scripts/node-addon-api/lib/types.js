@@ -510,9 +510,9 @@
  * @property {boolean|number} [traceSurvival] - Offline transducers, true:
  *   log at the end what pruning each result needed and what cutting the
  *   lists waiting for later frames would cost.
- * @property {boolean|number} [pruneWaiting] - Transducers, true (default):
- *   at every round's end also cut each list of arrivals waiting for a later
- *   frame to its best waitingMaxActive within waitingScoreBeam of its best.
+ * @property {boolean|number} [pruneWaiting] - TDT, true (default): at every
+ *   round's end also cut each list of arrivals waiting past the next frame
+ *   to its best waitingMaxActive within waitingScoreBeam of its best.
  * @property {number} [waitingMaxActive] - Default 0: twice the max active
  *   paths.
  * @property {number} [waitingScoreBeam] - Default 0: half of scoreBeam.

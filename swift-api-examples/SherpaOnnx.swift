@@ -255,8 +255,8 @@ public func sherpaOnnxFusionConfig(
   literalZeros: Bool = true,
   // Offline transducers: log at the end what pruning each result needed.
   traceSurvival: Bool = false,
-  // Transducers: at every round's end also cut each list of arrivals
-  // waiting for a later frame to its best waitingMaxActive (0: twice the
+  // TDT: at every round's end also cut each list of arrivals
+  // waiting past the next frame to its best waitingMaxActive (0: twice the
   // max active paths) within waitingScoreBeam (0: half of scoreBeam).
   pruneWaiting: Bool = true,
   waitingMaxActive: Int = 0,

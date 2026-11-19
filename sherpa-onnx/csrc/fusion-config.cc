@@ -71,8 +71,8 @@ void FusionConfig::Register(ParseOptions *po) {
                "memory, and log a table of it at the end. Costs time.");
   po->Register("prune-waiting", &prune_waiting,
                "Used only when decoding_method is prefix_beam_search, for "
-               "transducer models. At the end of every round, also cut each "
-               "list of hypotheses waiting for a later frame to its best "
+               "TDT models. At the end of every round, also cut each list of "
+               "hypotheses waiting past the next frame to its best "
                "--waiting-max-active within --waiting-score-beam of its best, "
                "instead of only when that frame begins. Not applied with "
                "--modified-beam-search-rules.");

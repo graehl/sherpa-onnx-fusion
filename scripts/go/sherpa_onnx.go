@@ -201,8 +201,8 @@ type FusionConfig struct {
 	// needed and what cutting the lists waiting for later frames would cost.
 	TraceSurvival int
 
-	// Transducers, 1: at every round's end also cut each list of arrivals
-	// waiting for a later frame to its best WaitingMaxActive within
+	// TDT, 1: at every round's end also cut each list of arrivals
+	// waiting past the next frame to its best WaitingMaxActive within
 	// WaitingScoreBeam of its best. 0 means the default, on; turn it off
 	// with LiteralZeros set, or through OptionsJson.
 	PruneWaiting     int
