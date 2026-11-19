@@ -94,12 +94,11 @@ The tagger's intermediate tensors are a few megabytes against the
 encoder's, so measure resident memory before choosing either.
 
 With a LiteRT encoder (today only w2v-BERT CTC,
-`offline-w2v-bert-ctc-litert-model.cc`), nothing is reachable from
-outside: each model creates its own `LiteRtEnvironment`, passing only
-the dispatch library directory, and allocates its tensor buffers per
-fixed-length signature at load. Sharing would mean the caller creates
-the environment, or the device context it wraps, and sherpa accepts it
-through the C API as an opaque handle. LiteRT 2.3's environment options
+`offline-w2v-bert-ctc-litert-model.cc`), the model allocates its tensor
+buffers per fixed-length signature at load, in a `LiteRtEnvironment` it
+creates, or since 2026-11-19 in one the caller lends it
+(`SherpaOnnxCreateOfflineRecognizerWithLiteRtEnvironment`;
+[LiteRT backend](../../topics/litert-backend.md)). LiteRT 2.3's environment options
 already take a caller's OpenCL context and queue, EGL display and
 context, Vulkan, Metal or WebGPU device; for the NPU only the dispatch
 library is passed. A tagger on ONNX Runtime shares nothing with a LiteRT
@@ -114,6 +113,17 @@ engine, and sherpa takes a borrowed environment that must outlive the
 recognizer. Unchecked: whether the route lwpc uses to call LiteRT-LM
 exposes that pointer, and whether one environment may be used from the
 MT thread and the ASR thread at once.
+
+That second question matters because lwpc may wish to run MT on one
+utterance concurrently with ASR on the next (graehl, 2026-11-19). The
+recognizer already serializes its own LiteRT calls (a mutex in the
+model), but nothing orders them against the MT engine's. If LiteRT does
+not allow concurrent use of one environment, or of one GPU queue, the
+caller must order the two, and the recognizer would need a way to share
+that lock or run its encoder at the caller's call. Concurrent use also
+puts the encoder and MT on the same accelerator, so ASR latency for the
+next utterance can wait behind MT steps however the environment is
+shared; measure both orders on the phone.
 
 ## Not wanted
 
