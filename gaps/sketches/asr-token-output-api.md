@@ -93,6 +93,19 @@ reachable without changing sherpa, since a provider string of the form
 The tagger's intermediate tensors are a few megabytes against the
 encoder's, so measure resident memory before choosing either.
 
+With a LiteRT encoder (today only w2v-BERT CTC,
+`offline-w2v-bert-ctc-litert-model.cc`), nothing is reachable from
+outside: each model creates its own `LiteRtEnvironment`, passing only
+the dispatch library directory, and allocates its tensor buffers per
+fixed-length signature at load. Sharing would mean the caller creates
+the environment, or the device context it wraps, and sherpa accepts it
+through the C API as an opaque handle. LiteRT 2.3's environment options
+already take a caller's OpenCL context and queue, EGL display and
+context, Vulkan, Metal or WebGPU device; for the NPU only the dispatch
+library is passed. A tagger on ONNX Runtime shares nothing with a LiteRT
+encoder except the process heap. Sherpa also sets no CPU thread count
+for LiteRT, so the one-thread case is unchecked there.
+
 ## Not wanted
 
 A callback inside sherpa that rewrites text. For offline recognition
