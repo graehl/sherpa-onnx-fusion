@@ -444,13 +444,19 @@ void TransducerPrefixSearch::ApplyScorerWave(
 std::vector<uint32_t> TransducerPrefixSearch::Prune(
     const std::vector<uint32_t> &candidates, int32_t slot, bool to_frontier) {
   // A waiting list is cut by its own limits, by default twice the
-  // frontier's count within half its beam.
+  // frontier's count within half its beam. The list the next frame begins
+  // with is cut no tighter than that frame's own pruning, which follows its
+  // last round: so max_active and beam keep their meaning for it.
   int32_t max_active = options_.max_active;
   float beam = options_.beam;
   if (!to_frontier) {
     max_active = options_.waiting_max_active > 0 ? options_.waiting_max_active
                                                  : 2 * max_active;
     beam = options_.waiting_beam > 0 ? options_.waiting_beam : beam / 2;
+    if (slot == (frame_ + 1) % ring_size_) {
+      max_active = std::max(max_active, options_.max_active);
+      beam = std::max(beam, options_.beam);
+    }
   }
   auto mass_in = [slot](State *state) -> float & {
     return slot == kAgainSlot ? state->again : state->arrive[slot];
@@ -512,11 +518,6 @@ bool TransducerPrefixSearch::EndRound() {
   for (uint32_t index : trie_.NewNodes()) trie_.ReleaseIfUnused(index);
   // The round's scores are complete: where a policy would cut waiting lists.
   if (options_.trace_survival) RankWaiting();
-  if (options_.prune_waiting && !options_.prune_steps) {
-    for (int32_t slot = 0; slot != ring_size_; ++slot) {
-      arriving_[slot] = Prune(arriving_[slot], slot, false);
-    }
-  }
 
   // The frontier is spent; it leaves through Unpin below, after the
   // next frontier is chosen, so a prefix in both is not freed in between.
@@ -528,6 +529,13 @@ bool TransducerPrefixSearch::EndRound() {
     state->again = kLogZero;
   }
   again_.clear();
+  if (options_.prune_waiting && !options_.prune_steps) {
+    // With no next round, EndFrame prunes the next frame's list at once.
+    const int32_t next = frontier_.empty() ? (frame_ + 1) % ring_size_ : -1;
+    for (int32_t slot = 0; slot != ring_size_; ++slot) {
+      if (slot != next) arriving_[slot] = Prune(arriving_[slot], slot, false);
+    }
+  }
   for (uint32_t index : spent) Unpin(index);
   ++round_;
   return !frontier_.empty();

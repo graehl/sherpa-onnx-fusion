@@ -81,9 +81,12 @@ struct TransducerPrefixSearchOptions {
   // begins. With prune_waiting, every round's end also cuts each waiting
   // list to its best waiting_max_active within waiting_beam of its best
   // (0 for either: twice max_active, half of beam, where a survival trace
-  // of Parakeet TDT on LibriSpeech kept every result's dominant path); a
-  // cut entry that later receives probability again rejoins. Not applied
-  // with prune_steps, which must reproduce modified_beam_search.
+  // of Parakeet TDT on LibriSpeech kept every result's dominant path). The
+  // list of the next frame is cut no tighter than max_active within beam,
+  // the pruning that frame begins with, so those keep their meaning; with
+  // one symbol per frame (one round), the cut then removes nothing. A cut
+  // entry that later receives probability again rejoins. Not applied with
+  // prune_steps, which must reproduce modified_beam_search.
   bool prune_waiting = true;
   int32_t waiting_max_active = 0;
   float waiting_beam = 0;
@@ -274,7 +277,8 @@ class TransducerPrefixSearch {
   // (an arrival slot, or kAgainSlot) plus scorer scores and bonus, and
   // clears and unpins the others. Returns the kept ones, best first.
   // "to_frontier": they become the frontier, under max_active and beam;
-  // otherwise they keep waiting, under the waiting list's limits.
+  // otherwise they keep waiting, under the waiting list's limits (for the
+  // next frame's list, no tighter than max_active and beam).
   static constexpr int32_t kAgainSlot = -1;
   std::vector<uint32_t> Prune(const std::vector<uint32_t> &candidates,
                               int32_t slot, bool to_frontier = true);
