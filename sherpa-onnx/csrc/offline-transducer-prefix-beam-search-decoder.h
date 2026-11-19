@@ -34,6 +34,11 @@ TransducerPrefixSearchOptions MakeTransducerPrefixSearchOptions(
     const FusionConfig &config, int32_t max_active, TransducerTopology topology,
     int32_t context_size);
 
+// "config" for a streaming transducer decoder: without trace_survival, whose
+// summary only the offline decoders record, so a streaming search does not
+// pay for a trace nothing reports. Logs when it drops the option.
+FusionConfig StreamingFusionConfig(const FusionConfig &config);
+
 // TransducerPrefixSearchOptions::blank_like_token for a configuration: the
 // table's "<unk>" under modified_beam_search_rules, otherwise none.
 int32_t UnknownTokenAsBlank(const FusionConfig &config,
