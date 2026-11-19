@@ -64,9 +64,14 @@ inter-op thread counts (`GetSessionOptionsImpl` in
 there is no shared pool to hand out. Sharing would mean ONNX Runtime's
 global thread pools (an environment created with global thread pools and
 sessions that disable per-session threads), chosen by the process, with
-sherpa accepting that choice. That changes how sherpa's own sessions
-contend with each other, so it needs measurement on the phone before it
-is worth doing; it is independent of the token API.
+sherpa accepting that choice. It is independent of the token API.
+
+On the phone, where sessions run with one thread (graehl, 2026-11-19),
+this is moot: ONNX Runtime with one intra-op thread computes on the
+calling thread and keeps no pool threads, and the default sequential
+execution mode never uses the inter-op pool. There is nothing to share;
+the caller schedules the tagger on whichever thread it likes. Sharing
+matters only for multi-threaded server use.
 
 ## Not wanted
 
