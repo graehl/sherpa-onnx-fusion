@@ -106,6 +106,15 @@ library is passed. A tagger on ONNX Runtime shares nothing with a LiteRT
 encoder except the process heap. Sherpa also sets no CPU thread count
 for LiteRT, so the one-thread case is unchecked there.
 
+lwpc intends to run MT through LiteRT (graehl, 2026-11-19). LiteRT-LM's
+`Engine` owns its environment and lends it out: `GetEnvironment()` in
+`runtime/engine/engine.h` (LiteRT-LM `eea5e30e`) returns a non-owning
+pointer valid for the engine's lifetime. So the natural owner is the MT
+engine, and sherpa takes a borrowed environment that must outlive the
+recognizer. Unchecked: whether the route lwpc uses to call LiteRT-LM
+exposes that pointer, and whether one environment may be used from the
+MT thread and the ASR thread at once.
+
 ## Not wanted
 
 A callback inside sherpa that rewrites text. For offline recognition
