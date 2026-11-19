@@ -2,7 +2,7 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
 
-use std::os::raw::{c_char, c_float};
+use std::os::raw::{c_char, c_float, c_void};
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -263,6 +263,11 @@ pub struct OfflineStream {
 extern "C" {
     pub fn SherpaOnnxCreateOfflineRecognizer(
         config: *const OfflineRecognizerConfig,
+    ) -> *const OfflineRecognizer;
+
+    pub fn SherpaOnnxCreateOfflineRecognizerWithLiteRtEnvironment(
+        config: *const OfflineRecognizerConfig,
+        litert_environment: *mut c_void,
     ) -> *const OfflineRecognizer;
 
     pub fn SherpaOnnxDestroyOfflineRecognizer(recognizer: *const OfflineRecognizer);

@@ -837,6 +837,37 @@ impl OfflineRecognizer {
         }
     }
 
+    /// Create a recognizer whose LiteRT (`.tflite`) model is built in the
+    /// caller's LiteRT environment instead of one of its own, so it shares
+    /// that environment's device context (e.g. with an MT engine).
+    ///
+    /// `litert_environment` is a `LiteRtEnvironment` from LiteRT's C API.
+    /// `model_config.litert_dispatch_dir` must be unset. A null pointer
+    /// behaves as [`OfflineRecognizer::create`].
+    ///
+    /// # Safety
+    ///
+    /// `litert_environment` must be null or a valid `LiteRtEnvironment`
+    /// that outlives the returned recognizer; the recognizer never
+    /// destroys it.
+    pub unsafe fn create_with_litert_environment(
+        config: &OfflineRecognizerConfig,
+        litert_environment: *mut std::os::raw::c_void,
+    ) -> Option<Self> {
+        let mut cstrings = Vec::new();
+        let mut scorers = Vec::new();
+        let sys_config = config.to_sys(&mut cstrings, &mut scorers);
+        let ptr = sys::SherpaOnnxCreateOfflineRecognizerWithLiteRtEnvironment(
+            &sys_config,
+            litert_environment,
+        );
+        if ptr.is_null() {
+            None
+        } else {
+            Some(Self { ptr })
+        }
+    }
+
     /// Create an empty offline stream.
     pub fn create_stream(&self) -> OfflineStream {
         let ptr = unsafe { sys::SherpaOnnxCreateOfflineStream(self.ptr) };

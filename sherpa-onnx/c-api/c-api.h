@@ -1503,6 +1503,25 @@ SherpaOnnxCreateOfflineRecognizer(
     const SherpaOnnxOfflineRecognizerConfig *config);
 
 /**
+ * @brief Create an offline recognizer whose LiteRT model is built in the
+ * caller's LiteRT environment instead of one of its own.
+ *
+ * Sharing an environment shares its device context, e.g. with an MT engine
+ * that also runs on LiteRT. @p litert_environment is a @c LiteRtEnvironment
+ * (LiteRT's C API), borrowed: the recognizer never destroys it, and it must
+ * outlive the recognizer. The caller configures it, so
+ * @c model_config.litert_dispatch_dir must be NULL or empty, and
+ * @c model_config.w2v_bert_ctc must name a .tflite model. With
+ * @p litert_environment NULL this is SherpaOnnxCreateOfflineRecognizer().
+ * Requires a build with LiteRT (-DSHERPA_ONNX_ENABLE_LITERT=ON).
+ *
+ * @return A recognizer, or NULL on an invalid configuration.
+ */
+SHERPA_ONNX_API const SherpaOnnxOfflineRecognizer *
+SherpaOnnxCreateOfflineRecognizerWithLiteRtEnvironment(
+    const SherpaOnnxOfflineRecognizerConfig *config, void *litert_environment);
+
+/**
  * @brief Update the configuration of an existing offline recognizer.
  *
  * @param recognizer Recognizer handle.

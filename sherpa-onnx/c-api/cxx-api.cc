@@ -474,10 +474,16 @@ static SherpaOnnxOfflineRecognizerConfig Convert(
 
 OfflineRecognizer OfflineRecognizer::Create(
     const OfflineRecognizerConfig &config) {
+  return Create(config, nullptr);
+}
+
+OfflineRecognizer OfflineRecognizer::Create(
+    const OfflineRecognizerConfig &config, void *litert_environment) {
   std::vector<SherpaOnnxScorerConfig> scorers;
   auto c = Convert(config, &scorers);
 
-  auto p = SherpaOnnxCreateOfflineRecognizer(&c);
+  auto p = SherpaOnnxCreateOfflineRecognizerWithLiteRtEnvironment(
+      &c, litert_environment);
   return OfflineRecognizer(p);
 }
 

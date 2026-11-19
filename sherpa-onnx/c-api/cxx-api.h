@@ -935,6 +935,12 @@ class SHERPA_ONNX_API OfflineRecognizer
   /** @brief Create an offline recognizer from a config struct. */
   static OfflineRecognizer Create(const OfflineRecognizerConfig &config);
 
+  /** @brief Create one whose LiteRT model uses the caller's borrowed
+   * LiteRtEnvironment; see
+   * SherpaOnnxCreateOfflineRecognizerWithLiteRtEnvironment(). */
+  static OfflineRecognizer Create(const OfflineRecognizerConfig &config,
+                                  void *litert_environment);
+
   /** @brief Destroy the wrapped C handle. */
   void Destroy(const SherpaOnnxOfflineRecognizer *p) const;
 
