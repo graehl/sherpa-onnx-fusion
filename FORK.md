@@ -125,7 +125,9 @@ and TDT, § Matching the existing decoders).
   utterance runs in the shortest length that holds it, a longer one in
   blended overlapping windows (`--litert-window`).
 - Batched decoding for w2v-BERT and omnilingual CTC exports that take
-  `input_lengths`, whose fp32 results then do not depend on the batch.
+  `input_lengths`, whose fp32 results then do not depend on the batch, or
+  whose `batching_supported` metadata says whether they batch
+  ([bulk decoding](topics/bulk-decoding.md)).
 
 ### Bulk decoding
 

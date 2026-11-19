@@ -95,14 +95,15 @@ class OfflineW2vBertCtcModel::Impl {
       stacked_length[b] = frames_length[b] / kStack;
     }
 
+    // Padding is zero, the value normalized features have on average, with
+    // or without a lengths input: a graph that takes lengths masks it, and
+    // one whose metadata says it batches without them was checked so.
+    for (int32_t b = 0; b != batch; ++b) {
+      std::fill(q + b * row + stacked_length[b] * feat_dim * kStack,
+                q + (b + 1) * row, 0.0f);
+    }
     std::vector<Ort::Value> out;
     if (takes_lengths_) {
-      // Padding is finite and the model masks it; zero is the value its
-      // normalized features have on average.
-      for (int32_t b = 0; b != batch; ++b) {
-        std::fill(q + b * row + stacked_length[b] * feat_dim * kStack,
-                  q + (b + 1) * row, 0.0f);
-      }
       std::array<Ort::Value, 2> inputs = {std::move(stacked), View(&length)};
       out =
           sess_->Run({}, input_names_ptr_.data(), inputs.data(), inputs.size(),
