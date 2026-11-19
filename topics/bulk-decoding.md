@@ -32,8 +32,11 @@ one batch.
   decoding a padded batch against each recording alone) is batched or run
   one recording per call as that says; without it, such a model is
   batched only if it takes `input_lengths`. Padding is zero either way. An
-  omnilingual model that says `true` but takes no `input_lengths` is
-  rejected at load, since it cannot report each recording's valid frames.
+  omnilingual model that says `true` but takes no `input_lengths` returns
+  no lengths either, so each recording's valid frames are its samples
+  through the wav2vec2 convolutional frontend (which the published export
+  matches exactly); a batch whose padded length disagrees with that stops
+  with an error.
 - **Model threads and search threads.** With `--decode-threads=N` the
   `--nj` threads only read files and run the model, and N other threads run
   the search, so a GPU model can take one thread while the search takes
