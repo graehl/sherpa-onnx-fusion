@@ -42,10 +42,12 @@ class OnlineTransducerPrefixBeamSearchDecoder : public OnlineTransducerDecoder {
         options_(MakeTransducerPrefixSearchOptions(
             config, max_active, TransducerTopology::kOneSymbolPerFrame,
             model->ContextSize())),
-        fusion_(std::make_shared<TransducerFusion>(config, symbol_table, 0,
-                                                   model->VocabSize())),
+        fusion_(std::make_shared<TransducerFusion>(
+            StreamingFusionConfig(config), symbol_table, 0,
+            model->VocabSize())),
         blank_penalty_(blank_penalty) {
     options_.blank_like_token = UnknownTokenAsBlank(config, symbol_table);
+    options_.trace_survival = false;  // as StreamingFusionConfig drops it
   }
 
   OnlineTransducerDecoderResult GetEmptyResult() const override;

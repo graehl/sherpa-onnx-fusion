@@ -23,10 +23,10 @@ Decoder::~OnlineTransducerPrefixBeamSearchNeMoDecoder() = default;
 Decoder::OnlineTransducerPrefixBeamSearchNeMoDecoder(
     OnlineTransducerNeMoModel *model, const FusionConfig &config,
     int32_t max_active, const SymbolTable &symbol_table, float blank_penalty)
-    : config_(config),
+    : config_(StreamingFusionConfig(config)),
       max_active_(max_active),
       fusion_(std::make_shared<TransducerFusion>(
-          config, symbol_table, model->VocabSize() - 1, model->VocabSize())),
+          config_, symbol_table, model->VocabSize() - 1, model->VocabSize())),
       blank_penalty_(blank_penalty),
       calls_(std::make_shared<NeMoTransducerCalls>()) {
   // NOLINTEND

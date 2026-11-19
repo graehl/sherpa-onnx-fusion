@@ -1368,7 +1368,7 @@ offline NeMo transducer models. The options are fields of `FusionConfig`
 | `--modified-beam-search-rules` | false | Stateless transducers: search exactly as `modified_beam_search` does |
 | `--length-normalize` | false | Transducers: rank results by score over output length |
 | `--prune-waiting`, `--waiting-max-active`, `--waiting-score-beam` | true, 0, 0 | Transducers: also cut the lists of arrivals waiting for later frames at every round end; 0 means twice `--max-active-paths`, half the `--score-beam` (§ Fusion on RNN-T and TDT) |
-| `--trace-survival` | false | Offline transducers: at the end, log what pruning each result needed, and what cutting the lists of arrivals waiting for later frames would cost in results and save in entries (about 12% slower) |
+| `--trace-survival` | false | Offline transducers: at the end, log what pruning each result needed, and what cutting the lists of arrivals waiting for later frames would cost in results and save in entries (about 12% slower); streaming searches ignore it, with a warning |
 
 `--ctc-prior` names a text file of `token-id log-prior` lines, where a
 token's prior is the recognizer's average probability for it over some

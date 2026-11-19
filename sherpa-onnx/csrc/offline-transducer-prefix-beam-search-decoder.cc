@@ -41,6 +41,17 @@ TransducerPrefixSearchOptions MakeTransducerPrefixSearchOptions(
   return options;
 }
 
+FusionConfig StreamingFusionConfig(const FusionConfig &config) {
+  FusionConfig streaming = config;
+  if (streaming.trace_survival) {
+    SHERPA_ONNX_LOGE(
+        "--trace-survival is for offline transducer models; ignored by the "
+        "streaming search");
+    streaming.trace_survival = false;
+  }
+  return streaming;
+}
+
 int32_t UnknownTokenAsBlank(const FusionConfig &config,
                             const SymbolTable &symbol_table) {
   return config.modified_beam_search_rules && symbol_table.Contains("<unk>")
