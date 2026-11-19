@@ -34,6 +34,12 @@ scorer. These were not run:
   run with such a model.
 - **Intermediate commits of the C-struct mirrors** were checked for layout
   against that commit's `c-api.h`, not run.
+- **The waiting-list and stats fields** (`trace_survival`, `prune_waiting`,
+  the waiting limits, a scorer's `stats`; 2026-11-19) ran through the C
+  API, Python and JNI with a TDT model; Go and Rust were type-checked, the
+  Node native code compiled and the WebAssembly packer checked on a fake
+  heap against clang's wasm32 layout. C#, Pascal, Swift, Dart, Kotlin and
+  ArkTS were checked by reading only: no toolchain for them was at hand.
 
 Known sharp edges, documented where they bite:
 

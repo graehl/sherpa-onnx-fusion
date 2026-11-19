@@ -16,6 +16,9 @@ public class ScorerConfig {
     // true: apply the scorer only to the hypotheses that survive the search,
     // as n-best rescoring does, instead of during the search.
     private final boolean rescore;
+    // When the scorer is destroyed, log what it measured of its own work and
+    // memory (onnx-rnn: its widest model step and peak memory).
+    private final boolean stats;
 
     private ScorerConfig(Builder builder) {
         this.type = builder.type;
@@ -27,6 +30,7 @@ public class ScorerConfig {
         this.weight = builder.weight;
         this.extra = builder.extra;
         this.rescore = builder.rescore;
+        this.stats = builder.stats;
     }
 
     public static Builder builder() {
@@ -69,6 +73,10 @@ public class ScorerConfig {
         return rescore;
     }
 
+    public boolean getStats() {
+        return stats;
+    }
+
     public static class Builder {
         private String type = "";
         private String model = "";
@@ -79,6 +87,7 @@ public class ScorerConfig {
         private float weight = 1.0f;
         private String extra = "{}";
         private boolean rescore = false;
+        private boolean stats = true;
 
         public ScorerConfig build() {
             return new ScorerConfig(this);
@@ -126,6 +135,11 @@ public class ScorerConfig {
 
         public Builder setRescore(boolean rescore) {
             this.rescore = rescore;
+            return this;
+        }
+
+        public Builder setStats(boolean stats) {
+            this.stats = stats;
             return this;
         }
     }

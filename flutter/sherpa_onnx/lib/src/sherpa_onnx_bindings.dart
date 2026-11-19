@@ -665,6 +665,9 @@ final class SherpaOnnxScorerConfig extends Struct {
 
   @Int32()
   external int rescore;
+
+  @Int32()
+  external int stats;
 }
 
 final class SherpaOnnxFusionConfig extends Struct {
@@ -700,6 +703,18 @@ final class SherpaOnnxFusionConfig extends Struct {
 
   @Int32()
   external int literalZeros;
+
+  @Int32()
+  external int traceSurvival;
+
+  @Int32()
+  external int pruneWaiting;
+
+  @Int32()
+  external int waitingMaxActive;
+
+  @Float()
+  external double waitingScoreBeam;
 }
 
 final class SherpaOnnxOfflineCtcFstDecoderConfig extends Struct {

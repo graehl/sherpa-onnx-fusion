@@ -352,6 +352,13 @@ typedef struct SherpaOnnxScorerConfig {
    * search, as n-best rescoring does, instead of during the search.
    */
   int32_t rescore;
+  /**
+   * Non-zero: when the scorer is destroyed, log what it measured of its own
+   * work and memory (onnx-rnn: its widest model step and peak memory).
+   * 0 means the default, on, unless the fusion config's literal_zeros is
+   * set, when it turns the log off.
+   */
+  int32_t stats;
 } SherpaOnnxScorerConfig;
 
 /**
@@ -407,6 +414,23 @@ typedef struct SherpaOnnxFusionConfig {
    * example, a score_beam of 0 means no limit, as on the command line.
    */
   int32_t literal_zeros;
+  /**
+   * Offline transducers, non-zero: log at the end what pruning each result
+   * needed and what cutting the lists of arrivals waiting for later frames
+   * would cost and save. Costs time.
+   */
+  int32_t trace_survival;
+  /**
+   * Transducers, non-zero: at every round's end also cut each list of
+   * arrivals waiting for a later frame to its best @c waiting_max_active
+   * within @c waiting_score_beam of its best. 0 means the default, on,
+   * unless @c literal_zeros is set, when it turns the cut off.
+   */
+  int32_t prune_waiting;
+  /** Entries each waiting list keeps. 0: twice max_active_paths. */
+  int32_t waiting_max_active;
+  /** Score gap a waiting list keeps. 0: half of @c score_beam. */
+  float waiting_score_beam;
 } SherpaOnnxFusionConfig;
 
 /**

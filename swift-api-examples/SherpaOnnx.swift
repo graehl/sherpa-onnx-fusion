@@ -183,7 +183,10 @@ public func sherpaOnnxScorerConfig(
   provider: String = "cpu",
   weight: Float = 1.0,
   extra: String = "{}",
-  rescore: Bool = false
+  rescore: Bool = false,
+  // Log, when the scorer is destroyed, what it measured of its own work and
+  // memory.
+  stats: Bool = true
 ) -> SherpaOnnxScorerConfig {
   return SherpaOnnxScorerConfig(
     type: toCPointer(type),
@@ -194,7 +197,8 @@ public func sherpaOnnxScorerConfig(
     provider: toCPointer(provider),
     weight: weight,
     extra: toCPointer(extra),
-    rescore: rescore ? 1 : 0)
+    rescore: rescore ? 1 : 0,
+    stats: stats ? 1 : 0)
 }
 
 /// Owns the C array of scorers that SherpaOnnxFusionConfig.scorers points
@@ -248,7 +252,15 @@ public func sherpaOnnxFusionConfig(
   // scoreBeam 0: no limit), since these parameters and
   // sherpaOnnxScorerConfig() carry the real defaults. false: as in the C
   // API, a numeric 0 means the default.
-  literalZeros: Bool = true
+  literalZeros: Bool = true,
+  // Offline transducers: log at the end what pruning each result needed.
+  traceSurvival: Bool = false,
+  // Transducers: at every round's end also cut each list of arrivals
+  // waiting for a later frame to its best waitingMaxActive (0: twice the
+  // max active paths) within waitingScoreBeam (0: half of scoreBeam).
+  pruneWaiting: Bool = true,
+  waitingMaxActive: Int = 0,
+  waitingScoreBeam: Float = 0
 ) -> SherpaOnnxFusionConfig {
   return SherpaOnnxFusionConfig(
     scorers: UnsafePointer(scorers?.pointer),
@@ -263,7 +275,11 @@ public func sherpaOnnxFusionConfig(
     modified_beam_search_rules: modifiedBeamSearchRules ? 1 : 0,
     ctc_prior: toCPointer(ctcPrior),
     ctc_prior_weight: ctcPriorWeight,
-    literal_zeros: literalZeros ? 1 : 0)
+    literal_zeros: literalZeros ? 1 : 0,
+    trace_survival: traceSurvival ? 1 : 0,
+    prune_waiting: pruneWaiting ? 1 : 0,
+    waiting_max_active: Int32(waitingMaxActive),
+    waiting_score_beam: waitingScoreBeam)
 }
 
 public func sherpaOnnxOnlineRecognizerConfig(

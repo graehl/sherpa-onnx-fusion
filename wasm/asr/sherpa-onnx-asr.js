@@ -476,7 +476,7 @@ function initSherpaOnnxOfflineCtcFstDecoderConfig(config, Module) {
 // kept, since the fusion config sets literal_zeros; an empty string takes
 // the C API's default.
 function initSherpaOnnxScorerConfigArray(scorers, Module) {
-  const len = 9 * 4;  // size of one SherpaOnnxScorerConfig
+  const len = 10 * 4;  // size of one SherpaOnnxScorerConfig
   const n = scorers.length;
   if (n == 0) {
     return {ptr: 0, len: 0, buffer: 0};
@@ -511,6 +511,7 @@ function initSherpaOnnxScorerConfigArray(scorers, Module) {
     Module.setValue(q + 24, s.weight ?? 1, 'float');
     Module.setValue(q + 28, p[6 * i + 5], 'i8*');  // extra
     Module.setValue(q + 32, s.rescore ? 1 : 0, 'i32');
+    Module.setValue(q + 36, (s.stats ?? true) ? 1 : 0, 'i32');
   }
 
   return {ptr: ptr, len: n * len, buffer: buffer};
@@ -541,7 +542,7 @@ function initSherpaOnnxFusionConfig(config, Module) {
       buffer + lengthBonusUnitLen + ctcAlignmentLen + scorerTextCaseLen;
   Module.stringToUTF8(config.ctcPrior || '', ctcPriorPtr, ctcPriorLen);
 
-  const len = 13 * 4;
+  const len = 17 * 4;
   const ptr = Module._malloc(len);
 
   let offset = 0;
@@ -584,6 +585,18 @@ function initSherpaOnnxFusionConfig(config, Module) {
   offset += 4;
 
   Module.setValue(ptr + offset, 1, 'i32');  // literal_zeros
+  offset += 4;
+
+  Module.setValue(ptr + offset, config.traceSurvival ? 1 : 0, 'i32');
+  offset += 4;
+
+  Module.setValue(ptr + offset, (config.pruneWaiting ?? true) ? 1 : 0, 'i32');
+  offset += 4;
+
+  Module.setValue(ptr + offset, config.waitingMaxActive ?? 0, 'i32');
+  offset += 4;
+
+  Module.setValue(ptr + offset, config.waitingScoreBeam ?? 0, 'float');
   offset += 4;
 
   return {ptr: ptr, len: len, buffer: buffer, scorers: scorers};

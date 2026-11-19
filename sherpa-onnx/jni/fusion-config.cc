@@ -43,6 +43,7 @@ ScorerOptions GetScorerOptions(JNIEnv *env, jobject scorer, bool *ok) {
   SHERPA_ONNX_JNI_READ_FLOAT(ans.weight, weight, cls, scorer);
   SHERPA_ONNX_JNI_READ_STRING(ans.extra, extra, cls, scorer);
   SHERPA_ONNX_JNI_READ_BOOL(ans.rescore, rescore, cls, scorer);
+  SHERPA_ONNX_JNI_READ_BOOL(ans.common.stats, stats, cls, scorer);
 
   env->DeleteLocalRef(cls);
   *ok = true;
@@ -113,6 +114,12 @@ FusionConfig GetFusionConfig(JNIEnv *env, jobject fusion, bool *ok) {
                             modifiedBeamSearchRules, cls, fusion);
   SHERPA_ONNX_JNI_READ_STRING(ans.ctc_prior, ctcPrior, cls, fusion);
   SHERPA_ONNX_JNI_READ_FLOAT(ans.ctc_prior_weight, ctcPriorWeight, cls, fusion);
+  SHERPA_ONNX_JNI_READ_BOOL(ans.trace_survival, traceSurvival, cls, fusion);
+  SHERPA_ONNX_JNI_READ_BOOL(ans.prune_waiting, pruneWaiting, cls, fusion);
+  SHERPA_ONNX_JNI_READ_INT(ans.waiting_max_active, waitingMaxActive, cls,
+                           fusion);
+  SHERPA_ONNX_JNI_READ_FLOAT(ans.waiting_score_beam, waitingScoreBeam, cls,
+                             fusion);
 
   env->DeleteLocalRef(cls);
   *ok = true;

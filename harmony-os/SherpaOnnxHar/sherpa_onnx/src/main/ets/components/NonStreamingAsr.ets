@@ -257,6 +257,8 @@ export class ScorerConfig {
   public extra: string = '{}';  // JSON object of type-specific options
   // true: apply only to the hypotheses that survive the search (rescoring)
   public rescore: boolean = false;
+  // true: log, when the scorer is destroyed, what it measured of its work
+  public stats: boolean = true;
 }
 
 // Scorers and search settings for decodingMethod 'prefix_beam_search'
@@ -276,6 +278,14 @@ export class FusionConfig {
   // CTC models: a file of "token-id log-prior" lines subtracted per frame
   public ctcPrior: string = '';
   public ctcPriorWeight: number = 1.0;
+  // Offline transducers: log at the end what pruning each result needed
+  public traceSurvival: boolean = false;
+  // Transducers: at every round's end also cut each list waiting for a
+  // later frame to its best waitingMaxActive (0: twice the max active
+  // paths) within waitingScoreBeam (0: half of scoreBeam) of its best
+  public pruneWaiting: boolean = true;
+  public waitingMaxActive: number = 0;
+  public waitingScoreBeam: number = 0;
 }
 
 export class OfflineRecognizerConfig {

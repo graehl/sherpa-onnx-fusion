@@ -45,6 +45,9 @@ pub struct ScorerConfig {
     /// Apply the scorer only to the hypotheses that survive the search, as
     /// n-best rescoring does, instead of during the search.
     pub rescore: bool,
+    /// When the scorer is destroyed, log what it measured of its own work
+    /// and memory (`onnx-rnn`: its widest model step and peak memory).
+    pub stats: bool,
 }
 
 impl Default for ScorerConfig {
@@ -59,6 +62,7 @@ impl Default for ScorerConfig {
             weight: 1.0,
             extra: Some("{}".into()),
             rescore: false,
+            stats: true,
         }
     }
 }
@@ -75,6 +79,7 @@ impl ScorerConfig {
             weight: self.weight,
             extra: to_c_ptr(&self.extra, cstrings),
             rescore: self.rescore as i32,
+            stats: self.stats as i32,
         }
     }
 }
@@ -114,6 +119,17 @@ pub struct FusionConfig {
     pub ctc_prior: Option<String>,
     /// Weight of `ctc_prior`.
     pub ctc_prior_weight: f32,
+    /// Offline transducers: log at the end what pruning each result needed
+    /// and what cutting the lists waiting for later frames would cost.
+    pub trace_survival: bool,
+    /// Transducers: at every round's end also cut each list of arrivals
+    /// waiting for a later frame to its best `waiting_max_active` within
+    /// `waiting_score_beam` of its best.
+    pub prune_waiting: bool,
+    /// Entries each waiting list keeps; 0: twice the max active paths.
+    pub waiting_max_active: i32,
+    /// Score gap a waiting list keeps; 0: half of `score_beam`.
+    pub waiting_score_beam: f32,
 }
 
 impl Default for FusionConfig {
@@ -130,6 +146,10 @@ impl Default for FusionConfig {
             modified_beam_search_rules: false,
             ctc_prior: None,
             ctc_prior_weight: 1.0,
+            trace_survival: false,
+            prune_waiting: true,
+            waiting_max_active: 0,
+            waiting_score_beam: 0.0,
         }
     }
 }
@@ -168,8 +188,12 @@ impl FusionConfig {
             modified_beam_search_rules: self.modified_beam_search_rules as i32,
             ctc_prior: to_c_ptr(&self.ctc_prior, cstrings),
             ctc_prior_weight: self.ctc_prior_weight,
-            // Every numeric field above holds its real value.
+            // Every numeric field holds its real value.
             literal_zeros: 1,
+            trace_survival: self.trace_survival as i32,
+            prune_waiting: self.prune_waiting as i32,
+            waiting_max_active: self.waiting_max_active,
+            waiting_score_beam: self.waiting_score_beam,
         }
     }
 }

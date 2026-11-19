@@ -25,6 +25,16 @@ public class FusionConfig {
     // subtracted from its log probability in every frame.
     private final String ctcPrior;
     private final float ctcPriorWeight;
+    // Offline transducers: log at the end what pruning each result needed
+    // and what cutting the lists waiting for later frames would cost.
+    private final boolean traceSurvival;
+    // Transducers: at every round's end also cut each list of arrivals
+    // waiting for a later frame to its best waitingMaxActive within
+    // waitingScoreBeam of its best (0: twice the max active paths, half of
+    // scoreBeam).
+    private final boolean pruneWaiting;
+    private final int waitingMaxActive;
+    private final float waitingScoreBeam;
 
     private FusionConfig(Builder builder) {
         this.scorers = builder.scorers;
@@ -38,6 +48,10 @@ public class FusionConfig {
         this.modifiedBeamSearchRules = builder.modifiedBeamSearchRules;
         this.ctcPrior = builder.ctcPrior;
         this.ctcPriorWeight = builder.ctcPriorWeight;
+        this.traceSurvival = builder.traceSurvival;
+        this.pruneWaiting = builder.pruneWaiting;
+        this.waitingMaxActive = builder.waitingMaxActive;
+        this.waitingScoreBeam = builder.waitingScoreBeam;
     }
 
     public static Builder builder() {
@@ -88,6 +102,22 @@ public class FusionConfig {
         return ctcPriorWeight;
     }
 
+    public boolean getTraceSurvival() {
+        return traceSurvival;
+    }
+
+    public boolean getPruneWaiting() {
+        return pruneWaiting;
+    }
+
+    public int getWaitingMaxActive() {
+        return waitingMaxActive;
+    }
+
+    public float getWaitingScoreBeam() {
+        return waitingScoreBeam;
+    }
+
     public static class Builder {
         private ScorerConfig[] scorers = new ScorerConfig[0];
         private float lengthBonus = 0.0f;
@@ -100,6 +130,10 @@ public class FusionConfig {
         private boolean modifiedBeamSearchRules = false;
         private String ctcPrior = "";
         private float ctcPriorWeight = 1.0f;
+        private boolean traceSurvival = false;
+        private boolean pruneWaiting = true;
+        private int waitingMaxActive = 0;
+        private float waitingScoreBeam = 0.0f;
 
         public FusionConfig build() {
             return new FusionConfig(this);
@@ -157,6 +191,26 @@ public class FusionConfig {
 
         public Builder setCtcPriorWeight(float ctcPriorWeight) {
             this.ctcPriorWeight = ctcPriorWeight;
+            return this;
+        }
+
+        public Builder setTraceSurvival(boolean traceSurvival) {
+            this.traceSurvival = traceSurvival;
+            return this;
+        }
+
+        public Builder setPruneWaiting(boolean pruneWaiting) {
+            this.pruneWaiting = pruneWaiting;
+            return this;
+        }
+
+        public Builder setWaitingMaxActive(int waitingMaxActive) {
+            this.waitingMaxActive = waitingMaxActive;
+            return this;
+        }
+
+        public Builder setWaitingScoreBeam(float waitingScoreBeam) {
+            this.waitingScoreBeam = waitingScoreBeam;
             return this;
         }
     }

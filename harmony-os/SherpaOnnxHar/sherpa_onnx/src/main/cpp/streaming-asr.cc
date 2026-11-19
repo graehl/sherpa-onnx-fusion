@@ -200,6 +200,7 @@ static SherpaOnnxScorerConfig GetScorerConfig(Napi::Value v) {
   // explicit 0 reaches the core as 0.
   c.num_threads = 1;
   c.weight = 1;
+  c.stats = 1;
 
   if (!v.IsObject()) {
     return c;
@@ -216,6 +217,7 @@ static SherpaOnnxScorerConfig GetScorerConfig(Napi::Value v) {
   SHERPA_ONNX_ASSIGN_ATTR_FLOAT(weight, weight);
   SHERPA_ONNX_ASSIGN_ATTR_STR(extra, extra);
   SHERPA_ONNX_ASSIGN_ATTR_BOOL(rescore, rescore);
+  SHERPA_ONNX_ASSIGN_ATTR_BOOL(stats, stats);
 
   return c;
 }
@@ -244,6 +246,7 @@ SherpaOnnxFusionConfig GetFusionConfig(Napi::Object obj) {
   c.token_candidates = 8;
   c.score_beam = 12;
   c.ctc_prior_weight = 1;
+  c.prune_waiting = 1;
   c.literal_zeros = 1;
 
   if (o.Has("scorers") && o.Get("scorers").IsArray()) {
@@ -270,6 +273,10 @@ SherpaOnnxFusionConfig GetFusionConfig(Napi::Object obj) {
                                modifiedBeamSearchRules);
   SHERPA_ONNX_ASSIGN_ATTR_STR(ctc_prior, ctcPrior);
   SHERPA_ONNX_ASSIGN_ATTR_FLOAT(ctc_prior_weight, ctcPriorWeight);
+  SHERPA_ONNX_ASSIGN_ATTR_BOOL(trace_survival, traceSurvival);
+  SHERPA_ONNX_ASSIGN_ATTR_BOOL(prune_waiting, pruneWaiting);
+  SHERPA_ONNX_ASSIGN_ATTR_INT32(waiting_max_active, waitingMaxActive);
+  SHERPA_ONNX_ASSIGN_ATTR_FLOAT(waiting_score_beam, waitingScoreBeam);
 
   return c;
 }

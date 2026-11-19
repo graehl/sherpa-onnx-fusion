@@ -26,6 +26,10 @@ namespace SherpaOnnx
             CtcPrior = "";
             CtcPriorWeight = 1.0F;
             LiteralZeros = 1;
+            TraceSurvival = 0;
+            PruneWaiting = 1;
+            WaitingMaxActive = 0;
+            WaitingScoreBeam = 0.0F;
         }
 
         /// <summary>
@@ -101,6 +105,28 @@ namespace SherpaOnnx
         /// new ScorerConfig[n], or its Weight and NumThreads are 0.
         /// </summary>
         public int LiteralZeros;
+
+        /// <summary>
+        /// Offline transducers, non-zero: log at the end what pruning each
+        /// result needed and what cutting the lists waiting for later frames
+        /// would cost.
+        /// </summary>
+        public int TraceSurvival;
+
+        /// <summary>
+        /// Transducers, non-zero: at every round's end also cut each list of
+        /// arrivals waiting for a later frame to its best WaitingMaxActive
+        /// within WaitingScoreBeam of its best.
+        /// </summary>
+        public int PruneWaiting;
+
+        /// <summary>Entries each waiting list keeps; 0: twice the max active
+        /// paths.</summary>
+        public int WaitingMaxActive;
+
+        /// <summary>Score gap a waiting list keeps; 0: half of
+        /// ScoreBeam.</summary>
+        public float WaitingScoreBeam;
     }
 
     /// Copies a ScorerConfig[] into native memory for FusionConfig.Scorers.
