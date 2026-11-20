@@ -47,9 +47,8 @@ vocabularies such as Whisper's.
   vocabulary.
 - **Bindings.** Rust is the first consumer (lwpc).
   `OfflineRecognizerResult` in `sherpa-onnx/rust/sherpa-onnx/src/offline_asr.rs`
-  drops every JSON field except text, tokens, timestamps and durations,
-  so `lang`, `lang_probs` and `ys_log_probs` are lost there today; fix
-  that in the same change. Other bindings follow the fork's usual
+  has gained `lang` and `lang_probs` upstream (#4245) but still drops
+  `ys_log_probs`; add it and `token_ids` in the same change. Other bindings follow the fork's usual
   coverage ([fork-feature-bindings](../fork-feature-bindings.md)).
 - **Upstream.** `token_ids` and the table are general and small; offer
   them upstream rather than carrying them as fork-only.
