@@ -14,8 +14,11 @@ Topic: litert-backend
 - **Model.** `offline-w2v-bert-ctc-litert-model.{h,cc}` is chosen when
   `--w2v-bert-ctc` names a `.tflite` file. `--provider=npu` with
   `--litert-dispatch-dir` runs a compiled graph on the TPU; any other
-  provider runs a portable graph on LiteRT's CPU kernels. The search,
-  scorers and log-softmax stay outside LiteRT.
+  provider runs a portable graph on LiteRT's CPU kernels. The search and
+  scorers stay outside LiteRT. Graphs from the research exporter since
+  2026-11-24 end in a log-softmax, as k2-fsa's w2v-BERT export does (all
+  of it on the TPU when compiled); the window blend normalizes again,
+  which changes nothing for them and normalizes older graphs.
 - **Fixed lengths.** A graph has one length per signature and takes
   `input_lengths`, so a shorter utterance is padded and masked.
   `--w2v-bert-ctc` takes several files, comma separated; an utterance runs

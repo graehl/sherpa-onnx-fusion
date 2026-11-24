@@ -18,9 +18,10 @@ The first split is by cost and by what the search needs:
 
 - **In LiteRT:** the encoder, up to its final hidden states, or up to the
   logits where the head is part of the same graph (a CTC model's output
-  layer makes the graph depend on the vocabulary size).
-- **Outside it at first:** everything after: a CTC model's log-softmax and
-  the search; a transducer's prediction network and joiner; the scorers.
+  layer makes the graph depend on the vocabulary size), and since
+  2026-11-24 a CTC model's log-softmax, which compiles onto the TPU.
+- **Outside it at first:** everything after: the search; a transducer's
+  prediction network and joiner; the scorers.
   These stay on the CPU or in ONNX Runtime as they are now.
 - **Eventually, perhaps all of it** in LiteRT, if the small per-step models
   (joiner, prediction network, recurrent scorer) are worth moving.
