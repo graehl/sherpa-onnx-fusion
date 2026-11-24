@@ -204,6 +204,8 @@ present and prints a warning describing the correct result.
 - [Prefix search against the FST decoder on a graph with an LM](gaps/sketches/fst-decoder-lm-graph-comparison.md) (run for a character LM; what remains is in the sketch).
 - [Checking that a token scorer and a recognizer share a vocabulary](gaps/sketches/scorer-vocabulary-compatibility.md).
 - [Running models through LiteRT](gaps/sketches/litert-model-backend.md).
+- [Window blends that need raw logits](gaps/w2v-bert-blends-lack-raw-logits.md):
+  w2v-BERT exports now give only log probabilities.
 - [Hybrid chunked streaming](gaps/sketches/hybrid-chunked-streaming.md):
   searching an offline model's finished windows before the audio ends.
 - [A remaining-cost estimate for partly spelled words](gaps/sketches/word-lm-remaining-cost.md).

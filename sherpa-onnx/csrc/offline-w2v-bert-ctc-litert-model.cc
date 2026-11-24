@@ -55,6 +55,10 @@ constexpr float kRowSeconds = 0.02f;
 // position in its list.
 constexpr const char *kInputNames[] = {"input_features", "input_lengths"};
 constexpr const char *kOutputNames[] = {"logits", "logits_lengths"};
+// The same outputs as k2-fsa's export names them since it normalizes in the
+// graph; a graph may use either pair.
+constexpr const char *kLogProbOutputNames[] = {"log_probs",
+                                               "log_probs_lengths"};
 enum Input { kFeatures = 0, kLengths = 1 };
 enum Output { kLogits = 0, kLogitsLengths = 1 };
 
@@ -99,7 +103,8 @@ class FixedLengthGraph {
     // Buffers are passed to a run in the signature's order, which need not
     // be the order of the names here.
     inputs_ = Ports(env, handle, true, kInputNames, &input_index_);
-    outputs_ = Ports(env, handle, false, kOutputNames, &output_index_);
+    outputs_ = Ports(env, handle, false, kOutputNames, &output_index_,
+                     &kLogProbOutputNames);
     const auto &features = In(kFeatures).type.layout;
     const auto &logits = Out(kLogits).type.layout;
     const auto is_length = [](const Port &port) {
@@ -116,7 +121,8 @@ class FixedLengthGraph {
       SHERPA_ONNX_LOGE(
           "%s is not a w2v-BERT CTC LiteRT graph: each signature must take "
           "input_features (1, P, 160) and input_lengths int32 (1) and return "
-          "logits (1, F, vocab_size) and logits_lengths int32 (1).",
+          "log_probs (1, F, vocab_size) and log_probs_lengths int32 (1), or "
+          "the same as logits and logits_lengths.",
           path.c_str());
       SHERPA_ONNX_EXIT(-1);
     }
@@ -202,7 +208,8 @@ class FixedLengthGraph {
  private:
   std::vector<Port> Ports(LiteRtEnvironment env, LiteRtSignature signature,
                           bool input, const char *const (&names)[2],
-                          std::array<size_t, 2> *index) {
+                          std::array<size_t, 2> *index,
+                          const char *const (*other_names)[2] = nullptr) {
     LiteRtParamIndex n = 0;
     SHERPA_ONNX_LITERT_OK(input ? LiteRtGetNumSignatureInputs(signature, &n)
                                 : LiteRtGetNumSignatureOutputs(signature, &n));
@@ -230,15 +237,21 @@ class FixedLengthGraph {
         SHERPA_ONNX_LITERT_OK(LiteRtGetCompiledModelOutputBufferRequirements(
             compiled_, signature_, i, &ports[i].requirements));
       }
-      auto found =
-          std::find_if(std::begin(names), std::end(names),
-                       [name](auto *s) { return std::strcmp(s, name) == 0; });
-      if (found == std::end(names)) {
+      // The position of name in names, else in other_names.
+      auto position = [name](const char *const(&list)[2]) {
+        auto found =
+            std::find_if(std::begin(list), std::end(list),
+                         [name](auto *s) { return std::strcmp(s, name) == 0; });
+        return found - std::begin(list);
+      };
+      auto at = position(names);
+      if (at == 2 && other_names) at = position(*other_names);
+      if (at == 2) {
         SHERPA_ONNX_LOGE("Unexpected %s in the LiteRT graph: %s",
                          input ? "input" : "output", name);
         SHERPA_ONNX_EXIT(-1);
       }
-      (*index)[found - std::begin(names)] = i;
+      (*index)[at] = i;
       SHERPA_ONNX_LITERT_OK(LiteRtGetRankedTensorType(tensor, &ports[i].type));
     }
     return ports;

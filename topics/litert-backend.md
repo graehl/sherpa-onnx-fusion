@@ -16,9 +16,12 @@ Topic: litert-backend
   `--litert-dispatch-dir` runs a compiled graph on the TPU; any other
   provider runs a portable graph on LiteRT's CPU kernels. The search and
   scorers stay outside LiteRT. Graphs from the research exporter since
-  2026-11-24 end in a log-softmax, as k2-fsa's w2v-BERT export does (all
-  of it on the TPU when compiled); the window blend normalizes again,
-  which changes nothing for them and normalizes older graphs.
+  2026-11-24 end in a log-softmax and name their outputs `log_probs` and
+  `log_probs_lengths`, as k2-fsa's w2v-BERT export does (all of it on the
+  TPU when compiled); older graphs' `logits` and `logits_lengths` still
+  load. The window blend normalizes again, which changes nothing for the
+  new graphs and normalizes older ones. Blends that need raw logits are
+  [no longer possible](../gaps/w2v-bert-blends-lack-raw-logits.md).
 - **Fixed lengths.** A graph has one length per signature and takes
   `input_lengths`, so a shorter utterance is padded and masked.
   `--w2v-bert-ctc` takes several files, comma separated; an utterance runs
