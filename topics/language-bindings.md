@@ -17,6 +17,11 @@ Topic: language-bindings
   appended, never inserted, so a binding that mirrors the layout appends in
   the same order. The conversion to core configs lives in
   `sherpa-onnx/c-api/c-api-fusion.cc`.
+- **The w2v-BERT model's two forms.** The core and Python take upstream's
+  nested `OfflineW2vBertCtcModelConfig` (`w2v_bert_ctc.model`), merged in
+  k2-fsa#4263. The C API and the bindings built on it keep the fork's
+  string member `w2v_bert_ctc`, which `c-api.cc` and the JNI reader copy
+  into `.model`, until upstream's bindings PR settles their layout.
 - **Zero is the default in C.** As elsewhere in the C API, a zero or NULL
   field means the core default, so a zero-filled struct works.
   `literal_zeros` on `SherpaOnnxFusionConfig` and on

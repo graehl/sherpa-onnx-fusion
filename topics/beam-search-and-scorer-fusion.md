@@ -33,7 +33,7 @@ everything is kept in the
 | `onnx-rnn` scorer (LSTM or GRU) | `recurrent-lm-scorer.h`, `onnx-recurrent-lm-step.cc` | character or recognizer-token units |
 | Options and JSON | `fusion-config.h`, `option-collection.h`, `option-json.h` | § Options; [option collections](json-option-collections.md) |
 | Offline CTC recognizer | `offline-ctc-prefix-beam-search-decoder.h` | batch shares scorer calls |
-| w2v-BERT CTC model type | `offline-w2v-bert-ctc-model.h` (`--w2v-bert-ctc`) | transformers export with the input `input_features`; one utterance at a time, or padded batches when the export also takes `input_lengths` and masks padding itself, or when its `batching_supported` metadata says so ([bulk decoding](bulk-decoding.md)) |
+| w2v-BERT CTC model type | `offline-w2v-bert-ctc-model.h` (`--w2v-bert-ctc`) | upstream's (k2-fsa#4263): rows of two frames joined by the recognizer, `input_lengths` masking padding, log-softmax in the graph from export version 2; the fork also runs older exports (no version: it log-softmaxes; `input_features` alone: one utterance at a time unless `batching_supported` metadata says so, [bulk decoding](bulk-decoding.md)) |
 | Model run ahead of the search, offline CTC and transducers | `OfflineRecognizer::EncodeStreams` | § Inflight batching |
 | Streaming CTC recognizer | `online-ctc-prefix-beam-search-decoder.h` | search kept per stream |
 | Offline transducer recognizers | `offline-transducer-prefix-beam-search-decoder.h` | stateless and NeMo |
