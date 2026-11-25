@@ -15,7 +15,9 @@ namespace sherpa_onnx {
 void OfflineW2vBertCtcModelConfig::Register(ParseOptions *po) {
   po->Register("w2v-bert-ctc", &model,
                "Path to model.onnx of a w2v-BERT 2.0 CTC model. Please see "
-               "scripts/w2v-bert/README.md for how to export one");
+               "scripts/w2v-bert/README.md for how to export one. Or, with "
+               "-DSHERPA_ONNX_ENABLE_LITERT=ON, one or more .tflite graphs of "
+               "it, comma separated");
 }
 
 bool OfflineW2vBertCtcModelConfig::Validate() const {

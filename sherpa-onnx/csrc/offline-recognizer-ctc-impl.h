@@ -266,13 +266,14 @@ class OfflineRecognizerCtcImpl : public OfflineRecognizerImpl {
       for (OfflineStream *s : todo) {
         auto t = ForwardStream(s);
         if (!t.empty()) {
-          KeepEncoderOutput(&s, 1, t);
+          KeepEncoderOutput(&s, 1, std::move(t));
         }
       }
     } else if (!todo.empty()) {
       auto t = ForwardStreams(todo.data(), static_cast<int32_t>(todo.size()));
       if (!t.empty()) {
-        KeepEncoderOutput(todo.data(), static_cast<int32_t>(todo.size()), t);
+        KeepEncoderOutput(todo.data(), static_cast<int32_t>(todo.size()),
+                          std::move(t));
       }
     }
   }
@@ -334,7 +335,7 @@ class OfflineRecognizerCtcImpl : public OfflineRecognizerImpl {
       return;
     }
     OfflineEncoderConfig encoder = model_config.encoder;
-    if (EndsWith(model_config.w2v_bert_ctc, ".tflite")) {
+    if (EndsWith(model_config.w2v_bert_ctc.model, ".tflite")) {
       // Its graphs have fixed lengths.
       encoder.window.seconds = 0;
       encoder.lengths.clear();
@@ -342,6 +343,9 @@ class OfflineRecognizerCtcImpl : public OfflineRecognizerImpl {
     }
     OfflineEncoderAdapter adapter;
     adapter.encode = [this](Ort::Value x, Ort::Value x_length) {
+      if (JoinsW2vBertFrames()) {
+        return ForwardW2vBertFrameBatch(std::move(x), std::move(x_length));
+      }
       return model_->Forward(std::move(x), std::move(x_length));
     };
     adapter.normalize = [this](float *f, int32_t num_frames, int32_t dim) {
@@ -502,13 +506,14 @@ class OfflineRecognizerCtcImpl : public OfflineRecognizerImpl {
 
     int32_t num_frames = f.size() / feat_dim;
 
-    model_->NormalizeFeatures(f.data(), num_frames, feat_dim);
-    StackW2vBertFrames(&f, &num_frames, &feat_dim);
-    if (!config_.model_config.w2v_bert_ctc.model.empty() && num_frames == 0) {
+    if (!config_.model_config.w2v_bert_ctc.model.empty() && num_frames < 2) {
       // Under 35 ms: no filterbank frame, or one, which makes no row.
       s->SetResult(OfflineRecognitionResult{});
       return {};
     }
+
+    model_->NormalizeFeatures(f.data(), num_frames, feat_dim);
+    StackW2vBertFrames(&f, &num_frames, &feat_dim);
 
     std::vector<int64_t> shape = {1, num_frames, feat_dim};
     if (!config_.model_config.omnilingual.model.empty()) {
@@ -553,10 +558,72 @@ class OfflineRecognizerCtcImpl : public OfflineRecognizerImpl {
   // feature extractor does, and changes the shape.
   void StackW2vBertFrames(std::vector<float> *f, int32_t *num_frames,
                           int32_t *feat_dim) const {
-    if (config_.model_config.w2v_bert_ctc.model.empty()) return;
+    if (!JoinsW2vBertFrames()) return;
     *num_frames /= 2;
     *feat_dim *= 2;
     f->resize(static_cast<size_t>(*num_frames) * *feat_dim);
+  }
+
+  // Whether the recognizer joins frame pairs for the model: an ONNX w2v-BERT
+  // model takes rows of two frames. A LiteRT one takes the frames, which it
+  // normalizes over the utterance, odd last frame included, before cutting
+  // its own windows.
+  bool JoinsW2vBertFrames() const {
+    const std::string &model = config_.model_config.w2v_bert_ctc.model;
+    return !model.empty() && !EndsWith(model, ".tflite");
+  }
+
+  // The window and length encoder forms batches of frames, (N, T, C) with
+  // lengths in frames. This joins them into rows of 2 C, as
+  // StackW2vBertFrames does for a stream: without a copy when T is even. A
+  // batch in which no stream has a whole row gives each no output frames.
+  std::vector<Ort::Value> ForwardW2vBertFrameBatch(Ort::Value x,
+                                                   Ort::Value x_length) const {
+    auto shape = x.GetTensorTypeAndShapeInfo().GetShape();
+    const int64_t n = shape[0], frames = shape[1], dim = shape[2];
+    const int64_t rows = frames / 2;
+
+    std::array<int64_t, 1> length_shape = {n};
+    Ort::Value row_length = Ort::Value::CreateTensor<int64_t>(
+        model_->Allocator(), length_shape.data(), length_shape.size());
+    const int64_t *frame_length = x_length.GetTensorData<int64_t>();
+    int64_t *row = row_length.GetTensorMutableData<int64_t>();
+    int64_t longest = 0;
+    for (int64_t i = 0; i != n; ++i) {
+      row[i] = frame_length[i] / 2;
+      longest = std::max(longest, row[i]);
+    }
+
+    if (longest == 0) {
+      std::array<int64_t, 3> out_shape = {n, 0, model_->VocabSize()};
+      std::vector<Ort::Value> out;
+      out.push_back(Ort::Value::CreateTensor<float>(
+          model_->Allocator(), out_shape.data(), out_shape.size()));
+      out.push_back(std::move(row_length));
+      return out;
+    }
+
+    std::array<int64_t, 3> row_shape = {n, rows, 2 * dim};
+    float *p = x.GetTensorMutableData<float>();
+    if (frames % 2 == 0) {
+      // x keeps the buffer alive until Forward returns.
+      auto memory_info =
+          Ort::MemoryInfo::CreateCpu(OrtDeviceAllocator, OrtMemTypeDefault);
+      Ort::Value joined = Ort::Value::CreateTensor<float>(
+          memory_info, p, static_cast<size_t>(n * frames * dim),
+          row_shape.data(), row_shape.size());
+      return model_->Forward(std::move(joined), std::move(row_length));
+    }
+    Ort::Value joined = Ort::Value::CreateTensor<float>(
+        model_->Allocator(), row_shape.data(), row_shape.size());
+    float *q = joined.GetTensorMutableData<float>();
+    const size_t in_stride = static_cast<size_t>(frames * dim);
+    const size_t out_stride = static_cast<size_t>(rows * 2 * dim);
+    for (int64_t b = 0; b != n; ++b) {
+      std::copy(p + b * in_stride, p + b * in_stride + out_stride,
+                q + b * out_stride);
+    }
+    return model_->Forward(std::move(joined), std::move(row_length));
   }
 
   // The convolutional feature extractor of omnilingual ASR models needs at
@@ -567,24 +634,13 @@ class OfflineRecognizerCtcImpl : public OfflineRecognizerImpl {
     return config_.model_config.omnilingual.model.empty() ? 10 : 20;
   }
 
-  // Moves each stream's valid frames of the model output "t" for "ss" into
-  // that stream.
+  // Gives each of the n streams its item of the model output "t", which they
+  // then share.
   static void KeepEncoderOutput(OfflineStream **ss, int32_t n,
-                                const std::vector<Ort::Value> &t) {
-    std::vector<int64_t> shape = t[0].GetTensorTypeAndShapeInfo().GetShape();
-    auto max_frames = static_cast<int32_t>(shape[1]);
-    auto dim = static_cast<int32_t>(shape[2]);
-    const float *p = t[0].GetTensorData<float>();
-    // The model's lengths are int64; see OfflineCtcModel::Forward.
-    const int64_t *length = t[1].GetTensorData<int64_t>();
-    for (int32_t i = 0; i != n; ++i) {
-      auto num_frames = static_cast<int32_t>(length[i]);
-      const float *begin = p + static_cast<size_t>(i) * max_frames * dim;
-      ss[i]->SetEncoderOutput(
-          std::vector<float>(begin,
-                             begin + static_cast<size_t>(num_frames) * dim),
-          num_frames);
-    }
+                                std::vector<Ort::Value> t) {
+    auto batch =
+        std::make_shared<const EncoderOutputBatch>(std::move(t[0]), t[1]);
+    for (int32_t i = 0; i != n; ++i) ss[i]->SetEncoderOutput(batch, i);
   }
 
   // Searches streams that EncodeStreams has processed. One it gave an empty
@@ -602,7 +658,7 @@ class OfflineRecognizerCtcImpl : public OfflineRecognizerImpl {
 
     auto batch = static_cast<int32_t>(encoded.size());
     auto t = TakeEncoderOutputs(encoded.data(), batch, model_->Allocator());
-    auto results = decoder_->Decode(std::move(t[0]), std::move(t[1]));
+    auto results = decoder_->Decode(std::move(t.values), std::move(t.lengths));
 
     for (int32_t i = 0; i != batch; ++i) {
       auto r = Convert(results[i], symbol_table_, FrameShiftMs(),

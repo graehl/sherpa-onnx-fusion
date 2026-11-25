@@ -4,6 +4,7 @@
 #include "sherpa-onnx/csrc/offline-model-config.h"
 
 #include <string>
+#include <vector>
 
 #include "sherpa-onnx/csrc/file-utils.h"
 #include "sherpa-onnx/csrc/macros.h"
@@ -37,6 +38,12 @@ void OfflineModelConfig::Register(ParseOptions *po) {
   po->Register("litert-dispatch-dir", &litert_dispatch_dir,
                "Directory of LiteRT's accelerator library, for a .tflite "
                "model run with --provider=npu");
+  po->Register("litert-window", &litert_window,
+               "WINDOW_S:OVERLAP_S:SLACK_S: a .tflite model runs an utterance "
+               "longer than WINDOW_S in blended overlapping windows of its "
+               "shortest length of at least WINDOW_S; empty: of its longest. "
+               "Overrides --encoder.window.seconds, overlap and slack");
+  encoder.Register(po);
 
   po->Register("tokens", &tokens, "Path to tokens.txt");
 
@@ -69,6 +76,10 @@ void OfflineModelConfig::Register(ParseOptions *po) {
 }
 
 bool OfflineModelConfig::Validate() const {
+  if (!encoder.Validate()) {
+    return false;
+  }
+
   // For RK NPU, we reinterpret num_threads:
   //
   // For RK3588 only
@@ -191,6 +202,33 @@ bool OfflineModelConfig::Validate() const {
     return qwen3_asr.Validate();
   }
 
+  if (litert_environment && !EndsWith(w2v_bert_ctc.model, ".tflite")) {
+    SHERPA_ONNX_LOGE(
+        "A LiteRT environment was given, but w2v_bert_ctc names no .tflite "
+        "model to use it");
+    return false;
+  }
+  if (litert_environment && !litert_dispatch_dir.empty()) {
+    SHERPA_ONNX_LOGE(
+        "litert_dispatch_dir must be empty with a caller's LiteRT "
+        "environment: the dispatch library is set when the environment is "
+        "created");
+    return false;
+  }
+
+  if (EndsWith(w2v_bert_ctc.model, ".tflite")) {
+    // A LiteRT model may be several .tflite files, comma separated.
+    std::vector<std::string> paths;
+    SplitStringToVector(w2v_bert_ctc.model, ",", true, &paths);
+    for (const auto &path : paths) {
+      if (!FileExists(path)) {
+        SHERPA_ONNX_LOGE("w2v_bert_ctc: '%s' does not exist", path.c_str());
+        return false;
+      }
+    }
+    return true;
+  }
+
   if (!w2v_bert_ctc.model.empty()) {
     return w2v_bert_ctc.Validate();
   }
@@ -259,6 +297,9 @@ std::string OfflineModelConfig::ToString() const {
   os << "w2v_bert_ctc=" << w2v_bert_ctc.ToString() << ", ";
   os << "telespeech_ctc=\"" << telespeech_ctc << "\", ";
   os << "litert_dispatch_dir=\"" << litert_dispatch_dir << "\", ";
+  os << "litert_window=\"" << litert_window << "\", ";
+  if (litert_environment) os << "litert_environment=borrowed, ";
+  os << "encoder=" << encoder.ToString() << ", ";
   os << "tokens=\"" << tokens << "\", ";
   os << "num_threads=" << num_threads << ", ";
   os << "debug=" << (debug ? "True" : "False") << ", ";

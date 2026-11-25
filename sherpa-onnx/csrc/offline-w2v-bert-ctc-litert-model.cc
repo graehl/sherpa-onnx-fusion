@@ -332,7 +332,7 @@ class OfflineW2vBertCtcLiteRtModel::Impl {
     }
 
     std::vector<std::string> paths;
-    SplitStringToVector(config.w2v_bert_ctc, ",", true, &paths);
+    SplitStringToVector(config.w2v_bert_ctc.model, ",", true, &paths);
     for (const auto &path : paths) {
       LiteRtModel model;
       SHERPA_ONNX_LITERT_OK(

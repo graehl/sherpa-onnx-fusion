@@ -16,6 +16,7 @@ from sherpa_onnx.lib._sherpa_onnx import (
     OfflineFireRedAsrCtcModelConfig,
     OfflineCtcFstDecoderConfig,
     OfflineDolphinModelConfig,
+    OfflineEncoderConfig,
     OfflineFireRedAsrModelConfig,
     OfflineLMConfig,
     OfflineModelConfig,
@@ -43,6 +44,12 @@ def _assert_file_exists(f: str):
 
 def _fusion_or_default(fusion: Optional[FusionConfig]) -> FusionConfig:
     return FusionConfig() if fusion is None else fusion
+
+
+def _encoder_or_default(
+    encoder: Optional[OfflineEncoderConfig],
+) -> OfflineEncoderConfig:
+    return OfflineEncoderConfig() if encoder is None else encoder
 
 
 class OfflineRecognizer(object):
@@ -138,6 +145,7 @@ class OfflineRecognizer(object):
         lodr_scale: float = 0.0,
         fusion: Optional[FusionConfig] = None,
         options_json: str = "",
+        encoder_config: Optional[OfflineEncoderConfig] = None,
     ):
         """
         Please refer to
@@ -213,6 +221,10 @@ class OfflineRecognizer(object):
             A JSON object of command-line options applied after every other
             option, e.g. ``'{"scorer": [{"weight": 40}], "score-beam": 0}'``.
             An error raises ``ValueError``.
+          encoder_config:
+            An :class:`OfflineEncoderConfig`: how the encoder runs, e.g. a long
+            utterance in overlapping windows. (``encoder`` is the encoder
+            model's path here; other factories call this ``encoder``.)
         """
         self = cls.__new__(cls)
         model_config = OfflineModelConfig(
@@ -228,6 +240,7 @@ class OfflineRecognizer(object):
             modeling_unit=modeling_unit,
             bpe_vocab=bpe_vocab,
             model_type=model_type,
+            encoder=_encoder_or_default(encoder_config),
         )
 
         feat_config = FeatureExtractorConfig(
@@ -684,6 +697,7 @@ class OfflineRecognizer(object):
         hr_lexicon: str = "",
         fusion: Optional[FusionConfig] = None,
         options_json: str = "",
+        encoder: Optional[OfflineEncoderConfig] = None,
     ):
         """
         Please refer to
@@ -726,6 +740,9 @@ class OfflineRecognizer(object):
             A JSON object of command-line options applied after every other
             option, e.g. ``'{"scorer": [{"weight": 40}], "score-beam": 0}'``.
             An error raises ``ValueError``.
+          encoder:
+            An :class:`OfflineEncoderConfig`: how the encoder runs, e.g. a long
+            utterance in overlapping windows.
         """
         self = cls.__new__(cls)
         model_config = OfflineModelConfig(
@@ -734,6 +751,7 @@ class OfflineRecognizer(object):
             num_threads=num_threads,
             debug=debug,
             provider=provider,
+            encoder=_encoder_or_default(encoder),
         )
 
         feat_config = FeatureExtractorConfig(
@@ -775,6 +793,7 @@ class OfflineRecognizer(object):
         hr_lexicon: str = "",
         fusion: Optional[FusionConfig] = None,
         options_json: str = "",
+        encoder: Optional[OfflineEncoderConfig] = None,
     ):
         """
         Please refer to
@@ -815,6 +834,9 @@ class OfflineRecognizer(object):
             A JSON object of command-line options applied after every other
             option, e.g. ``'{"scorer": [{"weight": 40}], "score-beam": 0}'``.
             An error raises ``ValueError``.
+          encoder:
+            An :class:`OfflineEncoderConfig`: how the encoder runs, e.g. a long
+            utterance in overlapping windows.
         """
         self = cls.__new__(cls)
         model_config = OfflineModelConfig(
@@ -823,6 +845,7 @@ class OfflineRecognizer(object):
             num_threads=num_threads,
             debug=debug,
             provider=provider,
+            encoder=_encoder_or_default(encoder),
         )
 
         feat_config = FeatureExtractorConfig(
@@ -859,6 +882,7 @@ class OfflineRecognizer(object):
         provider: str = "cpu",
         fusion: Optional[FusionConfig] = None,
         options_json: str = "",
+        encoder: Optional[OfflineEncoderConfig] = None,
     ):
         """
         Please refer to
@@ -889,6 +913,9 @@ class OfflineRecognizer(object):
             A JSON object of command-line options applied after every other
             option, e.g. ``'{"scorer": [{"weight": 40}], "score-beam": 0}'``.
             An error raises ``ValueError``.
+          encoder:
+            An :class:`OfflineEncoderConfig`: how the encoder runs, e.g. a long
+            utterance in overlapping windows.
         """
         self = cls.__new__(cls)
         model_config = OfflineModelConfig(
@@ -897,6 +924,7 @@ class OfflineRecognizer(object):
             num_threads=num_threads,
             debug=debug,
             provider=provider,
+            encoder=_encoder_or_default(encoder),
         )
 
         recognizer_config = OfflineRecognizerConfig(
@@ -925,6 +953,9 @@ class OfflineRecognizer(object):
         hr_lexicon: str = "",
         fusion: Optional[FusionConfig] = None,
         options_json: str = "",
+        litert_dispatch_dir: str = "",
+        litert_window: str = "",
+        encoder: Optional[OfflineEncoderConfig] = None,
     ):
         """
         Please refer to
@@ -939,7 +970,8 @@ class OfflineRecognizer(object):
             each stream what ``decode_stream`` gives it alone. The int8
             model quantizes activations over the whole batch, so a batch
             can change a transcript by a word or a character, though in
-            our tests not the word error rate.
+            our tests not the word error rate. In a build with LiteRT, it
+            may also be one or more ``.tflite`` graphs, comma separated.
           tokens:
             Path to ``tokens.txt``. Each line in ``tokens.txt`` contains two
             columns::
@@ -967,6 +999,16 @@ class OfflineRecognizer(object):
             A JSON object of command-line options applied after every other
             option, e.g. ``'{"scorer": [{"weight": 40}], "score-beam": 0}'``.
             An error raises ``ValueError``.
+          litert_dispatch_dir:
+            Directory of LiteRT's accelerator library, for a ``.tflite`` model
+            run with ``provider="npu"``.
+          litert_window:
+            ``WINDOW_S:OVERLAP_S:SLACK_S``: a ``.tflite`` model runs an utterance
+            longer than ``WINDOW_S`` in blended overlapping windows of its
+            shortest length of at least ``WINDOW_S``; empty: of its longest.
+          encoder:
+            An :class:`OfflineEncoderConfig`: how the encoder runs, e.g. a long
+            utterance in overlapping windows.
         """
         self = cls.__new__(cls)
         model_config = OfflineModelConfig(
@@ -975,6 +1017,9 @@ class OfflineRecognizer(object):
             num_threads=num_threads,
             debug=debug,
             provider=provider,
+            litert_dispatch_dir=litert_dispatch_dir,
+            litert_window=litert_window,
+            encoder=_encoder_or_default(encoder),
         )
 
         recognizer_config = OfflineRecognizerConfig(
@@ -1005,6 +1050,7 @@ class OfflineRecognizer(object):
         provider: str = "cpu",
         fusion: Optional[FusionConfig] = None,
         options_json: str = "",
+        encoder: Optional[OfflineEncoderConfig] = None,
     ):
         """
         Please refer to
@@ -1035,6 +1081,9 @@ class OfflineRecognizer(object):
             A JSON object of command-line options applied after every other
             option, e.g. ``'{"scorer": [{"weight": 40}], "score-beam": 0}'``.
             An error raises ``ValueError``.
+          encoder:
+            An :class:`OfflineEncoderConfig`: how the encoder runs, e.g. a long
+            utterance in overlapping windows.
         """
         self = cls.__new__(cls)
         model_config = OfflineModelConfig(
@@ -1043,6 +1092,7 @@ class OfflineRecognizer(object):
             num_threads=num_threads,
             debug=debug,
             provider=provider,
+            encoder=_encoder_or_default(encoder),
         )
 
         recognizer_config = OfflineRecognizerConfig(
@@ -1066,6 +1116,7 @@ class OfflineRecognizer(object):
         provider: str = "cpu",
         fusion: Optional[FusionConfig] = None,
         options_json: str = "",
+        encoder: Optional[OfflineEncoderConfig] = None,
     ):
         """
         Please refer to
@@ -1096,6 +1147,9 @@ class OfflineRecognizer(object):
             A JSON object of command-line options applied after every other
             option, e.g. ``'{"scorer": [{"weight": 40}], "score-beam": 0}'``.
             An error raises ``ValueError``.
+          encoder:
+            An :class:`OfflineEncoderConfig`: how the encoder runs, e.g. a long
+            utterance in overlapping windows.
         """
         self = cls.__new__(cls)
         model_config = OfflineModelConfig(
@@ -1104,6 +1158,7 @@ class OfflineRecognizer(object):
             num_threads=num_threads,
             debug=debug,
             provider=provider,
+            encoder=_encoder_or_default(encoder),
         )
 
         recognizer_config = OfflineRecognizerConfig(
@@ -1136,6 +1191,7 @@ class OfflineRecognizer(object):
         ctc_max_active: int = 3000,
         fusion: Optional[FusionConfig] = None,
         options_json: str = "",
+        encoder: Optional[OfflineEncoderConfig] = None,
     ):
         """
         Please refer to
@@ -1184,6 +1240,9 @@ class OfflineRecognizer(object):
             A JSON object of command-line options applied after every other
             option, e.g. ``'{"scorer": [{"weight": 40}], "score-beam": 0}'``.
             An error raises ``ValueError``.
+          encoder:
+            An :class:`OfflineEncoderConfig`: how the encoder runs, e.g. a long
+            utterance in overlapping windows.
         """
         self = cls.__new__(cls)
         model_config = OfflineModelConfig(
@@ -1192,6 +1251,7 @@ class OfflineRecognizer(object):
             num_threads=num_threads,
             debug=debug,
             provider=provider,
+            encoder=_encoder_or_default(encoder),
         )
 
         feat_config = FeatureExtractorConfig(
@@ -1239,6 +1299,7 @@ class OfflineRecognizer(object):
         hr_lexicon: str = "",
         fusion: Optional[FusionConfig] = None,
         options_json: str = "",
+        encoder: Optional[OfflineEncoderConfig] = None,
     ):
         """
         Please refer to
@@ -1280,6 +1341,9 @@ class OfflineRecognizer(object):
             A JSON object of command-line options applied after every other
             option, e.g. ``'{"scorer": [{"weight": 40}], "score-beam": 0}'``.
             An error raises ``ValueError``.
+          encoder:
+            An :class:`OfflineEncoderConfig`: how the encoder runs, e.g. a long
+            utterance in overlapping windows.
         """
         self = cls.__new__(cls)
         model_config = OfflineModelConfig(
@@ -1289,6 +1353,7 @@ class OfflineRecognizer(object):
             debug=debug,
             provider=provider,
             model_type="nemo_ctc",
+            encoder=_encoder_or_default(encoder),
         )
 
         feat_config = FeatureExtractorConfig(
@@ -1931,6 +1996,7 @@ class OfflineRecognizer(object):
         hr_lexicon: str = "",
         fusion: Optional[FusionConfig] = None,
         options_json: str = "",
+        encoder: Optional[OfflineEncoderConfig] = None,
     ):
         """
         Please refer to
@@ -1971,6 +2037,9 @@ class OfflineRecognizer(object):
             A JSON object of command-line options applied after every other
             option, e.g. ``'{"scorer": [{"weight": 40}], "score-beam": 0}'``.
             An error raises ``ValueError``.
+          encoder:
+            An :class:`OfflineEncoderConfig`: how the encoder runs, e.g. a long
+            utterance in overlapping windows.
         """
         self = cls.__new__(cls)
         model_config = OfflineModelConfig(
@@ -1980,6 +2049,7 @@ class OfflineRecognizer(object):
             debug=debug,
             provider=provider,
             model_type="tdnn",
+            encoder=_encoder_or_default(encoder),
         )
 
         feat_config = FeatureExtractorConfig(
@@ -2023,6 +2093,7 @@ class OfflineRecognizer(object):
         hr_lexicon: str = "",
         fusion: Optional[FusionConfig] = None,
         options_json: str = "",
+        encoder: Optional[OfflineEncoderConfig] = None,
     ):
         """
         Please refer to
@@ -2064,6 +2135,9 @@ class OfflineRecognizer(object):
             A JSON object of command-line options applied after every other
             option, e.g. ``'{"scorer": [{"weight": 40}], "score-beam": 0}'``.
             An error raises ``ValueError``.
+          encoder:
+            An :class:`OfflineEncoderConfig`: how the encoder runs, e.g. a long
+            utterance in overlapping windows.
         """
         self = cls.__new__(cls)
         model_config = OfflineModelConfig(
@@ -2073,6 +2147,7 @@ class OfflineRecognizer(object):
             debug=debug,
             provider=provider,
             model_type="wenet_ctc",
+            encoder=_encoder_or_default(encoder),
         )
 
         feat_config = FeatureExtractorConfig(
